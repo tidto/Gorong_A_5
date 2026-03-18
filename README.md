@@ -9,53 +9,61 @@
 
 ## ✨ 핵심 서비스 기능 (Core values)
 
+#### From '집냥이' to 'Go냥이' :
+  ##### 외부 활동에 소극적인 현대인을 **'집냥이'**로 페르소나화하여, 플랫폼 내 게이미피케이션 요소를 통해 능동적인 **Go냥이**로 변화시키는 여정을 제공합니다.
 #### 하이브리드 서비스 구조: 
-##### 정보 탐색 및 동행 모집은 **웹(Web)**에서, GPS 기반 현장 인증은 **앱(App)**에서 진행하는 효율적인 사용자 여정을 제공합니다.
+  ##### 정보 탐색 및 동행 모집은 **웹(Web)**에서, GPS 기반 현장 인증은 **앱(App)**에서 진행하는 효율적인 사용자 여정을 제공합니다.
 #### 지오펜싱(Geofencing) 인증: 
-##### 실제 행사 장소 반경(25~50m) 내에 도달하면 GPS 기술을 통해 참여를 실시간으로 인증하고 즉각적인 리워드를 지급합니다.
+  ##### 실제 행사 장소 반경(25~50m) 내에 도달하면 GPS 기술을 통해 참여를 실시간으로 인증하고 즉각적인 리워드**펫쿠키**를 지급합니다.
 #### 게이미피케이션(Gamification): 
-##### 자신의 고냥이 캐릭터를 선택해 육성하고, '클로젯'에서 획득한 의상으로 꾸미며 활동 이력을 시각적으로 아카이빙합니다.
+  ##### * 자신의 고냥이(Go냥이) 캐릭터를 선택해 , '클로젯'에서 획득한 의상으로 꾸미며 활동 이력을 시각적으로 아카이빙합니다.
+  ##### * 단순한 일회성 아이템이 아닌, 사용자가 다녀온 장소와 추억을 상징하는 한정판 의상 및 특수 업적 뱃지를 통해 활동 이력을 시각적으로 기록합니다
 #### 실시간 커뮤니티: 
-##### 동행 모집 게시판인 **'꼬리 흔들기'**를 통해 인원이 충족(COMPLETED)되면 Firebase Firestore를 기반으로 임시 라이브 채팅방이 자동으로 활성화됩니다.
+  ##### 동행 모집 게시판인 **'꼬리 흔들기'**를 통해 인원이 충족(COMPLETED)되면 Firebase Firestore를 기반으로 임시 라이브 채팅방이 자동으로 활성화됩니다.
 #### 공공데이터 API 연동: 
-##### 한국관광공사의 TourAPI 4.0을 포함한 국가 제공 API를 연동하여 전국 단위의 신뢰도 높은 행사 정보를 제공합니다.
+  ##### 한국관광공사의 TourAPI 4.0을 포함한 국가 제공 API를 연동하여 전국 단위의 신뢰도 높은 행사 정보를 제공합니다.
+
+  
+---
 
 
 ## 🛠 프로젝트 기술 스택 정리
 
 #### 1. 개발 및 빌드 환경 (IDE & Build Tool)
-##### IDE: IntelliJ IDEA (Java 및 Spring Boot 개발 생산성 극대화)\
-##### Build Tool: Gradle (유연한 빌드 스크립트 관리 및 Maven 대비 빠른 빌드 속도 확보) 
-##### Version Control: Git / GitHub (Gorong_A_5 레파지토리 활용)
+  ##### IDE: IntelliJ IDEA (Java 및 Spring Boot 개발 생산성 극대화)\
+  ##### Build Tool: Gradle (유연한 빌드 스크립트 관리 및 Maven 대비 빠른 빌드 속도 확보) 
+  ##### Version Control: Git / GitHub (Gorong_A_5 레파지토리 활용)
 
 #### 2. 백엔드 아키텍처 (Backend)
-##### Framework: Spring Boot (모듈화된 MVC 구조를 통한 확장성 확보)
-##### Language: Java 25
-##### Database (Polyglot Persistence):
-##### RDBMS: Oracle
-##### DB Management Tool: DBeaver 
-##### Persistence Framework: MyBatis (Mapper를 통한 효율적인 SQL 관리)
+  ##### Framework: Spring Boot (모듈화된 MVC 구조를 통한 확장성 확보)
+  ##### Language: Java 25
+  ##### Database (Polyglot Persistence):
+  ##### RDBMS: Oracle
+  ##### DB Management Tool: DBeaver 
+  ##### Persistence Framework: MyBatis (Mapper를 통한 효율적인 SQL 관리)
 
 #### 4. 프론트엔드 및 인터랙션 (Frontend)
-##### Hybrid Framework: React Native (웹과 앱의 하이브리드 환경 최적화 및 코드 재사용성 확보)
-##### Animation Engine: Rive (상태 머신 기반: 사용자 입력에 실시간 반응하는 상태 머신 기반 고냥이 캐릭터 구현)
+  ##### Hybrid Framework: React Native (웹과 앱의 하이브리드 환경 최적화 및 코드 재사용성 확보)
+  ##### Animation Engine: Rive (상태 머신 기반: 사용자 입력에 실시간 반응하는 상태 머신 기반 고냥이 캐릭터 구현)
 
 #### 5. 인프라 및 CI/CD (Infrastructure)
-##### Cloud: AWS EC2 (안정적인 클라우드 컴퓨팅 인프라 제공)
-##### CI/CD: Jenkins (지속적인 통합 및 자동 배포 환경 구축을 통한 품질 관리)
-##### Server: Apache Tomcat
+  ##### Cloud: AWS EC2 (안정적인 클라우드 컴퓨팅 인프라 제공)
+  ##### CI/CD: Jenkins (지속적인 통합 및 자동 배포 환경 구축을 통한 품질 관리)
+  ##### Server: Apache Tomcat
 
 #### 6. 주요 API 연동
-##### 문화 정보: 한국관광공사 TourAPI 4.0 (공공데이터 기반 전국 축제 정보 수집)
-##### 위치 서비스: Kakao Local API (장소 검색 및 지오펜싱 정확도 향상)
+  ##### 문화 정보: 한국관광공사 TourAPI 4.0 (공공데이터 기반 전국 축제 정보 수집)
+  ##### 위치 서비스: Kakao Local API (장소 검색 및 지오펜싱 정확도 향상)
+
 
 --- 
-웹 기반 UI/UX 집중.
-앱 개발 리소스를 최소화하기 위해, 앱은 지오펜싱 인증 로그를 서버(Oracle/Firebase)에 전송하는 백그라운드 모듈 역할로만 국한시키고, 캐릭터 육성이나 커뮤니티 활동은 모두 웹 브라우저에서 이루어지도록 설계
+##### 웹 기반 UI/UX 집중.
+##### 앱 개발 리소스를 최소화하기 위해, 앱은 지오펜싱 인증 로그를 서버(Oracle/Firebase)에 전송하는 백그라운드 모듈 역할로만 국한시키고, 캐릭터 육성이나 커뮤니티 활동은 모두 웹 브라우저에서 이루어지도록 설계
 --- 
-React Native & Expo: 이미 프레젠테이션에서 언급된 것처럼 React Native와 expo-location 라이브러리를 사용하면 복잡한 네이티브 코드 없이도 위경도 좌표를 추출하고 **Haversine formula(거리 계산 로직)**를 통해 특정 반경 진입 여부를 계산하는 로직을 직접 코딩...
-Mapbox API: Mapbox는 iOS와 Android 모두에서 사용할 수 있는 지오펜싱 API를 제공하며, 이는 개별적인 네이티브 구현 없이도 경계 진입(Enter), 이탈(Exit), 체류(Dwell) 이벤트를 쉽게 관리할 수 있음...
+##### React Native & Expo: 이미 프레젠테이션에서 언급된 것처럼 React Native와 expo-location 라이브러리를 사용하면 복잡한 네이티브 코드 없이도 위경도 좌표를 추출하고 **Haversine formula(거리 계산 로직)**를 통해 특정 반경 진입 여부를 계산하는 로직을 직접 코딩...
+##### Mapbox API: Mapbox는 iOS와 Android 모두에서 사용할 수 있는 지오펜싱 API를 제공하며, 이는 개별적인 네이티브 구현 없이도 경계 진입(Enter), 이탈(Exit), 체류(Dwell) 이벤트를 쉽게 관리할 수 있음...
 --- 
+
 
 ## 🔍 코드 리뷰 (뱅크샐러드) 채택
 #### 출처 - [https://blog.banksalad.com/tech/banksalad-code-review-culture/]<https://blog.banksalad.com/tech/banksalad-code-review-culture/>
