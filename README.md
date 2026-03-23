@@ -47,10 +47,15 @@
   * Hybrid Framework: React Native (웹과 앱의 하이브리드 환경 최적화 및 코드 재사용성 확보)
   * Animation Engine: Rive (상태 머신 기반: 사용자 입력에 실시간 반응하는 상태 머신 기반 고냥이 캐릭터 구현)
 
-#### 5. 인프라 및 CI/CD (Infrastructure)
+#### 5. 인프라 및 CI/CD (Infrastructure & CI/CD)
   * Cloud: AWS EC2 (안정적인 클라우드 컴퓨팅 인프라 제공)
-  * CI/CD: Jenkins (지속적인 통합 및 자동 배포 환경 구축을 통한 품질 관리)
-  * Server: Apache Tomcat
+  * Web Server & Reverse Proxy: Nginx
+    * 보안: 외부 노출 포트를 단일화(80/443)하고 백엔드 서버 포트를 은닉.
+    * 라우팅: /api 경로는 백엔드로, 그 외 정적 자원 요청은 프론트엔드 영역으로 배분.
+    * SSL: Let's Encrypt 연동을 통한 HTTPS 암호화 통신 적용.
+  * WAS: Spring Boot (Embedded Tomcat)
+    * 내장 톰캣을 활용하여 별도의 WAS 설치 없이 독립적인 실행 파일(.jar)로 운영.
+  * CI/CD: Jenkins-GitHub Webhook과 연동하여 소스 코드 빌드, 테스트 및 EC2 자동 배포 환경 구축.
 
 #### 6. 주요 API 연동
   * 문화 정보: 한국관광공사 TourAPI 4.0 (공공데이터 기반 전국 축제 정보 수집)
