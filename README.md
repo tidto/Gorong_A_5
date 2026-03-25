@@ -61,6 +61,24 @@
   * 문화 정보: 한국관광공사 TourAPI 4.0 (공공데이터 기반 전국 축제 정보 수집)
   * 위치 서비스: Kakao Local API (장소 검색 및 지오펜싱 정확도 향상)
 
+## 📦 인프라 및 배포 전략 (Infrastructure & DevOps)
+#### 고롱(Gorong)은 서비스의 안정성과 확장성을 위해 전체 아키텍처를 Docker 컨테이너화하여 관리하며, Jenkins를 통해 자동화된 CI/CD 파이프라인을 구축했습니다.
+
+#### 1. 컨테이너 아키텍처 (Docker)
+  * Spring Boot Container: Java 25 기반의 백엔드 애플리케이션을 격리된 환경에서 실행.
+  * Nginx Container: 리버스 프록시 및 정적 자원(React 빌드 파일) 서빙을 담당하며, SSL 인증서 관리를 수행.
+  * Docker Compose: 다중 컨테이너 환경을 오케스트레이션하여 백엔드와 웹 서버 간의 네트워크 통신을 최적화.
+
+#### 2. CI/CD 파이프라인 (Jenkins)
+  1. Code Push: 개발자가 GitHub 레파지토리에 코드를 푸시.
+  2. Build: Jenkins가 Webhook을 감지하여 Gradle 빌드 수행 및 .jar 생성.
+  3. Dockerize: 빌드된 아티팩트를 기반으로 Docker 이미지를 빌드 및 Docker Hub(또는 Private Registry)에 푸시.
+  4. Deploy: EC2 서버에서 최신 이미지를 Pull 하여 docker-compose를 통해 무중단 배포 혹은 컨테이너 교체 수행.
+
+#### 3. 배포 환경 스펙
+  * OS: Ubuntu 22.04 LTS (AWS EC2)
+  * Runtime: Docker 24+, Docker Compose v2
+  * API Gateway: Nginx (Host Port 80, 443 → Container Port 8080)
 
 --- 
 ##### 웹 기반 UI/UX 집중.
