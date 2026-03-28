@@ -10,19 +10,18 @@
 ## ✨ 핵심 서비스 기능 (Core values)
 
 #### From '집냥이' to 'Go냥이' :
-   * 외부 활동에 소극적인 현대인을 방 안에만 머무는 **집냥이**에 비유했습니다. 고롱(Gorong)의 게이미피케이션 요소를 통해, 사용자가 스스로 오프라인 행사 현장으로 나서는 활동적인 **Go냥이**로 성장해 나가는 흥미로운 여정을 제공합니다.
+   * 외부 활동에 소극적인 현대인을 영역 동물인 고양이로 방 안에만 머무는 **집냥이**에 비유했습니다. 고롱(Gorong)의 게이미피케이션 요소를 통해, 사용자가 스스로 오프라인 행사 현장으로 나서는 활동적인 **Go냥이**로 성장해 나가는 흥미로운 여정을 제공합니다.
 #### 신뢰도 높은 정보 탐색 (Information Acquisition)
    * 공공데이터 기반 큐레이션: 한국관광공사의 TourAPI 4.0 등 국가 제공 API를 연동하여 전국의 정확한 축제 및 문화 정보를 사용자에게 배포합니다.
    * 맞춤형 추천: 사용자의 관심 태그와 위치 기반 서비스(LBS)를 통해 꼭 필요한 정보를 쉽고 빠르게 얻을 수 있게 합니다
 #### 하이브리드 서비스 구조: 
-   * 정보 탐색 및 동행 모집은 **웹(Web)**에서, GPS 기반 현장 인증은 **앱(App)**에서 진행하는 효율적인 사용자 여정을 제공합니다.
-#### 지오펜싱(Geofencing) 인증: 
-   * 실제 행사 장소 반경(25~50m) 내에 도달하면 GPS 기술을 통해 참여를 실시간으로 인증하고 즉각적인 리워드**펫쿠키**를 지급합니다.
-#### 게이미피케이션(Gamification): 
-   * 자신의 고냥이(Go냥이) 캐릭터를 선택해 , '클로젯'에서 획득한 의상으로 꾸미며 활동 이력을 시각적으로 아카이빙합니다.
-   * 단순한 일회성 아이템이 아닌, 사용자가 다녀온 장소와 추억을 상징하는 한정판 의상 및 특수 업적 뱃지를 통해 활동 이력을 시각적으로 기록합니다
-#### 실시간 커뮤니티: 
+   * 정보 탐색, 캐릭터 꾸미기, 커뮤니티 활동은 **웹(React, Rive engine)**에서, GPS 기반 현장 인증 및 실시간 동선 기록은 **네이티브 앱(Android/Kotlin)**에서 진행하여 각 환경의 강점을 극대화합니다.
+#### 지오펜싱(Geofencing) 인증 & 헬시 플래너:
+   * 실제 행사 장소 반경(25~50m) 내에 도달하면 GPS로 참여를 인증하고 리워드를 지급합니다. 이후 '헬시 플래너' 기능이 활성화되어 행사장을 돌아다니는 사용자의 실시간 이동 경로(Polyline), 거리, 칼로리 소모량 등을 지도 위에 시각화, 기록합니다.
+   * 단순한 일회성 아이템이 아닌, 사용자가 다녀온 장소와 추억을 상징하는 한정판 아이템 및 특수 업적 뱃지를 통해 활동 이력을 시각적으로 기록합니다
+#### 커뮤니티 공간: 
    * 동행 모집 게시판인 **'꼬리 흔들기'**를 통해 인원이 충족(COMPLETED)되면 Firebase Firestore를 기반으로 임시 라이브 채팅방이 자동으로 활성화됩니다.
+   * 포스팅을 통해 올렸던 이미지나 동영상같은 매개체들이 유저만의 갤러리에 저장되고 타 유저와 공유할 수 있습니다.
 
   
 ---
@@ -36,26 +35,31 @@
   * Version Control: Git / GitHub (Gorong_A_5 레파지토리 활용)
 
 #### 2. 백엔드 아키텍처 (Backend)
-  * Framework: Spring Boot (모듈화된 MVC 구조를 통한 확장성 확보)
+  * Framework: Spring Boot (모듈화된 MVC 구조)
   * Language: Java 25
-  * Database (Polyglot Persistence):
-  * RDBMS: Oracle
+  * Database (CQRS 및 Polyglot Persistence 적용):
+    * Main RDBMS (PostgreSQL + PostGIS): 회원 정보, 게시글, 그리고 '헬시 플래너'의 지오펜싱 및 실시간 동선(Polyline) 기록을 위한 공간 데이터(Spatial Data) 저장 및 핵심 비즈니스 로직 처리를 담당합니다.
+    * Real-time NoSQL (Firebase Firestore): 행사 구역 내 익명 오픈 채팅 전용으로 사용됩니다. 메인 서버(EC2)로 집중될 수 있는 대규모 실시간 채팅 트래픽을 완벽하게 분산시키고, 클라이언트 간의 초고속 실시간 동기화(Real-time Sync)를 보장합니다.  
   * DB Management Tool: DBeaver 
-  * Persistence Framework: MyBatis (Mapper를 통한 효율적인 SQL 관리)
+  * ORM/Mapper: MyBatis (Mapper를 통한 효율적인 SQL 관리)
 
 #### 4. 프론트엔드 및 인터랙션 (Frontend)
-  * Hybrid Framework: React Native (웹과 앱의 하이브리드 환경 최적화 및 코드 재사용성 확보)
-  * Animation Engine: Rive (상태 머신 기반: 사용자 입력에 실시간 반응하는 상태 머신 기반 고냥이 캐릭터 구현)
+  * Web Frontend: React (컴포넌트 기반 UI 개발 및 Nginx를 통한 정적 서빙)
+  * Mobile App: Android Native (Kotlin)
+  선정 이유: 앱이 백그라운드 상태이거나 화면이 꺼져 있을 때도 안정적으로 '헬시 플래너'의 GPS 위치(FusedLocationProviderClient)를 수집하기 위해 네이티브 환경으로 전환.
+  * Animation: Rive (사용자 입력에 실시간 반응하는 상태 머신 기반 고냥이 캐릭터 구현)
 
 #### 5. 인프라 및 CI/CD (Infrastructure & CI/CD)
   * Cloud: AWS EC2 (안정적인 클라우드 컴퓨팅 인프라 제공)
+  * Containerization: Docker & Docker Compose
+    * Spring Boot, React(Nginx), PostgreSQL을 각각의 컨테이너로 분리하여 환경을 통일하고 배포의 안정성 확보.
   * Web Server & Reverse Proxy: Nginx
     * 보안: 외부 노출 포트를 단일화(80/443)하고 백엔드 서버 포트를 은닉.
     * 라우팅: /api 경로는 백엔드로, 그 외 정적 자원 요청은 프론트엔드 영역으로 배분.
     * SSL: Let's Encrypt 연동을 통한 HTTPS 암호화 통신 적용.
   * WAS: Spring Boot (Embedded Tomcat)
     * 내장 톰캣을 활용하여 별도의 WAS 설치 없이 독립적인 실행 파일(.jar)로 운영.
-  * CI/CD: Jenkins-GitHub Webhook과 연동하여 소스 코드 빌드, 테스트 및 EC2 자동 배포 환경 구축.
+  * CI/CD: Jenkins-GitHub Webhook과 연동하여 소스 코드 빌드, Dockerize, EC2 자동 무중단 배포.
 
 #### 6. 주요 API 연동
   * 문화 정보: 한국관광공사 TourAPI 4.0 (공공데이터 기반 전국 축제 정보 수집)
@@ -79,6 +83,10 @@
   * OS: Ubuntu 22.04 LTS (AWS EC2)
   * Runtime: Docker 24+, Docker Compose v2
   * API Gateway: Nginx (Host Port 80, 443 → Container Port 8080)
+
+#### 4. 트래픽 분산 및 아키텍처 최적화 전략
+  * 서버와 채팅의 완벽한 분리: 백엔드(Spring Boot)는 모임 생성, 권한 체크, 메인 데이터 제공 기능에만 집중합니다.
+  * 현장에서 발생하는 폭발적인 실시간 채팅 트래픽과 익명 유저 세션 관리는 모두 Firebase Serverless 환경에 위임하여, 메인 AWS EC2 서버의 부하를 획기적으로 낮추고 서비스 안정성을 끌어올렸습니다.
 
 --- 
 ##### 웹 기반 UI/UX 집중.
