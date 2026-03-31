@@ -43,9 +43,13 @@
   * Language: Java 25
   * Database (CQRS 및 Polyglot Persistence 적용):
     * Main RDBMS (PostgreSQL + PostGIS): 회원 정보, 게시글, 그리고 '헬시 플래너'의 지오펜싱 및 실시간 동선(Polyline) 기록을 위한 공간 데이터(Spatial Data) 저장 및 핵심 비즈니스 로직 처리를 담당합니다.
-    * Real-time NoSQL (Firebase Firestore): 행사 구역 내 익명 오픈 채팅 전용으로 사용됩니다. 메인 서버(EC2)로 집중될 수 있는 대규모 실시간 채팅 트래픽을 완벽하게 분산시키고, 클라이언트 간의 초고속 실시간 동기화(Real-time Sync)를 보장합니다.  
+    * Real-time NoSQL (Firebase Firestore): 행사 구역 내 익명 오픈 채팅 전용으로 사용됩니다. 메인 서버(EC2)로 집중될 수 있는 대규모 실시간 채팅 트래픽을 완벽하게 분산시키고, 클라이언트 간의 초고속 실시간 동기화(Real-time Sync)를 보장합니다.
+  * Real-time Communication (실시간 통신):
+    * Spring WebSocket & STOMP: 사전 모집된 동행원들 간의 프라이빗 라이브 채팅을 지원하며, PostGIS와 연동하여 일행 간의 '현재 위치 좌표 마커'를 메모리 상에서 초고속으로 브로드캐스팅합니다.
   * DB Management Tool: DBeaver 
-  * ORM/Mapper: MyBatis (Mapper를 통한 효율적인 SQL 관리)
+  * ORM/Mapper:
+    * MyBatis: Mapper를 통한 효율적으로 활용하여 SQL 튜닝의 유연성을 확보했습니다.
+    * Spring Data JPA (Hibernate Spatial): PostGIS의 복잡한 공간 데이터 연산과 기본 CRUD를 객체지향적으로 안전하게 처리합니다.
 
 #### 4. 프론트엔드 및 인터랙션 (Frontend)
   * Web Frontend: React (컴포넌트 기반 UI 개발 및 Nginx를 통한 정적 서빙)
@@ -126,11 +130,9 @@
 ---
 ##### 목적별 하이브리드 실시간 채팅 시스템 (트래픽 분산 아키텍처):
 ##### 고롱(Gorong)은 서비스의 안정성을 극대화하기 위해, 채팅의 목적과 성격에 따라 두 가지 다른 기술 스택을 적용한 하이브리드 채팅 시스템을 구축했습니다.
-
 ##### 1. 사전 동행 프라이빗 채팅 (Spring WebSocket + PostGIS):
 ##### 웹(React)의 '꼬리 흔들기' 게시판에서 매칭이 완료된 일행 전용 채팅방입니다.
 ##### 메인 서버인 Spring Boot의 WebSocket과 STOMP 프로토콜을 활용하며, 앱(Android)에서 현장 지오펜싱 인증 시 PostGIS 공간 데이터와 연동되어 일행들의 실시간 위치 마커를 지도에 브로드캐스팅합니다. 행사 당일 24시에 서버에서 자동 소멸됩니다.
-
 ##### 2. 현장 오픈 채팅 'Grooming Room' (Firebase Serverless):
 ##### 현장(반경 25~50m)에 있는 수많은 유저가 익명으로 자유롭게 소통하는 휘발성 로컬 오픈 채팅입니다.
 ##### 단기간에 폭발적으로 발생하는 실시간 트래픽이 메인 서버(EC2)에 부하를 주지 않도록 Firebase Firestore와 Anonymous Auth(익명 인증) 인프라로 오프로딩(Offloading)하여 서버 안정성을 엔터프라이즈급으로 끌어올렸습니다.
