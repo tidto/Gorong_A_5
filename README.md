@@ -41,15 +41,16 @@
 #### 2. 백엔드 아키텍처 (Backend)
   * Framework: Spring Boot (모듈화된 MVC 구조)
   * Language: Java 25
-  * Database (CQRS 및 Polyglot Persistence 적용):
+  * Database:
     * Main RDBMS (PostgreSQL + PostGIS): 회원 정보, 게시글, 그리고 '헬시 플래너'의 지오펜싱 및 실시간 동선(Polyline) 기록을 위한 공간 데이터(Spatial Data) 저장 및 핵심 비즈니스 로직 처리를 담당합니다.
     * Real-time NoSQL (Firebase Firestore): 행사 구역 내 익명 오픈 채팅 전용으로 사용됩니다. 메인 서버(EC2)로 집중될 수 있는 대규모 실시간 채팅 트래픽을 완벽하게 분산시키고, 클라이언트 간의 초고속 실시간 동기화(Real-time Sync)를 보장합니다.
   * Real-time Communication (실시간 통신):
     * Spring WebSocket & STOMP: 사전 모집된 동행원들 간의 프라이빗 라이브 채팅을 지원하며, PostGIS와 연동하여 일행 간의 '현재 위치 좌표 마커'를 메모리 상에서 초고속으로 브로드캐스팅합니다.
-  * DB Management Tool: DBeaver 
   * ORM/Mapper:
     * MyBatis: Mapper를 통한 효율적으로 활용하여 SQL 튜닝의 유연성을 확보했습니다.
     * Spring Data JPA (Hibernate Spatial): PostGIS의 복잡한 공간 데이터 연산과 기본 CRUD를 객체지향적으로 안전하게 처리합니다.
+  * DB Management Tool: DBeaver 
+
 
 #### 4. 프론트엔드 및 인터랙션 (Frontend)
   * Web Frontend: React (컴포넌트 기반 UI 개발 및 Nginx를 통한 정적 서빙)
