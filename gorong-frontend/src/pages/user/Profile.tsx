@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import Button from '../components/Button'
-import Input from '../components/Input'
-import Card from '../components/Card'
+import Button from '../../components/Button'
+import Input from '../../components/Input'
+import Card from '../../components/Card'
 import { User, Settings, LogOut, History, Palette } from 'lucide-react'
 
 const mockHistory = [

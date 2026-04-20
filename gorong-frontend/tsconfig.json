@@ -21,6 +21,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "Signup.tsx"],
+  "include": ["src", "src/pages/user/Signup.tsx"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
