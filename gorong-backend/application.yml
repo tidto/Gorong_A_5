@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/gorong_db??currentSchema=gorong_schema
+    username: gorong_user
+    password: "5432"
+    driver-class-name: org.postgresql.Driver
+
+tourapi:
+  key: "c038469ef1c6916d564071bb43ae4c0343a7e11a602e2a6a2e12a1a583be5fc8"

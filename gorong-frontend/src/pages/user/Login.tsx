@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Button from '../components/Button'
-import { useAuth } from '../contexts/AuthContext'
+import Button from '../../components/Button'
+import { useAuth } from '../../contexts/AuthContext'
 import { ShieldCheck, Accessibility } from 'lucide-react'
 
 export default function Login() {
@@ -31,14 +31,7 @@ export default function Login() {
         </p>
 
         <div className="space-y-4">
-          <Button
-            type="button"
-            className="w-full bg-[#FEE500] text-black hover:bg-[#f7dd00] focus:outline-none focus:ring-2 focus:ring-black"
-            onClick={() => handleSocialLogin('kakao')}
-            disabled={isLoading}
-          >
-            {isLoading ? '처리 중...' : '카카오로 로그인'}
-          </Button>
+          
           <Button
             type="button"
             variant="secondary"
@@ -61,6 +54,14 @@ export default function Login() {
                 구글로 로그인
               </>
             )}
+          </Button>
+          <Button
+            type="button"
+            className="w-full bg-[#FEE500] text-black hover:bg-[#f7dd00] focus:outline-none focus:ring-2 focus:ring-black"
+            onClick={() => handleSocialLogin('kakao')}
+            disabled={isLoading}
+          >
+            {isLoading ? '처리 중...' : '카카오로 로그인'}
           </Button>
           <p className="text-sm text-gray-500">
             첫 로그인 시 추가 정보 입력 페이지로 이동합니다.

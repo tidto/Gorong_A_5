@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import Button from '../components/Button'
-import Input from '../components/Input'
-import Card from '../components/Card'
-import { useAuth } from '../contexts/AuthContext'
+import Button from '../../components/Button'
+import Input from '../../components/Input'
+import Card from '../../components/Card'
+import { useAuth } from '../../contexts/AuthContext'
 import { User, Settings, Bell, Shield, LogOut, Mail, Phone } from 'lucide-react'
 
 export default function MyPage() {

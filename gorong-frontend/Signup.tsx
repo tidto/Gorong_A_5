@@ -1,8 +1,8 @@
 import React, { useState, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import Button from '../components/Button'
-import Input from '../components/Input'
-import { useAuth } from '../contexts/AuthContext'
+import Button from './src/components/Button'
+import Input from './src/components/Input'
+import { useAuth } from './src/contexts/AuthContext'
 import { ShieldCheck, Mail, Lock, Calendar, MapPin, User, Heart, CheckCircle } from 'lucide-react'
 
 type SignupStep = 'terms' | 'basic' | 'age' | 'address' | 'profile' | 'interests' | 'complete' | 'disability'
