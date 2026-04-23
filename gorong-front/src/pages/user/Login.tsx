@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import Button from '../../components/Button'
 import { useAuth } from '../../contexts/AuthContext'
 import { ShieldCheck, Accessibility } from 'lucide-react'
+import { loginWithGoogle, loginWithGithub } from '../../api/authService'
+import { checkUserStatus } from '../../api/userApi' // ⭐️ 새로 만든 함수 가져오기
 
 export default function Login() {
   const navigate = useNavigate()
@@ -15,11 +17,50 @@ export default function Login() {
     }
   }, [auth.loggedIn, navigate])
 
-  const handleSocialLogin = async (provider: 'kakao' | 'google') => {
+  // ⭐️ kakao를 github로 변경
+  const handleSocialLogin = async (provider: 'google' | 'github') => {
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    setIsLoading(false)
-    navigate('/signup', { state: { socialProvider: provider } })
+    try {
+      let firebaseUser;
+      
+      // 1. Firebase 팝업 띄워서 인증
+      if (provider === 'google') {
+        firebaseUser = await loginWithGoogle();
+      } else if (provider === 'github') {
+        firebaseUser = await loginWithGithub();
+      }
+
+      if (!firebaseUser) throw new Error("인증 실패");
+
+      // 2. Firebase 토큰 뽑아내기
+      const idToken = await firebaseUser.getIdToken();
+
+      // 3. 백엔드에 우리 회원인지 물어보기!
+      const result = await checkUserStatus(idToken);
+
+      // 4. 대망의 분기 처리 (라우팅)
+      if (result.isRegistered) {
+        // 기존 회원이면 Context 등에 유저 정보 저장 후 홈으로!
+        // auth.login(result.user); (Context 사용 방식에 맞춰 수정하세요)
+        alert(`${result.user.nickname}님, 환영합니다!`);
+        navigate('/events', { replace: true });
+      } else {
+        // 신규 회원이면 추가 정보 화면으로! (이메일 등 Firebase 정보 들고 감)
+        alert("고롱의 새로운 고양이시군요! 추가 정보를 입력해주세요.");
+        navigate('/signup', { 
+          state: { 
+            email: firebaseUser.email, 
+            firebaseUid: firebaseUser.uid 
+          } 
+        });
+      }
+
+    } catch (error) {
+      console.error(`${provider} 로그인 실패:`, error)
+      alert("로그인 처리 중 문제가 발생했습니다.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -32,6 +73,7 @@ export default function Login() {
 
         <div className="space-y-4">
           
+          {/* 구글 로그인 버튼 */}
           <Button
             type="button"
             variant="secondary"
@@ -55,14 +97,28 @@ export default function Login() {
               </>
             )}
           </Button>
+
+          {/* ⭐️ 깃허브 로그인 버튼으로 교체 */}
           <Button
             type="button"
-            className="w-full bg-[#FEE500] text-black hover:bg-[#f7dd00] focus:outline-none focus:ring-2 focus:ring-black"
-            onClick={() => handleSocialLogin('kakao')}
+            className="w-full bg-[#24292F] text-white hover:bg-[#24292F]/90 focus:outline-none focus:ring-2 focus:ring-[#24292F] flex items-center justify-center gap-2"
+            onClick={() => handleSocialLogin('github')}
             disabled={isLoading}
           >
-            {isLoading ? '처리 중...' : '카카오로 로그인'}
+            {isLoading ? (
+              '처리 중...'
+            ) : (
+              <>
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-sm">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                  </svg>
+                </span>
+                깃허브로 로그인
+              </>
+            )}
           </Button>
+
           <p className="text-sm text-gray-500">
             첫 로그인 시 추가 정보 입력 페이지로 이동합니다.
           </p>

@@ -5,7 +5,8 @@ import { getAuth } from "firebase/auth";
 // 이를 자동으로 처리해주는 Axios Instance를 만들어야 합니다.
 
 const axiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL,
+  // ⭐️ 수정됨: baseURL 키워드를 사용하고, 끝에 세미콜론(;)을 제거했습니다.
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
 });
 
 // ⭐️ 핵심: 요청을 보내기 직전에 가로채서(Interceptor) 토큰을 끼워 넣습니다.
