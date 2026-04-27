@@ -1,9 +1,18 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/gorong_db??currentSchema=gorong_schema
+    # ⭐️ 1단계에서 복사한 엔드포인트 주소를 여기에 넣으세요.
+    url: gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com
     username: gorong_user
-    password: "5432"
+    password: gorong0132!!
     driver-class-name: org.postgresql.Driver
 
+  jpa:
+    hibernate:
+      ddl-auto: update # 처음 테이블 생성 시에는 update 또는 create
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 tourapi:
   key: "c038469ef1c6916d564071bb43ae4c0343a7e11a602e2a6a2e12a1a583be5fc8"

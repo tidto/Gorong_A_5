@@ -1,0 +1,33 @@
+{
+  "name": "gorong-app",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@react-native-firebase/app": "^24.0.0",
+    "@react-native-firebase/firestore": "^24.0.0",
+    "@tanstack/react-query": "^5.100.1",
+    "aios": "^1.0.1",
+    "expo": "~54.0.33",
+    "expo-dev-client": "~6.0.20",
+    "expo-location": "~19.0.8",
+    "expo-status-bar": "~3.0.9",
+    "nativewind": "^4.2.3",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-gifted-chat": "^3.3.2",
+    "react-native-maps": "^1.27.2",
+    "tailwindcss": "^3.4.19",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
