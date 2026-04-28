@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  
+  gorong-back:
+    image: ${DOCKER_USERNAME}/gorong-back:latest
+    container_name: gorong-back
+    ports:
+      - "8080:8080"
+    restart: always
+
+  
+  gorong-front:
+    image: ${DOCKER_USERNAME}/gorong-front:latest
+    container_name: gorong-front
+    ports:
+      - "80:80"
+    restart: always
