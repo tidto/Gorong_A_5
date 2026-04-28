@@ -7,6 +7,7 @@ import org.locationtech.jts.geom.Point; // PostGIS 지오펜싱을 위한 핵심
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+// ⭐️ 에러 원인이었던 클래스 레벨의 @Builder는 삭제했습니다.
 @Entity
 @Table(name = "user_profiles")
 @Getter
@@ -39,9 +40,8 @@ public class UserProfile {
     @Column(name = "base_location", columnDefinition = "geometry(Point, 4326)")
     private Point baseLocation;
 
-    // 육구 점수 (5점 만점, 소수점 첫째 자리) -> 오라클 NUMBER(2,1)과 동일
-    @Column(name = "jelly_score", precision = 2, scale = 1)
-    private BigDecimal jellyScore;
+    @Column(name = "gurr_temperature", columnDefinition = "numeric(3,1)")
+    private Double gurrTemperature; // ⭐️ 생성자에서 처리할 것이므로 여기서 = 38.5 는 지웠습니다.
 
     @Column(name = "total_walk_distance", precision = 10, scale = 2)
     private BigDecimal totalWalkDistance;
@@ -50,12 +50,17 @@ public class UserProfile {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // ⭐️ 생성자에만 @Builder를 달아서 명확하게 통제합니다.
     @Builder
-    public UserProfile(User user, String nickname, String gorongHz, BigDecimal jellyScore, BigDecimal totalWalkDistance) {
+    public UserProfile(User user, String nickname, String gorongHz, Double gurrTemperature, BigDecimal totalWalkDistance) {
         this.user = user;
         this.nickname = nickname;
         this.gorongHz = gorongHz;
-        this.jellyScore = jellyScore != null ? jellyScore : BigDecimal.ZERO;
+
+        // ⭐️ @Builder.Default 없이 여기서 깔끔하게 디폴트 값을 세팅합니다! (값이 안 들어오면 38.5)
+        this.gurrTemperature = gurrTemperature != null ? gurrTemperature : 38.5;
         this.totalWalkDistance = totalWalkDistance != null ? totalWalkDistance : BigDecimal.ZERO;
+
+        // 삭제된 jellyScore 로직은 완벽히 제거했습니다.
     }
 }

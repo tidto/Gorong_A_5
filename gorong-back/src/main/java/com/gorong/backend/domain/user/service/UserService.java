@@ -9,6 +9,7 @@ import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -41,8 +42,7 @@ public class UserService {
                 .user(savedUser) // 외래키(FK) 연결
                 .nickname(requestDto.getNickname())
                 .gorongHz(requestDto.getGorongHz())
-                .jellyScore(0.0) // 육구 점수 초기화
-                .totalWalkDistance(0.0)
+                .totalWalkDistance(BigDecimal.ZERO)
                 .build();
         userProfileRepository.save(newProfile);
     }
