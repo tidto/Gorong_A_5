@@ -7,6 +7,10 @@ services:
     container_name: gorong-back
     ports:
       - "8080:8080"
+    environment:
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - TOUR_API_KEY=${TOUR_API_KEY}
     restart: always
 
   
