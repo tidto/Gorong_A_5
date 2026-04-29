@@ -1,9 +1,8 @@
 spring:
   datasource:
-    # ⭐️ 1단계에서 복사한 엔드포인트 주소를 여기에 넣으세요.
-    url: gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com
-    username: gorong_user
-    password: gorong0132!!
+    url: jdbc:postgresql://gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com:5432/gorong_db?currentSchema=gorong_schema
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -14,5 +13,6 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: gorong_schema
 tourapi:
-  key: "c038469ef1c6916d564071bb43ae4c0343a7e11a602e2a6a2e12a1a583be5fc8"
+  key: ${TOUR_API_KEY}

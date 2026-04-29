@@ -4,45 +4,49 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime; // TIMESTAMPTZ 대응
 
 @Entity
-@Table(name = "users") // PostgreSQL에 생성될 실제 테이블 이름
+@Table(name = "users") // ERD의 USER (예약어 충돌 방지 위해 복수형 권장)
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // JPA 기본 규칙 (빈 생성자 필요)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
 public class User {
 
-    @Id // PK 지정
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // 오라클의 SEQUENCE.NEXTVAL과 동일한 역할
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
     private Long id;
 
-    @Column(name = "firebase_uid", unique = true, nullable = false, length = 128)
+    @Column(name = "firebase_uid", nullable = false, unique = true, columnDefinition = "TEXT")
     private String firebaseUid;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "email", nullable = false, columnDefinition = "TEXT")
     private String email;
 
-    @Column(name = "role_type", length = 20)
-    private String roleType = "USER";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role_type", nullable = false, columnDefinition = "TEXT")
+    private RoleType roleType;
 
-    @Column(name = "is_barrier_free")
-    private Boolean isBarrierFree = false;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "barrier_free_type", nullable = false, columnDefinition = "TEXT")
+    @Builder.Default
+    private BarrierFreeType barrierFreeType = BarrierFreeType.NONE;
 
-    @CreationTimestamp // INSERT 시 자동으로 현재 시간 저장 (오라클의 SYSDATE)
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "is_foreigner", nullable = false)
+    @Builder.Default
+    private Boolean isForeigner = false;
 
-    @UpdateTimestamp // UPDATE 시 자동으로 갱신
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    @CreationTimestamp
+    @Column(name = "create_at", nullable = false, updatable = false)
+    private OffsetDateTime createAt;
 
-    @Builder
-    public User(String firebaseUid, String email, String roleType, Boolean isBarrierFree) {
-        this.firebaseUid = firebaseUid;
-        this.email = email;
-        this.roleType = roleType != null ? roleType : "USER";
-        this.isBarrierFree = isBarrierFree != null ? isBarrierFree : false;
-    }
+    @UpdateTimestamp
+    @Column(name = "update_at")
+    private OffsetDateTime updateAt;
+
+    // --- Enums ---
+    public enum RoleType { USER, ADMIN }
+    public enum BarrierFreeType { NONE, PHYSICAL, VISUAL, AUDITORY }
 }
