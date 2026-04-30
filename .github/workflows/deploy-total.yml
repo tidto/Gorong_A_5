@@ -24,6 +24,12 @@ jobs:
     - name: Backend Build (Gradle)
       run: |
         cd gorong-back
+        
+        mkdir -p src/main/resources
+        cat << 'EOF' > src/main/resources/serviceAccountKey.json
+        ${{ secrets.FIREBASE_SERVICE_KEY }}
+        EOF
+        
         chmod +x ./gradlew
         ./gradlew build -x test
 
