@@ -22,13 +22,13 @@ jobs:
         distribution: 'temurin'
 
     - name: Backend Build (Gradle)
+      env:
+        FIREBASE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }} # 깃허브 자체 변수에 임시 저장
       run: |
         cd gorong-back
         
         mkdir -p src/main/resources
-        cat << 'EOF' > src/main/resources/serviceAccountKey.json
-        ${{ secrets.FIREBASE_SERVICE_KEY }}
-        EOF
+        echo "$FIREBASE_KEY" > src/main/resources/serviceAccountKey.json
         
         chmod +x ./gradlew
         ./gradlew build -x test
