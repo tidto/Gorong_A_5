@@ -9,7 +9,7 @@ RUN npm install
 # 전체 소스 코드 복사 및 빌드
 COPY . .
 # package.json의 "build": "vite build"를 실행하여 'dist' 폴더를 생성합니다.
-RUN npm run dev 
+RUN npm run build
 
 # 스테이지 2: 실행 (경량화된 Nginx 환경)
 FROM nginx:stable-alpine
