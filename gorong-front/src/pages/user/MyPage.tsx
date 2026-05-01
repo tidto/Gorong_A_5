@@ -112,11 +112,11 @@ export default function MyPage() {
                   <User className="w-5 h-5 text-blue-600" />
                   <span className="font-medium text-gray-900">미성년자 여부</span>
                 </div>
-                <span className={`text-sm font-medium ${
+                {/* <span className={`text-sm font-medium ${
                   auth.user?.isMinor ? 'text-orange-600' : 'text-green-600'
                 }`}>
                   {auth.user?.isMinor ? '미성년자 (부모 인증 필요)' : '성인'}
-                </span>
+                </span> */}
               </div>
 
               <div className="flex items-center justify-between py-3">
@@ -124,11 +124,11 @@ export default function MyPage() {
                   <Shield className="w-5 h-5 text-purple-600" />
                   <span className="font-medium text-gray-900">배리어프리 우선</span>
                 </div>
-                <span className={`text-sm font-medium ${
+                {/* <span className={`text-sm font-medium ${
                   auth.user?.requiresBarrierFree ? 'text-purple-600' : 'text-gray-600'
                 }`}>
                   {auth.user?.requiresBarrierFree ? '적용됨' : '미적용'}
-                </span>
+                </span> */}
               </div>
             </div>
           </Card>

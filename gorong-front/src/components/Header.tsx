@@ -72,12 +72,6 @@ export default function Header() {
               >
                 로그인
               </Link>
-              <Link
-                to="/signup"
-                className="rounded-full border border-primary-500 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 transition hover:bg-primary-100"
-              >
-                회원가입
-              </Link>
             </>
           )}
         </div>
