@@ -16,6 +16,12 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
 
+    // 💡 [추가] UserController의 /login API에서 회원이 존재하는지 판별할 때 사용하는 메서드!
+    @Transactional(readOnly = true) // 읽기 전용이므로 성능이 더 빠릅니다.
+    public boolean checkUserExistsByUid(String firebaseUid) {
+        return userRepository.existsByFirebaseUid(firebaseUid);
+    }
+
     @Transactional
     public void signUpUser(SignUpRequestDto requestDto) {
 
@@ -28,8 +34,8 @@ public class UserService {
         User newUser = User.builder()
                 .firebaseUid(requestDto.getFirebaseUid())
                 .email(requestDto.getEmail())
-                // 💡 역할(Role), 베리어프리, 외국인 여부는 엔티티에서 설정한 기본값이 자동으로 들어갑니다!
-                // 굳이 적는다면 .roleType(User.RoleType.USER) 이렇게 적어야 합니다.
+                // 💡 [수정] RoleType은 기본값이 설정되어 있지 않으므로 반드시 명시해주어야 에러가 나지 않습니다!
+                .roleType(User.RoleType.USER)
                 .build();
         User savedUser = userRepository.save(newUser);
 
@@ -38,10 +44,10 @@ public class UserService {
                 .user(savedUser) // 외래키(FK) 연결
                 .nickname(requestDto.getNickname())
                 // .gorongHz(requestDto.getGorongHz()) 온보딩 페이지에서 작성 후 insert
-                // 💡 온도(38.5)와 걸음수(0)도 엔티티의 생성자가 알아서 넣어주므로 생략!
                 .build();
         userProfileRepository.save(newProfile);
     }
+
     // 온보딩 완료 후 고롱 주파수를 업데이트하는 메서드
     @Transactional
     public void updateGorongHz(Long userId, String gorongHz) {
@@ -52,6 +58,6 @@ public class UserService {
         // 2. 프로필 객체의 빈칸에 주파수를 채워 넣습니다.
         profile.updateGorongHz(gorongHz);
 
-        // 💡 주의: 여기서 save()를 또 부를 필요가 없습니다! (JPA 더티 체킹)
+        // 💡 JPA 더티 체킹: 트랜잭션이 끝날 때 알아서 UPDATE 쿼리가 날아갑니다. 완벽합니다!
     }
 }

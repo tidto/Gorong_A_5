@@ -19,18 +19,16 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 프론트에서 보낸 헤더 추출 (Bearer 토큰)
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             try {
-                // ⭐️ 핵심: Firebase Admin SDK를 통해 토큰이 진짜인지 검증
+                // ⭐️ 핵심: 토큰을 까서 보물상자(decodedToken)를 얻어냅니다.
                 FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token);
-                String firebaseUid = decodedToken.getUid(); // A1b2C3d4 형태
 
-                // Spring Security 컨텍스트에 인증 정보 저장 (이제 컨트롤러에서 이 유저가 누군지 알 수 있음)
+                // 💡 [수정됨] UID 글자 하나만 넘기는 게 아니라, 토큰 전체(decodedToken)를 Principal(주체)로 넘깁니다!
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(firebaseUid, null, Collections.emptyList());
+                        new UsernamePasswordAuthenticationToken(decodedToken, null, Collections.emptyList());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
             } catch (FirebaseAuthException e) {

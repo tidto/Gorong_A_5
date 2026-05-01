@@ -4,10 +4,10 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import java.time.OffsetDateTime; // TIMESTAMPTZ 대응
+import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "users") // ERD의 USER (예약어 충돌 방지 위해 복수형 권장)
+@Table(name = "users")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -24,6 +24,14 @@ public class User {
 
     @Column(name = "email", nullable = false, columnDefinition = "TEXT")
     private String email;
+
+    // 💡 [추가된 부분 1] 프론트에서 넘어온 닉네임을 저장할 공간
+    @Column(name = "nickname", nullable = false, length = 50)
+    private String nickname;
+
+    // 💡 [추가된 부분 2] 프론트에서 넘어온 고롱 주파수를 저장할 공간
+    @Column(name = "gorong_hz", length = 20)
+    private String gorongHz;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role_type", nullable = false, columnDefinition = "TEXT")
