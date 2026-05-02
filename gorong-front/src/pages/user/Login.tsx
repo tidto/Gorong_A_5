@@ -5,8 +5,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { ShieldCheck, Accessibility } from 'lucide-react'
 import { checkUserStatus } from '../../api/userApi'
 import { auth } from '../../firebase/firebaseConfig'
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth'
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth'
 import { loginWithGoogle, loginWithGithub } from '../../api/authService'
+import { useNotification } from '../../contexts/NotificationContext'
 
 
 
@@ -18,6 +19,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const { toast, confirm } = useNotification()
 
   useEffect(() => {
     if (authContext.loggedIn) {
@@ -38,7 +40,7 @@ export default function Login() {
 
       if (result.isRegistered && result.user) {
         authContext.setUser(result.user ?? null)
-        alert(`${result.user.nickname}님, 환영합니다!`)
+        toast(`${result.user.nickname}님, 환영합니다!`, 'success')
         // 이전 경로가 있으면 그곳으로, 없으면 홈('/')으로
         const from = (location.state as any)?.from?.pathname ?? '/'
 
@@ -51,7 +53,7 @@ export default function Login() {
       }
     } catch (error) {
       console.error(`${provider} 로그인 실패:`, error)
-      alert('로그인 처리 중 문제가 발생했습니다.')
+      toast('로그인 처리 중 문제가 발생했습니다.', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -61,7 +63,7 @@ export default function Login() {
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) {
-      alert('이메일과 비밀번호를 모두 입력해주세요.')
+      toast('이메일과 비밀번호를 모두 입력해주세요.', 'warning')
       return
     }
 
@@ -71,9 +73,16 @@ export default function Login() {
       const idToken = await userCredential.user.getIdToken()
       const result = await checkUserStatus(idToken)
 
+      if (!userCredential.user.emailVerified) {
+        await sendEmailVerification(userCredential.user)
+        toast('이메일 인증이 필요합니다. 받은 편지함을 확인하고 링크를 클릭한 뒤 다시 로그인해 주세요.', 'success')
+        setIsLoading(false)
+        return
+      }
+
       if (result.isRegistered && result.user) {
         authContext.setUser(result.user ?? null)
-        alert(`${result.user.nickname}님, 환영합니다!`)
+        toast(`${result.user.nickname}님, 환영합니다!`, 'success')
         const from  = (location.state as any)?.from?.pathname ?? '/'
         navigate(from, { replace: true })
       } else {
@@ -83,22 +92,30 @@ export default function Login() {
       }
     } catch (error: any) {
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        const wantsToSignUp = window.confirm('가입되지 않은 이메일입니다. 새로 계정을 만드시겠습니까?')
+        const wantsToSignUp = await confirm({
+            message: '가입되지 않은 이메일입니다.',
+            description: '이 정보로 새로 계정을 만드시겠습니까?',
+            confirmLabel: '계정 만들기'
+        })
         if (wantsToSignUp) {
           try {
             const newCredential = await createUserWithEmailAndPassword(auth, email, password)
+            
+            await sendEmailVerification(newCredential.user)
+            toast('인증 메일을 발송했습니다! 이메일의 링크를 클릭한 뒤 다시 로그인해 주세요.', 'success')
+
             navigate('/signup', {
               state: { email: newCredential.user.email, firebaseUid: newCredential.user.uid }
             })
           } catch (signupError: any) {
-            if (signupError.code === 'auth/weak-password') alert('비밀번호는 6자리 이상이어야 합니다.')
-            else alert('회원가입 중 오류가 발생했습니다.')
+            if (signupError.code === 'auth/weak-password') toast('비밀번호는 6자리 이상이어야 합니다.', 'warning')
+            else toast('회원가입 중 오류가 발생했습니다.', 'error')
           }
         }
       } else if (error.code === 'auth/wrong-password') {
-        alert('비밀번호가 틀렸습니다.')
+        toast('비밀번호가 틀렸습니다.', 'error')
       } else {
-        alert('로그인 처리 중 문제가 발생했습니다.')
+        toast('로그인 처리 중 문제가 발생했습니다.', 'error')
       }
     } finally {
       setIsLoading(false)

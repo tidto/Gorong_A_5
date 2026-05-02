@@ -5,10 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Getter
 @NoArgsConstructor
 public class SignUpRequestDto {
-    // 프론트가 Firebase 가입 후 응답받은 고유 식별자
+
     @NotBlank(message = "Firebase UID는 필수입니다.")
     private String firebaseUid;
 
@@ -19,6 +21,17 @@ public class SignUpRequestDto {
     @NotBlank(message = "닉네임은 필수입니다.")
     private String nickname;
 
-    // 고롱 주파수 (프론트에서 온보딩 테스트 완료 후 같이 넘겨준다고 가정)
     private String gorongHz;
+
+    // 주소
+    private String baseAddress;
+
+    // 배리어프리 타입 (기본 NONE)
+    private String barrierFreeType;
+
+    // 외국인 여부
+    private Boolean isForeigner;
+
+    // 관심사 ID 목록 (interests 테이블의 interest_id)
+    private List<Long> interestIds;
 }

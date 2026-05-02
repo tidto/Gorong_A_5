@@ -3,6 +3,9 @@ import Button from '../../components/Button'
 import Input from '../../components/Input'
 import Card from '../../components/Card'
 import { User, Settings, LogOut, History, Palette } from 'lucide-react'
+import { useNotification } from '../../contexts/NotificationContext'
+
+const { toast } = useNotification()
 
 const mockHistory = [
   { id: 1, type: 'joined', event: '초보자 요가 클래스', date: '2024-04-10' },
@@ -27,7 +30,7 @@ export default function Profile() {
     // 실제로는 서버에 저장
     setTimeout(() => {
       setIsSaving(false)
-      alert('프로필이 저장되었습니다!')
+      toast('프로필이 저장되었습니다!', 'success')
     }, 1000)
   }
 

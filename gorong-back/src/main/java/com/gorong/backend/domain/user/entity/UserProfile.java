@@ -64,4 +64,16 @@ public class UserProfile {
     public void updateGorongHz(String gorongHz) {
         this.gorongHz = gorongHz;
     }
+    // @Builder 생성자 수정
+    @Builder
+    public UserProfile(User user, String nickname, String gorongHz,
+                       String baseAddress,
+                       Double purrTemperature, BigDecimal totalWalkDistance) {
+        this.user = user;
+        this.nickname = nickname;
+        this.gorongHz = gorongHz;
+        this.baseAddress = baseAddress;
+        this.purrTemperature = purrTemperature != null ? purrTemperature : 38.5;
+        this.totalWalkDistance = totalWalkDistance != null ? totalWalkDistance : BigDecimal.ZERO;
+    }
 }

@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({ 
       firebaseUser, 
       user, 
-      loggedIn: Boolean(firebaseUser && user), // 파이어베이스 인증 & 우리 DB 정보 둘 다 있어야 완벽한 로그인
+      loggedIn: Boolean(firebaseUser), // 파이어베이스 인증 & 우리 DB 정보 둘 다 있어야 완벽한 로그인
       isLoading, 
       setUser: saveUser, 
       logout, 
