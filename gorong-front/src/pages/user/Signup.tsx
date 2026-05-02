@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import axiosInstance from '../../api/axiosInstance';
+import axiosInstance from '../../api/axiosInstance';  // axios 대신
+
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ export default function Signup() {
 
       if (response.status === 200 || response.status === 201) {
         alert(`${nickname}님, 환영합니다!`);
-        navigate('/');
+        navigate('/', { replace: true })
       }
     } catch (err: any) {
       console.error('회원가입 에러:', err);

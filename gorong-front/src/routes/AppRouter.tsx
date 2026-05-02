@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Home from '../pages/Home'
 import EventList from '../pages/EventList'
 import EventDetail from '../pages/EventDetail'
@@ -18,11 +18,14 @@ import Profile from '../pages/user/Profile'
 import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
 
+// 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const auth = useAuth()
+  const location = useLocation()  // ← 추가
 
   if (!auth.loggedIn) {
-    return <Navigate to="/login" replace />
+    // 현재 경로를 state.from에 담아서 login으로 이동
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
 
   return children

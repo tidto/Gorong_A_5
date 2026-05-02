@@ -105,12 +105,6 @@ export default function EventDetail() {
   const event = mockEventDetails[eventId] || mockEventDetails[1]
 
   const handleParticipate = () => {
-    if (auth.user?.isMinor) {
-      setCharacterMessage('미성년자는 부모 인증이 필요합니다.')
-      setCharacterState('thinking')
-      return
-    }
-
     setCharacterMessage('동행 모집 페이지로 이동합니다.')
     setCharacterState('happy')
     setTimeout(() => navigate(`/events/${eventId}/join`), 600)
@@ -267,11 +261,7 @@ export default function EventDetail() {
               </div>
             </div>
 
-            {auth.user?.isMinor && (
-              <div className="rounded-3xl bg-yellow-50 border border-yellow-200 p-4 text-yellow-900">
-                미성년자는 부모 인증이 필요합니다. 신청 전 부모님과 상의해주세요.
-              </div>
-            )}
+            
           </div>
         </div>
       </div>

@@ -1,15 +1,21 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Button from '../../components/Button'
 import { useAuth } from '../../contexts/AuthContext'
 import { ShieldCheck, Accessibility } from 'lucide-react'
 import { checkUserStatus } from '../../api/userApi'
 import { auth } from '../../firebase/firebaseConfig'
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth'
-import { getLoginRedirectResult, loginWithGoogle, loginWithGithub } from '../../api/authService'
+import { loginWithGoogle, loginWithGithub } from '../../api/authService'
+
+
+const location = useLocation()
+const from = (location.state as any)?.from?.pathname ?? '/'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+
   const authContext = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState('')
@@ -17,47 +23,43 @@ export default function Login() {
 
   useEffect(() => {
     if (authContext.loggedIn) {
-      navigate('/events', { replace: true })
+      navigate(from, { replace: true })
     }
   }, [authContext.loggedIn, navigate])
 
-  // 리다이렉트 결과 처리 (소셜 로그인 후 돌아왔을 때)
-  useEffect(() => {
-    const handleRedirectResult = async () => {
-      try {
-        const result = await getLoginRedirectResult()
-        if (!result) return
+  // 소셜 로그인 (팝업)
+  const handleSocialLogin = async (provider: 'google' | 'github') => {
+    setIsLoading(true)
+    try {
+      const firebaseUser = provider === 'google'
+        ? await loginWithGoogle()
+        : await loginWithGithub()
 
-        setIsLoading(true)
-        const idToken = await result.user.getIdToken()
-        const loginResult = await checkUserStatus(idToken)
+      const idToken = await firebaseUser.getIdToken()
+      const result = await checkUserStatus(idToken)
 
-        if (loginResult.isRegistered && loginResult.user) {
-          authContext.setUser(loginResult.user ?? null)
-          alert(`${loginResult.user.nickname}님, 환영합니다!`)
-          navigate('/events', { replace: true })
-        } else {
-          navigate('/signup', {
-            state: { email: result.user.email, firebaseUid: result.user.uid }
-          })
-        }
-      } catch (error) {
-        console.error('리다이렉트 로그인 처리 실패:', error)
-      } finally {
-        setIsLoading(false)
+      if (result.isRegistered && result.user) {
+        authContext.setUser(result.user ?? null)
+        alert(`${result.user.nickname}님, 환영합니다!`)
+        // 이전 경로가 있으면 그곳으로, 없으면 홈('/')으로
+        const from = (location.state as any)?.from?.pathname ?? '/'
+
+        // 로그인 성공 시 navigate 부분만 모두 이걸로 교체
+        navigate(from, { replace: true })
+      } else {
+        navigate('/signup', {
+          state: { email: firebaseUser.email, firebaseUid: firebaseUser.uid }
+        })
       }
+    } catch (error) {
+      console.error(`${provider} 로그인 실패:`, error)
+      alert('로그인 처리 중 문제가 발생했습니다.')
+    } finally {
+      setIsLoading(false)
     }
-
-    handleRedirectResult()
-  }, [])
-
-  // 소셜 로그인 (리다이렉트 시작)
-  const handleSocialLogin = (provider: 'google' | 'github') => {
-    if (provider === 'google') loginWithGoogle()
-    else loginWithGithub()
   }
 
-  // 이메일/비밀번호 로그인 및 회원가입
+  // 이메일/비밀번호
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) {
@@ -74,7 +76,8 @@ export default function Login() {
       if (result.isRegistered && result.user) {
         authContext.setUser(result.user ?? null)
         alert(`${result.user.nickname}님, 환영합니다!`)
-        navigate('/events', { replace: true })
+        const from  = (location.state as any)?.from?.pathname ?? '/'
+        navigate(from, { replace: true })
       } else {
         navigate('/signup', {
           state: { email: userCredential.user.email, firebaseUid: userCredential.user.uid }
@@ -82,24 +85,21 @@ export default function Login() {
       }
     } catch (error: any) {
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        const wantsToSignUp = window.confirm('가입되지 않은 이메일입니다. 이 정보로 새로 계정을 만드시겠습니까?')
+        const wantsToSignUp = window.confirm('가입되지 않은 이메일입니다. 새로 계정을 만드시겠습니까?')
         if (wantsToSignUp) {
           try {
             const newCredential = await createUserWithEmailAndPassword(auth, email, password)
-            alert('기본 계정이 생성되었습니다. 추가 정보를 입력해주세요.')
             navigate('/signup', {
               state: { email: newCredential.user.email, firebaseUid: newCredential.user.uid }
             })
           } catch (signupError: any) {
-            console.error('이메일 회원가입 실패:', signupError)
             if (signupError.code === 'auth/weak-password') alert('비밀번호는 6자리 이상이어야 합니다.')
             else alert('회원가입 중 오류가 발생했습니다.')
           }
         }
       } else if (error.code === 'auth/wrong-password') {
-        alert('비밀번호가 틀렸습니다. 다시 확인해주세요.')
+        alert('비밀번호가 틀렸습니다.')
       } else {
-        console.error('이메일 로그인 에러:', error)
         alert('로그인 처리 중 문제가 발생했습니다.')
       }
     } finally {
@@ -180,8 +180,7 @@ export default function Login() {
             </Button>
           </form>
         </div>
-
-        {/* 하단 안내 영역 (기존 코드 유지) */}
+        {/* 하단 안내 영역 */}
         {/* ... */}
       </div>
     </div>
