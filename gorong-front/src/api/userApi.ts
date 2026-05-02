@@ -34,22 +34,22 @@ export const signUpToBackend = async (payload: SignUpPayload) => {
 };
 
 // 백엔드에 유저 가입 여부 확인
-export const checkUserStatus = async (idToken: string) => {
+interface LoginResponse {
+  isRegistered: boolean;
+  user?: {
+    nickname: string;
+    email: string;
+  };
+}
+
+export const checkUserStatus = async (idToken: string): Promise<LoginResponse> => {
   try {
-    // 💡 아키텍트 포인트: 
-    // 로그인 직후에는 auth.currentUser가 갱신되기 전 찰나의 타이밍 이슈가 생길 수 있습니다.
-    // 따라서 이 API만큼은 axiosInstance(인터셉터)를 쓰지 않고, 
-    // 방금 발급받은 idToken을 생짜 axios에 직접 꽂아 보내는 것이 훨씬 안전합니다. (기존 로직 유지)
     const response = await axios.post(`${API_BASE_URL}/v1/users/login`, {}, {
-      headers: {
-        Authorization: `Bearer ${idToken}`
-      }
+      headers: { Authorization: `Bearer ${idToken}` }
     });
-    return response.data; 
+    return response.data;
   } catch (error) {
     console.error("유저 상태 확인 에러:", error);
     throw error;
   }
-
-  
 };

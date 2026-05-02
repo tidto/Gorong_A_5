@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -20,6 +22,10 @@ public class UserService {
     @Transactional(readOnly = true) // 읽기 전용이므로 성능이 더 빠릅니다.
     public boolean checkUserExistsByUid(String firebaseUid) {
         return userRepository.existsByFirebaseUid(firebaseUid);
+    }
+    @Transactional(readOnly = true)
+    public Optional<User> findByUid(String firebaseUid) {
+        return userRepository.findByFirebaseUid(firebaseUid);
     }
 
     @Transactional
