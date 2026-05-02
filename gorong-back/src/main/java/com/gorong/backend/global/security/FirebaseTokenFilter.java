@@ -35,6 +35,11 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.getWriter().write("Invalid Firebase Token");
                 return;
+            } catch (Exception e) {
+                // Firebase Admin SDK 초기화 실패 등 예상 못한 에러 처리
+                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                response.getWriter().write("Auth server error: " + e.getMessage());
+                return;
             }
         }
         filterChain.doFilter(request, response);

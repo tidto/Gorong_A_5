@@ -3,18 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import Button from '../../components/Button'
 import { useAuth } from '../../contexts/AuthContext'
 import { ShieldCheck, Accessibility } from 'lucide-react'
-import { loginWithGoogle, loginWithGithub } from '../../api/authService'
 import { checkUserStatus } from '../../api/userApi'
-// ⭐️ 새롭게 추가된 Firebase 모듈 (경로는 실제 설정에 맞게 변경하세요)
-import { auth } from '../../firebase/firebaseConfig' 
+import { auth } from '../../firebase/firebaseConfig'
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth'
+import { getLoginRedirectResult, loginWithGoogle, loginWithGithub } from '../../api/authService'
 
 export default function Login() {
   const navigate = useNavigate()
   const authContext = useAuth()
   const [isLoading, setIsLoading] = useState(false)
-  
-  // ⭐️ 이메일, 비밀번호 상태 추가
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
@@ -24,88 +21,91 @@ export default function Login() {
     }
   }, [authContext.loggedIn, navigate])
 
-  // 기존 소셜 로그인 로직 (유지)
-  const handleSocialLogin = async (provider: 'google' | 'github') => {
+  // 리다이렉트 결과 처리 (소셜 로그인 후 돌아왔을 때)
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getLoginRedirectResult()
+        if (!result) return
+
+        setIsLoading(true)
+        const idToken = await result.user.getIdToken()
+        const loginResult = await checkUserStatus(idToken)
+
+        if (loginResult.isRegistered && loginResult.user) {
+          authContext.setUser(loginResult.user ?? null)
+          alert(`${loginResult.user.nickname}님, 환영합니다!`)
+          navigate('/events', { replace: true })
+        } else {
+          navigate('/signup', {
+            state: { email: result.user.email, firebaseUid: result.user.uid }
+          })
+        }
+      } catch (error) {
+        console.error('리다이렉트 로그인 처리 실패:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    handleRedirectResult()
+  }, [])
+
+  // 소셜 로그인 (리다이렉트 시작)
+  const handleSocialLogin = (provider: 'google' | 'github') => {
+    if (provider === 'google') loginWithGoogle()
+    else loginWithGithub()
+  }
+
+  // 이메일/비밀번호 로그인 및 회원가입
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email || !password) {
+      alert('이메일과 비밀번호를 모두 입력해주세요.')
+      return
+    }
+
     setIsLoading(true)
     try {
-      let firebaseUser;
-      if (provider === 'google') {
-        firebaseUser = await loginWithGoogle();
-      } else if (provider === 'github') {
-        firebaseUser = await loginWithGithub();
-      }
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const idToken = await userCredential.user.getIdToken()
+      const result = await checkUserStatus(idToken)
 
-      if (!firebaseUser) throw new Error("인증 실패");
-      const idToken = await firebaseUser.getIdToken();
-      const result = await checkUserStatus(idToken);
-
-      if (result.isRegistered) {
-        authContext.setUser(result.user ?? null);
-        alert(`${result.user?.nickname}님, 환영합니다!`);
-        navigate('/events', { replace: true });
+      if (result.isRegistered && result.user) {
+        authContext.setUser(result.user ?? null)
+        alert(`${result.user.nickname}님, 환영합니다!`)
+        navigate('/events', { replace: true })
       } else {
-        alert("고롱의 새로운 고양이시군요! 추가 정보를 입력해주세요.");
-        navigate('/signup', { state: { email: firebaseUser.email, firebaseUid: firebaseUser.uid } });
+        navigate('/signup', {
+          state: { email: userCredential.user.email, firebaseUid: userCredential.user.uid }
+        })
       }
-    } catch (error) {
-      console.error(`${provider} 로그인 실패:`, error)
-      alert("로그인 처리 중 문제가 발생했습니다.")
+    } catch (error: any) {
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        const wantsToSignUp = window.confirm('가입되지 않은 이메일입니다. 이 정보로 새로 계정을 만드시겠습니까?')
+        if (wantsToSignUp) {
+          try {
+            const newCredential = await createUserWithEmailAndPassword(auth, email, password)
+            alert('기본 계정이 생성되었습니다. 추가 정보를 입력해주세요.')
+            navigate('/signup', {
+              state: { email: newCredential.user.email, firebaseUid: newCredential.user.uid }
+            })
+          } catch (signupError: any) {
+            console.error('이메일 회원가입 실패:', signupError)
+            if (signupError.code === 'auth/weak-password') alert('비밀번호는 6자리 이상이어야 합니다.')
+            else alert('회원가입 중 오류가 발생했습니다.')
+          }
+        }
+      } else if (error.code === 'auth/wrong-password') {
+        alert('비밀번호가 틀렸습니다. 다시 확인해주세요.')
+      } else {
+        console.error('이메일 로그인 에러:', error)
+        alert('로그인 처리 중 문제가 발생했습니다.')
+      }
     } finally {
       setIsLoading(false)
     }
   }
-
-  // ⭐️ 통합 이메일 로그인/회원가입 로직 추가
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      alert("이메일과 비밀번호를 모두 입력해주세요.");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // 1. 먼저 로그인을 시도합니다.
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const idToken = await userCredential.user.getIdToken();
-      
-      // 2. 백엔드에 회원인지 확인
-      const result = await checkUserStatus(idToken);
-      
-      if (result.isRegistered) {
-        authContext.setUser(result.user ?? null);
-        alert(`${result.user?.nickname}님, 환영합니다!`);
-        navigate('/events', { replace: true });
-      } else {
-         // Firebase 로그인은 성공했으나 백엔드 DB에 정보가 없는 경우 (회원가입 중도 이탈자)
-        navigate('/signup', { state: { email: userCredential.user.email, firebaseUid: userCredential.user.uid } });
-      }
-
-    } catch (error: any) {
-      // 3. 만약 로그인 실패 에러가 "존재하지 않는 계정"이나 "잘못된 인증정보"라면 회원가입 진행
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        const wantsToSignUp = window.confirm("가입되지 않은 이메일입니다. 이 정보로 새로 계정을 만드시겠습니까?");
-        if (wantsToSignUp) {
-          try {
-            const newCredential = await createUserWithEmailAndPassword(auth, email, password);
-            alert("기본 계정이 생성되었습니다. 추가 정보를 입력해주세요.");
-            navigate('/signup', { state: { email: newCredential.user.email, firebaseUid: newCredential.user.uid } });
-          } catch (signupError: any) {
-            console.error("이메일 회원가입 실패:", signupError);
-            if (signupError.code === 'auth/weak-password') alert("비밀번호는 6자리 이상이어야 합니다.");
-            else alert("회원가입 중 오류가 발생했습니다.");
-          }
-        }
-      } else if (error.code === 'auth/wrong-password') {
-        alert("비밀번호가 틀렸습니다. 다시 확인해주세요.");
-      } else {
-        console.error("이메일 로그인 에러:", error);
-        alert("로그인 처리 중 문제가 발생했습니다.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="max-w-xl mx-auto px-4 py-12">
@@ -116,7 +116,6 @@ export default function Login() {
         </p>
 
         <div className="space-y-4">
-          {/* 소셜 로그인 버튼들 */}
           <Button
             type="button"
             variant="secondary"
@@ -125,7 +124,7 @@ export default function Login() {
             disabled={isLoading}
           >
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-sm bg-white">
-              {/* 구글 SVG 생략 (기존 코드 유지) */}
+              {/* 구글 SVG */}
             </span>
             Google로 계속
           </Button>
@@ -137,19 +136,17 @@ export default function Login() {
             disabled={isLoading}
           >
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-sm">
-              {/* 깃허브 SVG 생략 (기존 코드 유지) */}
+              {/* 깃허브 SVG */}
             </span>
             GitHub로 계속
           </Button>
 
-          {/* 구분선 */}
           <div className="flex items-center my-6">
             <div className="flex-grow border-t border-gray-300"></div>
             <span className="mx-4 text-sm text-gray-400">또는</span>
             <div className="flex-grow border-t border-gray-300"></div>
           </div>
 
-          {/* ⭐️ 이메일/비밀번호 폼 */}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
