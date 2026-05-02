@@ -51,7 +51,12 @@ export default function Login() {
           state: { email: firebaseUser.email, firebaseUid: firebaseUser.uid }
         })
       }
-    } catch (error) {
+    } catch (error : any) {
+      if (error.code === 'auth/popup-closed-by-user' ||
+          error.code === 'auth/cancelled-popup-request') {
+        setIsLoading(false)
+        return  // 조용히 종료, 에러 메시지 없음
+      }
       console.error(`${provider} 로그인 실패:`, error)
       toast('로그인 처리 중 문제가 발생했습니다.', 'error')
     } finally {
