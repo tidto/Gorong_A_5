@@ -40,7 +40,7 @@ export default function Login() {
       const result = await checkUserStatus(idToken);
 
       if (result.isRegistered) {
-        alert(`${result.user.nickname}님, 환영합니다!`);
+        alert(`${result.user?.nickname}님, 환영합니다!`);
         navigate('/events', { replace: true });
       } else {
         alert("고롱의 새로운 고양이시군요! 추가 정보를 입력해주세요.");
@@ -72,7 +72,7 @@ export default function Login() {
       const result = await checkUserStatus(idToken);
       
       if (result.isRegistered) {
-        alert(`${result.user.nickname}님, 환영합니다!`);
+        alert(`${result.user?.nickname}님, 환영합니다!`);
         navigate('/events', { replace: true });
       } else {
          // Firebase 로그인은 성공했으나 백엔드 DB에 정보가 없는 경우 (회원가입 중도 이탈자)
