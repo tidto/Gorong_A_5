@@ -1,8 +1,9 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Header() {
   const location = useLocation()
+  const navigate = useNavigate()
   const auth = useAuth()
 
   const menuItems = [
@@ -47,30 +48,31 @@ export default function Header() {
         <div className="flex flex-wrap items-center justify-end gap-2">
           {auth.loggedIn ? (
             <>
-              <span className="rounded-full bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700">
-                {auth.user?.nickname || '회원'}님
-              </span>
+              {/* 로그인 상태 */}
               <Link
                 to="/mypage"
-                className="rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 transition hover:bg-primary-100"
+                className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 transition hover:bg-primary-100"
               >
-                내 활동
+                <span className="text-base">🐾</span>
+                <span>{auth.user?.nickname || '회원'}님</span>
               </Link>
               <button
                 type="button"
                 onClick={auth.logout}
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-500 transition hover:bg-gray-100"
               >
                 로그아웃
               </button>
             </>
           ) : (
             <>
+              {/* 비로그인 상태 — Join Us 단일 버튼 */}
               <Link
                 to="/login"
-                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                state={{ from: location }}
+                className="rounded-full bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700"
               >
-                로그인
+                Join Us
               </Link>
             </>
           )}

@@ -98,13 +98,7 @@ function Header() {
                   to="/login"
                   className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
                 >
-                  로그인
-                </Link>
-                <Link
-                  to="/signup"
-                  className="rounded-lg border border-primary-500 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-                >
-                  회원가입
+                  join us
                 </Link>
               </div>
             )}

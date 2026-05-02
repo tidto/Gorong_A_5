@@ -9,11 +9,11 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'fire
 import { loginWithGoogle, loginWithGithub } from '../../api/authService'
 
 
-const location = useLocation()
-const from = (location.state as any)?.from?.pathname ?? '/'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as any)?.from?.pathname ?? '/'
   const authContext = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState('')
