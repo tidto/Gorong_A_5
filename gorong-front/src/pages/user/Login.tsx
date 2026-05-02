@@ -40,6 +40,7 @@ export default function Login() {
       const result = await checkUserStatus(idToken);
 
       if (result.isRegistered) {
+        authContext.setUser(result.user ?? null);
         alert(`${result.user?.nickname}님, 환영합니다!`);
         navigate('/events', { replace: true });
       } else {
@@ -72,6 +73,7 @@ export default function Login() {
       const result = await checkUserStatus(idToken);
       
       if (result.isRegistered) {
+        authContext.setUser(result.user ?? null);
         alert(`${result.user?.nickname}님, 환영합니다!`);
         navigate('/events', { replace: true });
       } else {

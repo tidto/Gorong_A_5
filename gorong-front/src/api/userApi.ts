@@ -1,6 +1,5 @@
 import axios from 'axios';
 import axiosInstance from "./axiosInstance";
-import { User } from "firebase/auth";
 
 // ⭐️ 수정: 하드코딩 제거. 전역 환경변수 사용
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';

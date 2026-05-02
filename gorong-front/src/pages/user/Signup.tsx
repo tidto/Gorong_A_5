@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import axios from 'axios';
+import axiosInstance from '../../api/axiosInstance';
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -23,19 +23,15 @@ export default function Signup() {
     setError('');
 
     try {
-      const idToken = await firebaseUser.getIdToken();
+      // const idToken = await firebaseUser.getIdToken();
 
-      // 💡 팀장님의 SignUpRequestDto 형태에 100% 맞춘 요청 데이터
-      const response = await axios.post('http://98.84.85.31:8080/api/v1/users/signup', {
+      // 인터셉트 Authorization 헤더 블록 자동 처리
+      const response = await axiosInstance.post('/v1/users/signup', {
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email,
         nickname: nickname,
-        gorongHz: "기본주파수" // 💡 온보딩 전이므로 기본값 세팅 (필요시 수정)
-      }, {
-        headers: {
-          Authorization: `Bearer ${idToken}` // 보안을 위해 토큰은 여전히 헤더에 탑승!
-        }
-      });
+        gorongHz: "1Hz"
+    });
 
       if (response.status === 200 || response.status === 201) {
         alert(`${nickname}님, 환영합니다!`);
