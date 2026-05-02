@@ -41,6 +41,7 @@ public class UserService {
                 .firebaseUid(requestDto.getFirebaseUid())
                 .email(requestDto.getEmail())
                 // 💡 [수정] RoleType은 기본값이 설정되어 있지 않으므로 반드시 명시해주어야 에러가 나지 않습니다!
+                .nickname(requestDto.getNickname())
                 .roleType(User.RoleType.USER)
                 .build();
         User savedUser = userRepository.save(newUser);
