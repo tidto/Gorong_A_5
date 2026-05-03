@@ -47,6 +47,14 @@ public class UserService {
             throw new IllegalArgumentException("이미 가입된 계정입니다.");
         }
 
+        Point baseLocation = null;
+        if (requestDto.getLatitude() != null && requestDto.getLongitude() != null) {
+            GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+            baseLocation = geometryFactory.createPoint(
+                    new Coordinate(requestDto.getLongitude(), requestDto.getLatitude())
+            );
+        }
+
         // 1. barrierFreeType 파싱 (없으면 NONE)
         User.BarrierFreeType barrierFreeType = User.BarrierFreeType.NONE;
         if (requestDto.getBarrierFreeType() != null) {
@@ -85,14 +93,6 @@ public class UserService {
                             .build())
                     .toList();
             userInterestsRepository.saveAll(userInterests);
-        }
-
-        Point baseLocation = null;
-        if (requestDto.getLatitude() != null && requestDto.getLongitude() != null) {
-            GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
-            baseLocation = geometryFactory.createPoint(
-                    new Coordinate(requestDto.getLongitude(), requestDto.getLatitude())
-            );
         }
     }
 
