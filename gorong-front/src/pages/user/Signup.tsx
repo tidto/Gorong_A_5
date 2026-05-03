@@ -5,6 +5,7 @@ import axiosInstance from '../../api/axiosInstance';
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, MapPin, Check } from 'lucide-react';
 import { useNotification } from '../../contexts/NotificationContext';
 import AddressSearchModal from '../../components/AddressSearchModal';
+import { useEffect } from 'react'
 
 // 관심사 목록 (interests 테이블 데이터 - DB 기준)
 const INTERESTS = [
@@ -95,6 +96,12 @@ const TERMS = [
 ];
 
 export default function Signup() {
+  // 헤더 숨기기
+  useEffect(() => {
+    document.body.classList.add('hide-header')
+    return () => document.body.classList.remove('hide-header')
+  }, [])
+
   const navigate = useNavigate();
   const { firebaseUser, setUser } = useAuth();
   const { toast } = useNotification();
@@ -251,7 +258,13 @@ export default function Signup() {
                     onChange={e => setTermAgreed(prev => ({ ...prev, [term.id]: e.target.checked }))}
                     className="h-5 w-5 rounded border-gray-300 accent-primary-600"
                   />
-                  <span className={`flex-1 text-sm font-medium ${term.required ? 'text-gray-800' : 'text-gray-500'}`}>
+                  <span className={`flex-1 text-sm font-medium ${
+                    term.required && !termAgreed[term.id]
+                      ? 'text-red-500'      // ← 필수인데 미체크면 빨간색
+                      : term.required
+                      ? 'text-gray-800'
+                      : 'text-gray-500'
+                  }`}>
                     {term.label}
                   </span>
                   <button
@@ -399,11 +412,17 @@ export default function Signup() {
               <ChevronLeft size={16} /> 이전
             </button>
           )}
+          {/* 다음 버튼 부분 수정 */}
           {step < 3 ? (
             <button
               type="button"
               onClick={nextStep}
-              className="flex flex-1 items-center justify-center gap-1 rounded-2xl bg-primary-600 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary-700"
+              disabled={step === 0 && !allRequired} // 첫 단계에서는 필수 약관 동의 여부에 따라 활성화
+              className={`flex flex-1 items-center justify-center gap-1 rounded-2xl py-3 text-sm font-bold text-white shadow-sm transition-all ${
+                step === 0 && !allRequired
+                  ? 'bg-gray-300 cursor-not-allowed'   // ← 비활성 스타일
+                  : 'bg-primary-600 hover:bg-primary-700'  // ← 활성 스타일
+              }`}
             >
               다음 <ChevronRight size={16} />
             </button>
