@@ -5,7 +5,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/v1/juso")
@@ -15,6 +16,7 @@ public class JusoController {
     @Value("${juso.api.key}")
     private String jusoApiKey;
 
+
     @GetMapping("/search")
     public ResponseEntity<?> search(
             @RequestParam String keyword,
@@ -22,10 +24,12 @@ public class JusoController {
             @RequestParam(defaultValue = "10") int size) {
 
         try {
+            String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
+
             String url = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
                     + "?currentPage=" + page
                     + "&countPerPage=" + size
-                    + "&keyword=" + java.net.URLEncoder.encode(keyword, "UTF-8")
+                    + "&keyword=" + encodedKeyword
                     + "&confmKey=" + jusoApiKey
                     + "&resultType=json";
 
