@@ -69,6 +69,7 @@ export default function ReviewPage() {
   const handleReport = (reviewId: number) => {
     alert(`리뷰 ${reviewId}번을 신고했습니다.`)
   }
+  
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
