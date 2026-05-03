@@ -35,6 +35,8 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
     // Firebase Admin SDK (서버용 Firebase 라이브러리)
     implementation 'com.google.firebase:firebase-admin:9.2.0'
+    implementation 'org.locationtech.jts:jts-core:1.19.0'
+
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 

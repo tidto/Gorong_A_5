@@ -49,17 +49,7 @@ public class UserProfile {
     @Column(name = "update_at")
     private OffsetDateTime updateAt;
 
-    // 4. 오직 이 생성자에만 @Builder를 달아서 통제합니다.
-    @Builder
-    public UserProfile(User user, String nickname, String gorongHz, Double purrTemperature, BigDecimal totalWalkDistance) {
-        this.user = user;
-        this.nickname = nickname;
-        this.gorongHz = gorongHz;
-
-        // 값이 안 들어오면 여기서 38.5와 0으로 세팅합니다.
-        this.purrTemperature = purrTemperature != null ? purrTemperature : 38.5;
-        this.totalWalkDistance = totalWalkDistance != null ? totalWalkDistance : BigDecimal.ZERO;
-    }
+    // 오직 이 생성자에만 @Builder를 달아서 통제합니다.
     // 온보딩 결과 주파수 업데이트 메서드
     public void updateGorongHz(String gorongHz) {
         this.gorongHz = gorongHz;
@@ -67,12 +57,13 @@ public class UserProfile {
     // @Builder 생성자 수정
     @Builder
     public UserProfile(User user, String nickname, String gorongHz,
-                       String baseAddress,
+                       String baseAddress, Point baseLocation,
                        Double purrTemperature, BigDecimal totalWalkDistance) {
         this.user = user;
         this.nickname = nickname;
         this.gorongHz = gorongHz;
         this.baseAddress = baseAddress;
+        this.baseLocation = baseLocation;
         this.purrTemperature = purrTemperature != null ? purrTemperature : 38.5;
         this.totalWalkDistance = totalWalkDistance != null ? totalWalkDistance : BigDecimal.ZERO;
     }

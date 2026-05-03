@@ -99,6 +99,8 @@ interface JusoResult {
   roadAddr: string;
   jibunAddr: string;
   zipNo: string;
+  entX: string; // 경도(longitude)
+  entY: string; // 위도(latitude)
 }
 
 export default function Signup() {
@@ -125,6 +127,7 @@ export default function Signup() {
   const [addressKeyword, setAddressKeyword] = useState('');
   const [addressResults, setAddressResults] = useState<JusoResult[]>([]);
   const [selectedAddress, setSelectedAddress] = useState('');
+  const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [addressSearching, setAddressSearching] = useState(false);
 
   // 관심사
@@ -200,6 +203,8 @@ export default function Signup() {
         email: firebaseUser.email,
         nickname,
         baseAddress: selectedAddress,
+        latitude: selectedCoords?.lat,
+        longitude: selectedCoords?.lng,
         isForeigner: false,
         barrierFreeType: 'NONE',
         interestIds: selectedInterests,
@@ -348,6 +353,7 @@ export default function Signup() {
                     type="button"
                     onClick={() => {
                       setSelectedAddress(addr.roadAddr);
+                      setSelectedCoords({ lat: parseFloat(addr.entY), lng: parseFloat(addr.entX) });
                       setAddressResults([]);
                       setAddressKeyword(addr.roadAddr);
                     }}

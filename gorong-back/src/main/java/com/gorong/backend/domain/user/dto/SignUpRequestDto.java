@@ -34,4 +34,8 @@ public class SignUpRequestDto {
 
     // 관심사 ID 목록 (interests 테이블의 interest_id)
     private List<Long> interestIds;
+
+    // 주소 api 경도/위도
+    private Double latitude;
+    private Double longitude;
 }

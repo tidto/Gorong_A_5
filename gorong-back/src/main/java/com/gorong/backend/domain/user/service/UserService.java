@@ -13,6 +13,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.geom.PrecisionModel;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -66,6 +71,7 @@ public class UserService {
                 .user(savedUser)
                 .nickname(requestDto.getNickname())
                 .baseAddress(requestDto.getBaseAddress())
+                .baseLocation(baseLocation)
                 .build();
         userProfileRepository.save(newProfile);
 
@@ -80,6 +86,14 @@ public class UserService {
                     .toList();
             userInterestsRepository.saveAll(userInterests);
         }
+
+        Point baseLocation = null;
+        if (requestDto.getLatitude() != null && requestDto.getLongitude() != null) {
+            GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+            baseLocation = geometryFactory.createPoint(
+                    new Coordinate(requestDto.getLongitude(), requestDto.getLatitude())
+            );
+        }
     }
 
     @Transactional
@@ -88,4 +102,6 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("프로필을 찾을 수 없습니다."));
         profile.updateGorongHz(gorongHz);
     }
+
+
 }
