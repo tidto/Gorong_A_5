@@ -21,18 +21,19 @@ public class JusoController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        String url = UriComponentsBuilder
-                .fromUriString("https://business.juso.go.kr/addrlink/addrLinkApi.do")
-                .queryParam("currentPage", page)
-                .queryParam("countPerPage", size)
-                .queryParam("keyword", keyword)
-                .queryParam("confmKey", jusoApiKey)
-                .queryParam("resultType", "json")
-                .build()
-                .toUriString();
+        try {
+            String url = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
+                    + "?currentPage=" + page
+                    + "&countPerPage=" + size
+                    + "&keyword=" + java.net.URLEncoder.encode(keyword, "UTF-8")
+                    + "&confmKey=" + jusoApiKey
+                    + "&resultType=json";
 
-        RestTemplate restTemplate = new RestTemplate();
-        Object result = restTemplate.getForObject(url, Object.class);
-        return ResponseEntity.ok(result);
+            RestTemplate restTemplate = new RestTemplate();
+            Object result = restTemplate.getForObject(url, Object.class);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("주소 검색 실패: " + e.getMessage());
+        }
     }
 }
