@@ -5,7 +5,6 @@ import Card from '../../components/Card'
 import { User, Settings, LogOut, History, Palette } from 'lucide-react'
 import { useNotification } from '../../contexts/NotificationContext'
 
-const { toast } = useNotification()
 
 const mockHistory = [
   { id: 1, type: 'joined', event: '초보자 요가 클래스', date: '2024-04-10' },
@@ -24,6 +23,8 @@ export default function Profile() {
   })
   const [characterColor, setCharacterColor] = useState('orange')
   const [isSaving, setIsSaving] = useState(false)
+
+  const { toast } = useNotification()
 
   const handleSaveProfile = async () => {
     setIsSaving(true)

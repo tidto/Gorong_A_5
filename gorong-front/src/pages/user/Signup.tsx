@@ -5,8 +5,6 @@ import axiosInstance from '../../api/axiosInstance';
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, MapPin, Search, Check } from 'lucide-react';
 import { useNotification } from '../../contexts/NotificationContext'
 
-const { toast } = useNotification()
-
 
 // 관심사 목록 (interests 테이블 데이터 - DB 기준)
 const INTERESTS = [
@@ -110,6 +108,9 @@ export default function Signup() {
   const [step, setStep] = useState(0); // 0: 약관, 1: 닉네임, 2: 주소, 3: 관심사
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // alert 대신 toast로 변경 (massage, signal type)
+  const { toast } = useNotification()
 
   // 약관
   const [termAgreed, setTermAgreed] = useState<Record<string, boolean>>({
