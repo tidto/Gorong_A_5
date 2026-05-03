@@ -21,12 +21,6 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const { toast, confirm } = useNotification()
 
-  useEffect(() => {
-    if (authContext.loggedIn) {
-      navigate(from, { replace: true })
-    }
-  }, [authContext.loggedIn, navigate])
-
   // 소셜 로그인 (팝업)
   const handleSocialLogin = async (provider: 'google' | 'github') => {
     setIsLoading(true)

@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import axiosInstance from '../../api/axiosInstance';
-import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, MapPin, Search, Check } from 'lucide-react';
-import { useNotification } from '../../contexts/NotificationContext'
-
+import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, MapPin, Check } from 'lucide-react';
+import { useNotification } from '../../contexts/NotificationContext';
+import AddressSearchModal from '../../components/AddressSearchModal';
 
 // 관심사 목록 (interests 테이블 데이터 - DB 기준)
 const INTERESTS = [
@@ -94,25 +94,14 @@ const TERMS = [
   },
 ];
 
-// Juso 주소 검색 결과 타입
-interface JusoResult {
-  roadAddr: string;
-  jibunAddr: string;
-  zipNo: string;
-  entX: string; // 경도(longitude)
-  entY: string; // 위도(latitude)
-}
-
 export default function Signup() {
   const navigate = useNavigate();
   const { firebaseUser, setUser } = useAuth();
+  const { toast } = useNotification();
 
-  const [step, setStep] = useState(0); // 0: 약관, 1: 닉네임, 2: 주소, 3: 관심사
+  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // alert 대신 toast로 변경 (massage, signal type)
-  const { toast } = useNotification()
 
   // 약관
   const [termAgreed, setTermAgreed] = useState<Record<string, boolean>>({
@@ -124,11 +113,10 @@ export default function Signup() {
   const [nickname, setNickname] = useState('');
 
   // 주소
-  const [addressKeyword, setAddressKeyword] = useState('');
-  const [addressResults, setAddressResults] = useState<JusoResult[]>([]);
+  const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState('');
+  const [detailAddress, setDetailAddress] = useState('');
   const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [addressSearching, setAddressSearching] = useState(false);
 
   // 관심사
   const [selectedInterests, setSelectedInterests] = useState<number[]>([]);
@@ -141,25 +129,6 @@ export default function Signup() {
     const next: Record<string, boolean> = {};
     TERMS.forEach(t => { next[t.id] = checked; });
     setTermAgreed(next);
-  };
-
-  // 주소 검색
-  const searchAddress = async () => {
-    if (!addressKeyword.trim()) return;
-    setAddressSearching(true);
-    setAddressResults([]);
-    try {
-      const key = import.meta.env.VITE_JUSO_API_KEY;
-      const res = await fetch(
-        `https://business.juso.go.kr/addrlink/addrLinkApi.do?currentPage=1&countPerPage=10&keyword=${encodeURIComponent(addressKeyword)}&confmKey=${key}&resultType=json`
-      );
-      const data = await res.json();
-      setAddressResults(data?.results?.juso || []);
-    } catch {
-      setError('주소 검색 중 오류가 발생했습니다.');
-    } finally {
-      setAddressSearching(false);
-    }
   };
 
   // 관심사 토글
@@ -202,7 +171,9 @@ export default function Signup() {
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email,
         nickname,
-        baseAddress: selectedAddress,
+        baseAddress: detailAddress
+          ? `${selectedAddress} ${detailAddress}`
+          : selectedAddress,
         latitude: selectedCoords?.lat,
         longitude: selectedCoords?.lng,
         isForeigner: false,
@@ -211,7 +182,6 @@ export default function Signup() {
         gorongHz: null,
       });
 
-      // 전역 상태 업데이트 (헤더에 로그인 반영)
       setUser({ nickname, email: firebaseUser.email ?? '' });
       toast(`${nickname}님, 고냥이에 오신 것을 환영합니다! 🐾`, 'success');
       navigate('/', { replace: true });
@@ -260,7 +230,6 @@ export default function Signup() {
         {/* ─── STEP 0: 약관 동의 ─── */}
         {step === 0 && (
           <div className="space-y-3">
-            {/* 전체 동의 */}
             <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-primary-50 p-4">
               <input
                 type="checkbox"
@@ -324,62 +293,63 @@ export default function Signup() {
         {step === 2 && (
           <div className="space-y-4">
             <p className="text-sm text-gray-500">주변 행사 추천을 위해 거주 주소를 입력해 주세요.</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={addressKeyword}
-                onChange={e => setAddressKeyword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && searchAddress()}
-                placeholder="도로명 또는 지번 주소 입력"
-                className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-primary-500 focus:bg-white"
-              />
-              <button
-                type="button"
-                onClick={searchAddress}
-                disabled={addressSearching}
-                className="flex items-center gap-1 rounded-2xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:bg-gray-300"
-              >
-                <Search size={16} />
-                검색
-              </button>
-            </div>
 
-            {/* 검색 결과 */}
-            {addressResults.length > 0 && (
-              <div className="max-h-52 overflow-y-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-                {addressResults.map((addr, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      setSelectedAddress(addr.roadAddr);
-                      setSelectedCoords({ lat: parseFloat(addr.entY), lng: parseFloat(addr.entX) });
-                      setAddressResults([]);
-                      setAddressKeyword(addr.roadAddr);
-                    }}
-                    className="flex w-full flex-col gap-0.5 border-b border-gray-50 px-4 py-3 text-left hover:bg-primary-50 last:border-b-0"
-                  >
-                    <span className="flex items-center gap-1 text-sm font-medium text-gray-800">
-                      <MapPin size={13} className="text-primary-500" />
-                      {addr.roadAddr}
-                    </span>
-                    <span className="text-xs text-gray-400">{addr.jibunAddr}</span>
-                  </button>
-                ))}
+            {/* 주소 검색 버튼 */}
+            <button
+              type="button"
+              onClick={() => setShowAddressModal(true)}
+              className={`w-full flex items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition-all ${
+                selectedAddress
+                  ? 'border-primary-400 bg-primary-50'
+                  : 'border-dashed border-gray-300 bg-gray-50 hover:border-primary-300'
+              }`}
+            >
+              <MapPin size={18} className={selectedAddress ? 'text-primary-600' : 'text-gray-400'} />
+              <div className="flex-1">
+                {selectedAddress ? (
+                  <>
+                    <p className="text-xs text-primary-500 font-medium mb-0.5">선택된 주소</p>
+                    <p className="text-sm font-semibold text-gray-900">{selectedAddress}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">클릭하여 주소 검색</p>
+                )}
               </div>
-            )}
+              <span className="text-xs font-semibold text-primary-600 bg-primary-100 px-2.5 py-1 rounded-full">
+                {selectedAddress ? '변경' : '검색'}
+              </span>
+            </button>
 
-            {/* 선택된 주소 */}
+            {/* 상세 주소 */}
             {selectedAddress && (
-              <div className="flex items-center gap-2 rounded-2xl bg-green-50 px-4 py-3">
-                <Check size={16} className="text-green-600" />
-                <span className="text-sm font-medium text-green-800">{selectedAddress}</span>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-500 ml-1">상세 주소 (선택)</label>
+                <input
+                  type="text"
+                  value={detailAddress}
+                  onChange={e => setDetailAddress(e.target.value)}
+                  placeholder="동/호수, 건물명 등"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-primary-400 focus:bg-white"
+                />
               </div>
             )}
 
-            <p className="text-xs text-gray-400">
-              * 행정안전부 도로명주소 API를 통해 검색됩니다.
-            </p>
+            <p className="text-xs text-gray-400">* 행정안전부 도로명주소 API를 통해 검색됩니다.</p>
+
+            {/* 주소 검색 모달 */}
+            {showAddressModal && (
+              <AddressSearchModal
+                onSelect={(result) => {
+                  setSelectedAddress(result.roadAddr);
+                  setSelectedCoords({
+                    lat: parseFloat(result.entY),
+                    lng: parseFloat(result.entX),
+                  });
+                  setShowAddressModal(false);
+                }}
+                onClose={() => setShowAddressModal(false)}
+              />
+            )}
           </div>
         )}
 
@@ -411,9 +381,7 @@ export default function Signup() {
                 );
               })}
             </div>
-            <p className="text-right text-xs text-gray-400">
-              {selectedInterests.length}개 선택됨
-            </p>
+            <p className="text-right text-xs text-gray-400">{selectedInterests.length}개 선택됨</p>
           </div>
         )}
 
