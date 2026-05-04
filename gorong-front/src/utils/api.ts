@@ -3,7 +3,7 @@
  * 백엔드 API 호출을 관리하는 유틸리티 함수
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
 
 // 타입 정의
 export interface ApiResponse<T> {
