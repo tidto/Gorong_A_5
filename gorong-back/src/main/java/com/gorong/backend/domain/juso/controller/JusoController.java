@@ -24,7 +24,6 @@ public class JusoController {
             @RequestParam(defaultValue = "10") int size) {
 
         try {
-
             // 2중 인코딩으로 인식. 특수문자로 넘어감
             // String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
             // URI 직접 생성 (인코딩 직접 제어)
