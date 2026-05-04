@@ -63,7 +63,6 @@ jobs:
         echo "VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}" >> .env
         echo "VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}" >> .env
         echo "VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}" >> .env
-        echo "JUSO_API_KEY=${{ secrets.JUSO_API_KEY }}" >> .env
         
         # 생성된 .env를 품고 이미지를 구워낸 뒤 도커 허브로 올립니다.
         docker build -t ${{ secrets.DOCKER_USERNAME }}/gorong-front:latest .
@@ -98,6 +97,7 @@ jobs:
           echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> .env
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "TOUR_API_KEY=${{ secrets.TOUR_API_KEY }}" >> .env
+          echo "JUSO_API_KEY=${{ secrets.JUSO_API_KEY }}" >> .env
           
           # 최신 이미지를 다운받고 백그라운드(-d)에서 컨테이너를 실행합니다.
           docker compose pull
