@@ -101,3 +101,6 @@ gradle-app.setting
 
 # Firebase Admin SDK Key
 src/main/resources/serviceAccountKey.json
+
+# gorong-back/.gitignore 에 추가
+src/main/resources/application-local.yml

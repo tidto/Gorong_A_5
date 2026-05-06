@@ -65,6 +65,6 @@ public class UserController {
         }
 
         userService.signUpUser(requestDto);
-        return ResponseEntity.ok("고롱(Gorong)의 세계에 오신 것을 환영합니다!");
+        return ResponseEntity.ok("고롱 Go Road ING! 환영합니다. 당신의 발걸음이 문화/행사에 큰 힘이 됩니다.");
     }
 }
