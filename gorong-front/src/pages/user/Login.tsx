@@ -108,6 +108,9 @@ export default function Login() {
             })
           } catch (signupError: any) {
             if (signupError.code === 'auth/weak-password') toast('비밀번호는 6자리 이상이어야 합니다.', 'warning')
+            else if (auth.currentUser) {
+              await auth.currentUser.delete()
+            }
             else toast('회원가입 중 오류가 발생했습니다.', 'error')
           }
         }
