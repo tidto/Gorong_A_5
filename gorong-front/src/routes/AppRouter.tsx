@@ -5,7 +5,7 @@ import EventDetail from '../pages/EventDetail'
 import GroupJoin from '../pages/GroupJoin'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
-import Group from '../pages/Group'
+import Group from '../pages/GroupList.tsx'
 import Chat from '../pages/Chat'
 import CatTower from '../pages/CatTower'
 import History from '../pages/History'
@@ -17,6 +17,8 @@ import MiniHome from '../pages/MiniHome'
 import Profile from '../pages/user/Profile'
 import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
+import GroupListPage from "../pages/GroupList.tsx";
+import GroupDetailPage from '../pages/GroupDetailPage';
 
 // 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -39,6 +41,8 @@ export default function AppRouter() {
           <Route path="/" element={<Home />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/groups" element={<GroupListPage />} />
+          <Route path="/groups/:id" element={<GroupDetailPage />} />
           <Route
             path="/events"
             element={
