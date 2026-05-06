@@ -106,14 +106,13 @@ export default function Login() {
             // navigate('/signup', {
             //   state: { email: newCredential.user.email, firebaseUid: newCredential.user.uid }
             // })
-          } catch (signupError: any) {
-            if (signupError.code === 'auth/weak-password') {
-            toast('비밀번호는 6자리 이상이어야 합니다.', 'warning')
-          } else {
-            if (auth.currentUser) await auth.currentUser.delete()  // Firebase 롤백
-            toast('회원가입 중 오류가 발생했습니다.', 'error')    // 항상 에러 알림
-          }
-
+            } catch (signupError: any) {
+              if (signupError.code === 'auth/weak-password') {
+              toast('비밀번호는 6자리 이상이어야 합니다.', 'warning')
+            } else {
+              if (auth.currentUser) await auth.currentUser.delete()  // Firebase 롤백
+              toast('회원가입 중 오류가 발생했습니다.', 'error')    // 항상 에러 알림
+            }
           }
         }
       } else if (error.code === 'auth/wrong-password') {
