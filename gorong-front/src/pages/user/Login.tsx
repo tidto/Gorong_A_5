@@ -113,6 +113,7 @@ export default function Login() {
             if (auth.currentUser) await auth.currentUser.delete()  // Firebase 롤백
             toast('회원가입 중 오류가 발생했습니다.', 'error')    // 항상 에러 알림
           }
+
           }
         }
       } else if (error.code === 'auth/wrong-password') {
