@@ -90,6 +90,7 @@ jobs:
             echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
             echo "TOUR_API_KEY=${{ secrets.TOUR_API_KEY }}" >> .env
             echo "JUSO_API_KEY=${{ secrets.JUSO_API_KEY }}" >> .env
+            echo "JUSO_COORD_API_KEY=${{ secrets.JUSO_COORD_API_KEY }}" >> .env
             
             docker compose pull
             docker compose up -d
