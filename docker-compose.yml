@@ -12,6 +12,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - TOUR_API_KEY=${TOUR_API_KEY}
       - JUSO_API_KEY=${JUSO_API_KEY}
+      - JUSO_COORD_API_KEY=${JUSO_COORD_API_KEY}
     restart: always
 
   
