@@ -6,6 +6,7 @@ import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, MapPin, Check } from
 import { useNotification } from '../../contexts/NotificationContext';
 import AddressSearchModal from '../../components/AddressSearchModal';
 import { useEffect } from 'react'
+import { auth } from '../../firebase/firebaseConfig'
 
 // 관심사 목록 (interests 테이블 데이터 - DB 기준)
 const INTERESTS = [
@@ -119,6 +120,9 @@ export default function Signup() {
   // 닉네임
   const [nickname, setNickname] = useState('');
 
+  // 외국인 여부
+  const [isForeigner, setIsForeigner] = useState(false)
+
   // 주소
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState('');
@@ -183,7 +187,7 @@ export default function Signup() {
           : selectedAddress,
         latitude: selectedCoords?.lat,
         longitude: selectedCoords?.lng,
-        isForeigner: false,
+        isForeigner,
         barrierFreeType: 'NONE',
         interestIds: selectedInterests,
         gorongHz: null,
@@ -193,6 +197,14 @@ export default function Signup() {
       toast(`${nickname}님, 고냥이에 오신 것을 환영합니다! 🐾`, 'success');
       navigate('/', { replace: true });
     } catch (err: any) {
+      // 백엔드 저장 실패 시 Firebase 계정도 롤백
+      try {
+        if (auth.currentUser) {
+          await auth.currentUser.delete()
+        }
+      } catch (deleteError) {
+        console.error('Firebase 계정 삭제 실패:', deleteError)
+      }
       setError(err.response?.data?.message || '회원가입 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -299,6 +311,18 @@ export default function Signup() {
               className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition focus:border-primary-500 focus:bg-white"
             />
             <p className="text-right text-xs text-gray-400">{nickname.length}/12</p>
+                    <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <input
+                type="checkbox"
+                checked={isForeigner}
+                onChange={e => setIsForeigner(e.target.checked)}
+                className="h-5 w-5 rounded border-gray-300 accent-primary-600"
+              />
+              <div>
+                <p className="text-sm font-medium text-gray-800">외국인 거주자이신가요?</p>
+                <p className="text-xs text-gray-400">외국인 등록증 소지자 또는 국내 거주 외국인</p>
+              </div>
+            </label>
           </div>
         )}
 
