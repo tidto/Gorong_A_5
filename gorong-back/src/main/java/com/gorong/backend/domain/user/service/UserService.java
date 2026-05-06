@@ -67,7 +67,6 @@ public class UserService {
         User newUser = User.builder()
                 .firebaseUid(requestDto.getFirebaseUid())
                 .email(requestDto.getEmail())
-                .nickname(requestDto.getNickname())
                 .roleType(User.RoleType.USER)
                 .barrierFreeType(barrierFreeType)
                 .isForeigner(requestDto.getIsForeigner() != null ? requestDto.getIsForeigner() : false)
@@ -80,6 +79,7 @@ public class UserService {
                 .nickname(requestDto.getNickname())
                 .baseAddress(requestDto.getBaseAddress())
                 .baseLocation(baseLocation)
+                .gorongHz(requestDto.getGorongHz())
                 .build();
         userProfileRepository.save(newProfile);
 

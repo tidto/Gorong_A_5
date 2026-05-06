@@ -102,7 +102,21 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
             <button
               key={i}
               type="button"
-              onClick={() => onSelect(addr)}
+              onClick={async () => {
+                try {
+                  const coordRes = await axiosInstance.get('/v1/juso/coord', {
+                    params: { roadAddr: addr.roadAddr }
+                  })
+                  const coordData = coordRes.data?.results?.juso?.[0]
+                  onSelect({
+                    ...addr,
+                    entX: coordData?.entX ?? '0',
+                    entY: coordData?.entY ?? '0',
+                  })
+                } catch {
+                  onSelect({ ...addr, entX: '0', entY: '0' })
+                }
+              }}
               className="flex w-full items-center gap-3 border-b border-gray-50 px-5 py-3.5 text-left hover:bg-primary-50 transition last:border-b-0"
             >
               <MapPin size={15} className="shrink-0 text-primary-400" />

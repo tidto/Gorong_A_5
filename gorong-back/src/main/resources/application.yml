@@ -21,3 +21,5 @@ tourapi:
 juso:
   api:
     key: ${JUSO_API_KEY}
+  coord:
+    key: ${JUSO_COORD_API_KEY}

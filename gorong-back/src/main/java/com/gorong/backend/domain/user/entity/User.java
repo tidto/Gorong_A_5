@@ -25,14 +25,6 @@ public class User {
     @Column(name = "email", nullable = false, columnDefinition = "TEXT")
     private String email;
 
-    // 💡 [추가된 부분 1] 프론트에서 넘어온 닉네임을 저장할 공간
-    @Column(name = "nickname", nullable = false, length = 50)
-    private String nickname;
-
-    // 💡 [추가된 부분 2] 프론트에서 넘어온 고롱 주파수를 저장할 공간
-    @Column(name = "gorong_hz", length = 20)
-    private String gorongHz;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "role_type", nullable = false, columnDefinition = "TEXT")
     private RoleType roleType;
