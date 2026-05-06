@@ -32,9 +32,10 @@ public class SecurityConfig {
                         // 💡 카카오/네이버 전용 주소 삭제.
                         // 프론트엔드와 맞춰서 v1 로그인/회원가입 API 주소로 수정했습니다.
                         .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup").permitAll()
+                        .requestMatchers("/api/minihomes/**").permitAll()
                         // 주소popup
                         .requestMatchers("/api/v1/juso/**").permitAll()
-                        .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함
+                        .anyRequest().permitAll()
                 )
                 // 우리가 만든 Firebase 필터를 껴넣음
                 .addFilterBefore(new FirebaseTokenFilter(), UsernamePasswordAuthenticationFilter.class);

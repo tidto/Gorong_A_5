@@ -15,7 +15,8 @@
     "lucide-react": "^0.292.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0"
+    "react-router-dom": "^6.20.0",
+    "rive-react": "^4.24.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

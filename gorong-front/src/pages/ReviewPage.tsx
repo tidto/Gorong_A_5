@@ -13,7 +13,7 @@ const mockReviews = [
     rating: 5,
     comment: '정말 좋은 행사였어요! Go냥이와 함께해서 더 즐거웠습니다.',
     date: '2024-04-15',
-    images: ['https://via.placeholder.com/200x150?text=Review+1'],
+    images: ['/gorong_logo.png'],
   },
   {
     id: 2,
@@ -29,7 +29,7 @@ const mockReviews = [
     rating: 5,
     comment: '초보자도 쉽게 따라할 수 있었어요. 추천합니다!',
     date: '2024-04-10',
-    images: ['https://via.placeholder.com/200x150?text=Review+2'],
+    images: ['/gorong_logo.png'],
   },
 ]
 
@@ -56,7 +56,7 @@ export default function ReviewPage() {
       rating: newRating,
       comment: newReview,
       date: new Date().toISOString().split('T')[0],
-      images: newImages.map(() => 'https://via.placeholder.com/200x150?text=New+Review'),
+      images: newImages.map(() => '/gorong_logo.png'),
     }
 
     setReviews([review, ...reviews])

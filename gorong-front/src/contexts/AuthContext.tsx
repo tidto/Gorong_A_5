@@ -34,6 +34,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    if (!auth) {
+      const stored = localStorage.getItem('gorong-db-user')
+      if (stored) {
+        try {
+          setUser(JSON.parse(stored))
+        } catch {
+          localStorage.removeItem('gorong-db-user')
+        }
+      }
+      setIsLoading(false)
+      return
+    }
+
     // 2. 파이어베이스가 로그인 상태를 실시간으로 감지합니다.
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setFirebaseUser(currentUser)
@@ -62,7 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 3. 로그아웃 함수 (파이어베이스와 로컬스토리지 모두 삭제)
   const logout = async () => {
     try {
-      await signOut(auth)
+      if (auth) {
+        await signOut(auth)
+      }
       setUser(null)
       localStorage.removeItem('gorong-db-user')
     } catch (error) {
@@ -93,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({ 
       firebaseUser, 
       user, 
-      loggedIn: Boolean(firebaseUser), // 파이어베이스 인증 & 우리 DB 정보 둘 다 있어야 완벽한 로그인
+      loggedIn: Boolean(firebaseUser || user),
       isLoading, 
       setUser: saveUser, 
       logout, 

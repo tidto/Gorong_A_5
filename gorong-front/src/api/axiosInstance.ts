@@ -9,7 +9,7 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   async (config) => {
     // ⭐️ 현재 유저 정보를 가져옵니다.
-    const user = auth.currentUser;
+    const user = auth?.currentUser;
 
     if (user) {
       const token = await user.getIdToken();

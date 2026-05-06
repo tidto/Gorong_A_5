@@ -33,10 +33,16 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 
 export default function AppRouter() {
   return (
-    <Router>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
           <Route
@@ -129,11 +135,7 @@ export default function AppRouter() {
           />
           <Route
             path="/minihome"
-            element={
-              <ProtectedRoute>
-                <MiniHome />
-              </ProtectedRoute>
-            }
+            element={<MiniHome />}
           />
           <Route
             path="/profile"

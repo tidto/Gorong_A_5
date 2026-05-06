@@ -4,7 +4,7 @@ import Button from '../../components/Button'
 import { useAuth } from '../../contexts/AuthContext'
 import { ShieldCheck, Accessibility } from 'lucide-react'
 import { checkUserStatus } from '../../api/userApi'
-import { auth } from '../../firebase/firebaseConfig'
+import { auth, isFirebaseConfigured } from '../../firebase/firebaseConfig'
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth'
 import { loginWithGoogle, loginWithGithub } from '../../api/authService'
 import { useNotification } from '../../contexts/NotificationContext'
@@ -21,8 +21,22 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const { toast, confirm } = useNotification()
 
+  const loginAsDevUser = () => {
+    authContext.setUser({
+      nickname: '로컬개발유저',
+      email: email || 'dev@gorong.local'
+    })
+    toast('개발 모드 로그인으로 진행합니다.', 'success')
+    navigate(from, { replace: true })
+  }
+
   // 소셜 로그인 (팝업)
   const handleSocialLogin = async (provider: 'google' | 'github') => {
+    if (!isFirebaseConfigured) {
+      loginAsDevUser()
+      return
+    }
+
     setIsLoading(true)
     try {
       const firebaseUser = provider === 'google'
@@ -61,6 +75,12 @@ export default function Login() {
   // 이메일/비밀번호
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!isFirebaseConfigured || !auth) {
+      loginAsDevUser()
+      return
+    }
+
     if (!email || !password) {
       toast('이메일과 비밀번호를 모두 입력해주세요.', 'warning')
       return

@@ -50,7 +50,7 @@ const mockMessages: ChatMessage[] = [
     message: '',
     time: '10:35 AM',
     type: 'image',
-    imageUrl: 'https://via.placeholder.com/200x150?text=Yoga+Class',
+    imageUrl: '/gorong_logo.png',
   },
 ]
 

@@ -100,4 +100,4 @@ gradle-app.setting
 # End of https://www.toptal.com/developers/gitignore/api/java,gradle
 
 # Firebase Admin SDK Key
-src/main/resources/serviceAccountKey.json
+src/main/resources/serviceAccountKey.jsonsrc/main/resources/application-local.yml

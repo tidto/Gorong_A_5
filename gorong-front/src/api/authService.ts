@@ -11,6 +11,9 @@ const githubProvider = new GithubAuthProvider();
 
 export const loginWithGoogle = async (): Promise<User> => {
   try {
+    if (!auth) {
+      throw new Error('Firebase auth is not configured');
+    }
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
@@ -21,6 +24,9 @@ export const loginWithGoogle = async (): Promise<User> => {
 
 export const loginWithGithub = async (): Promise<User> => {
   try {
+    if (!auth) {
+      throw new Error('Firebase auth is not configured');
+    }
     const result = await signInWithPopup(auth, githubProvider);
     return result.user;
   } catch (error: any) {
