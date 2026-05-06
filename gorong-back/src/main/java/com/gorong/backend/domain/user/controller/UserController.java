@@ -3,6 +3,8 @@ package com.gorong.backend.domain.user.controller;
 import com.google.firebase.auth.FirebaseToken;
 import com.gorong.backend.domain.user.dto.SignUpRequestDto;
 import com.gorong.backend.domain.user.entity.User;
+import com.gorong.backend.domain.user.entity.UserProfile;
+import com.gorong.backend.domain.user.repository.UserProfileRepository;
 import com.gorong.backend.domain.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import java.util.Optional;
 public class UserController {
 
     private final UserService userService;
+    private final UserProfileRepository userProfileRepository;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(Authentication authentication) {
@@ -30,11 +33,16 @@ public class UserController {
 
         if (userOpt.isPresent()) {
             User user = userOpt.get();
+
+            String nickname = userProfileRepository.findByUserId(user.getId())
+                    .map(UserProfile::getNickname)
+                    .orElse("");
+
             // 프론트가 기대하는 { isRegistered: true, user: { nickname, email } } 구조
             return ResponseEntity.ok(Map.of(
                     "isRegistered", true,
                     "user", Map.of(
-                            "nickname", user.getNickname() != null ? user.getNickname() : "",
+                            "nickname", nickname,
                             "email", user.getEmail()
                     )
             ));
