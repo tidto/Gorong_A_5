@@ -51,12 +51,19 @@ public class JusoController {
     // roadAddr로 좌표 조회 + UTM-K → WGS84 변환
     // ==========================================
     @GetMapping("/coord")
-    public ResponseEntity<?> coord(@RequestParam String roadAddr) {
+    public ResponseEntity<?> coord(
+            @RequestParam String admCd,
+            @RequestParam String rnMgtSn,
+            @RequestParam String udrtYn,
+            @RequestParam String buldMnnm,
+            @RequestParam String buldSlno) {
         try {
-            String encodedAddr = URLEncoder.encode(roadAddr, StandardCharsets.UTF_8);
-
             String rawUrl = "https://business.juso.go.kr/addrlink/addrCoordApi.do"
-                    + "?roadAddr=" + encodedAddr
+                    + "?admCd=" + admCd
+                    + "&rnMgtSn=" + rnMgtSn
+                    + "&udrtYn=" + udrtYn
+                    + "&buldMnnm=" + buldMnnm
+                    + "&buldSlno=" + buldSlno
                     + "&confmKey=" + jusoCoordApiKey
                     + "&resultType=json";
 

@@ -21,6 +21,11 @@ interface RawJusoItem {
   zipNo: string
   entX: string
   entY: string
+  admCd: string     
+  rnMgtSn: string   
+  udrtYn: string     
+  buldMnnm: string  
+  buldSlno: string   
   [key: string]: string
 }
 
@@ -55,10 +60,14 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
   const handleSelect = async (addr: RawJusoItem, index: number) => {
     setConverting(index)
     try {
-      // ✅ 핵심 수정: entX/entY는 addrLinkApi 결과에 없거나 빈 문자열임
-      //    → roadAddr로 /coord API를 직접 호출해 WGS84 좌표를 가져옴
       const coordRes = await publicAxios.get('/v1/juso/coord', {
-        params: { roadAddr: addr.roadAddr }
+        params: { 
+                admCd: addr.admCd,
+                rnMgtSn: addr.rnMgtSn,
+                udrtYn: addr.udrtYn,
+                buldMnnm: addr.buldMnnm,
+                buldSlno: addr.buldSlno,
+              }
       })
       const { lat, lng } = coordRes.data
       console.log('좌표 변환 성공 - lat:', lat, 'lng:', lng)
