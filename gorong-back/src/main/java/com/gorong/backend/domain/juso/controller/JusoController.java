@@ -89,6 +89,25 @@ public class JusoController {
         }
     }
 
+    @GetMapping("/coord/convert")
+    public ResponseEntity<?> convertCoord(
+            @RequestParam String entX,
+            @RequestParam String entY) {
+        try {
+            double x = Double.parseDouble(entX);
+            double y = Double.parseDouble(entY);
+
+            if (x == 0 || y == 0) {
+                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0));
+            }
+
+            double[] wgs84 = convertUtmkToWgs84(x, y);
+            return ResponseEntity.ok(Map.of("lat", wgs84[0], "lng", wgs84[1]));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("좌표 변환 실패: " + e.getMessage());
+        }
+    }
+
     // ==========================================
     // UTM-K(EPSG:5179) → WGS84(EPSG:4326) 변환
     // ==========================================

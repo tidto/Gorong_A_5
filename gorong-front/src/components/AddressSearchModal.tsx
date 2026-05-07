@@ -100,36 +100,34 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
 
           {!loading && results.map((addr, i) => (
             <button
-              key={i}
-              type="button"
-              onClick={async () => {
-                try {
-                  const coordRes = await axiosInstance.get('/v1/juso/coord', {
-                    params: { roadAddr: addr.roadAddr }
-                  })
-                  const { lat, lng } = coordRes.data
-                  
-                  console.log("모달 내부 - Juso API 응답 lat:", lat, "lng:", lng);
+            key={i}
+            type="button"
+            onClick={async () => {
+              try {
+              // roadAddr로 좌표를 다시 검색하지 않고, 검색 결과에 이미 있는 entX/entY를 WGS84로 변환만 요청
+              const coordRes = await axiosInstance.get('/v1/juso/coord/convert', {
+              params: { entX: addr.entX, entY: addr.entY }
+              })
+              const { lat, lng } = coordRes.data
+                console.log("모달 내부 - 변환된 좌표 lat:", lat, "lng:", lng);
 
-                  onSelect({
-                    ...addr,
-                    // WGS84로 변환된 값을 entX(경도), entY(위도)에 담아서 부모로 전달
-                    entX: String(lng || 0), 
-                    entY: String(lat || 0), 
-                  })
-                } catch (error) {
-                  console.error("좌표 변환 실패:", error);
-                  onSelect({ ...addr, entX: '0', entY: '0' })
-                }
-              }}
-              className="flex w-full items-center gap-3 border-b border-gray-50 px-5 py-3.5 text-left hover:bg-primary-50 transition last:border-b-0"
-            >
+                onSelect({
+                  ...addr,
+                  entX: String(lng ?? 0),  // || → ?? 로 변경 (0이 유효한 값일 수 있으므로)
+                  entY: String(lat ?? 0),
+                })
+              } catch (error) {
+                console.error("좌표 변환 실패:", error);
+                onSelect({ ...addr, entX: '0', entY: '0' })
+              }
+            }}
+            className="flex w-full items-center gap-3 border-b border-gray-50 px-5 py-3.5 text-left hover:bg-primary-50 transition last:border-b-0">
               <MapPin size={15} className="shrink-0 text-primary-400" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{addr.roadAddr}</p>
-                <p className="text-xs text-gray-400 truncate">{addr.jibunAddr}</p>
-              </div>
-              <ChevronRight size={15} className="shrink-0 text-gray-300" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{addr.roadAddr}</p>
+              <p className="text-xs text-gray-400 truncate">{addr.jibunAddr}</p>
+            </div>
+            <ChevronRight size={15} className="shrink-0 text-gray-300" />
             </button>
           ))}
         </div>
