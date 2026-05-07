@@ -139,30 +139,30 @@ public class UserService {
         UserProfile profile = userProfileRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("프로필을 찾을 수 없습니다."));
 
-        // 1. User 업데이트 (엔티티에 Setter 역할을 하는 update 메서드 생성 권장)
-        User.BarrierFreeType barrierType = User.BarrierFreeType.NONE;
-        try {
-            if (request.getBarrierFreeType() != null) {
-                barrierType = User.BarrierFreeType.valueOf(request.getBarrierFreeType());
-            }
-        } catch (IllegalArgumentException ignored) {}
+        // ✅ 수정 1: User 업데이트 실제 반영
+        User.BarrierFreeType barrierType = null;
+        if (request.getBarrierFreeType() != null) {
+            try { barrierType = User.BarrierFreeType.valueOf(request.getBarrierFreeType()); }
+            catch (IllegalArgumentException ignored) {}
+        }
+        user.updateProfile(barrierType, request.getIsForeigner());
 
+        // ✅ 수정 2: UserProfile 업데이트 실제 반영 (위치 포함)
+        Point newLocation = null;
+        if (request.getLatitude() != null && request.getLongitude() != null) {
+            GeometryFactory gf = new GeometryFactory(new PrecisionModel(), 4326);
+            newLocation = gf.createPoint(new Coordinate(request.getLongitude(), request.getLatitude()));
+            newLocation.setSRID(4326);
+        }
+        profile.updateProfile(request.getNickname(), request.getBaseAddress(), newLocation);
 
-
-        // 2. UserInterests 업데이트 (기존 삭제 후 새로 삽입)
+        // ✅ 수정 3: 관심사 업데이트
         userInterestsRepository.deleteByUserId(user.getId());
-
         if (request.getInterestCodes() != null && !request.getInterestCodes().isEmpty()) {
-            // interestsRepository.findByCodeIn() 이 있다고 가정
             List<Interests> newInterests = interestsRepository.findByTourCategoryCodeIn(request.getInterestCodes());
-            List<UserInterests> userInterests = newInterests.stream()
-                    .map(interest -> UserInterests.builder()
-                            .user(user)
-                            .interest(interest)
-                            .build())
-                    .toList();
-            userInterestsRepository.saveAll(userInterests);
+            userInterestsRepository.saveAll(newInterests.stream()
+                    .map(i -> UserInterests.builder().user(user).interest(i).build())
+                    .toList());
         }
     }
-
 }

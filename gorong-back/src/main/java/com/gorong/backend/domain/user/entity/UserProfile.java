@@ -67,4 +67,10 @@ public class UserProfile {
         this.purrTemperature = purrTemperature != null ? purrTemperature : 38.5;
         this.totalWalkDistance = totalWalkDistance != null ? totalWalkDistance : BigDecimal.ZERO;
     }
+
+    public void updateProfile(String nickname, String baseAddress, Point baseLocation) {
+        if (nickname != null && !nickname.isBlank()) this.nickname = nickname;
+        if (baseAddress != null) this.baseAddress = baseAddress;
+        this.baseLocation = baseLocation; // null이면 위치 초기화
+    }
 }

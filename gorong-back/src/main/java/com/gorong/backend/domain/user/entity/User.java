@@ -46,6 +46,11 @@ public class User {
     @Column(name = "update_at")
     private OffsetDateTime updateAt;
 
+    public void updateProfile(BarrierFreeType barrierFreeType, Boolean isForeigner) {
+        if (barrierFreeType != null) this.barrierFreeType = barrierFreeType;
+        if (isForeigner != null) this.isForeigner = isForeigner;
+    }
+
     // --- Enums ---
     public enum RoleType { USER, ADMIN }
     public enum BarrierFreeType { NONE, PHYSICAL, VISUAL, AUDITORY }
