@@ -7,7 +7,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ChatRequestDto {
-    @NotBlank(message = "message는 필수입니다.")
+    @NotBlank(message = "message is required.")
     private String message;
 }
 
