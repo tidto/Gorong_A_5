@@ -193,8 +193,8 @@ export default function Signup() {
         baseAddress: detailAddress
           ? `${selectedAddress} ${detailAddress}`
           : selectedAddress,
-        latitude: selectedCoords?.lat,
-        longitude: selectedCoords?.lng,
+        latitude: lat !== 0 ? lat : null
+        longitude: lng !== 0 ? lng : null
         isForeigner,
         barrierFreeType: 'NONE',
         interestIds: selectedInterests,
@@ -394,8 +394,8 @@ export default function Signup() {
                   
                   // 2. 모달이 이미 변환해서 넘겨준 좌표를 State에 저장 (API 호출 제거됨!)
                   setSelectedCoords({
-                    lat: parseFloat(result.entY), // 위도
-                    lng: parseFloat(result.entX), // 경도
+                    lat: parseFloat(result.entY) || 0 
+                    lng: parseFloat(result.entX) || 0
                   });
 
                   console.log("Signup 최종 세팅된 좌표 - lat:", result.entY, "lng:", result.entX);
