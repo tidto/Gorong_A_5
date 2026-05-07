@@ -108,12 +108,17 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
                     params: { roadAddr: addr.roadAddr }
                   })
                   const { lat, lng } = coordRes.data
+                  
+                  console.log("모달 내부 - Juso API 응답 lat:", lat, "lng:", lng);
+
                   onSelect({
                     ...addr,
-                    entX: String(lng ?? 0),
-                    entY: String(lat ?? 0),
+                    // WGS84로 변환된 값을 entX(경도), entY(위도)에 담아서 부모로 전달
+                    entX: String(lng || 0), 
+                    entY: String(lat || 0), 
                   })
-                } catch {
+                } catch (error) {
+                  console.error("좌표 변환 실패:", error);
                   onSelect({ ...addr, entX: '0', entY: '0' })
                 }
               }}

@@ -4,7 +4,9 @@ import com.gorong.backend.domain.interest.entity.Interests;
 import com.gorong.backend.domain.interest.entity.UserInterests;
 import com.gorong.backend.domain.interest.repository.InterestsRepository;
 import com.gorong.backend.domain.interest.repository.UserInterestsRepository;
+import com.gorong.backend.domain.user.dto.MyPageResponseDto;
 import com.gorong.backend.domain.user.dto.SignUpRequestDto;
+import com.gorong.backend.domain.user.dto.UserProfileUpdateRequestDto;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
@@ -53,6 +55,7 @@ public class UserService {
             baseLocation = geometryFactory.createPoint(
                     new Coordinate(requestDto.getLongitude(), requestDto.getLatitude())
             );
+            baseLocation.setSRID(4326);
         }
 
         // 1. barrierFreeType 파싱 (없으면 NONE)
@@ -103,5 +106,63 @@ public class UserService {
         profile.updateGorongHz(gorongHz);
     }
 
+    // 마이페이지 데이터 조회
+    @Transactional(readOnly = true)
+    public MyPageResponseDto getMyPageInfo(String firebaseUid) {
+        User user = userRepository.findByFirebaseUid(firebaseUid)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        UserProfile profile = userProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("프로필을 찾을 수 없습니다."));
+
+        List<String> interestCodes = userInterestsRepository.findByUserId(user.getId())
+                .stream()
+                .map(ui -> ui.getInterest().getTourCategoryCode())
+                .toList();
+
+        return MyPageResponseDto.builder()
+                .nickname(profile.getNickname())
+                .email(user.getEmail())
+                .baseAddress(profile.getBaseAddress())
+                .purrTemperature(profile.getPurrTemperature())
+                .gorongHz(profile.getGorongHz())
+                .barrierFreeType(user.getBarrierFreeType().name())
+                .isForeigner(user.getIsForeigner())
+                .interestCodes(interestCodes)
+                .build();
+    }
+
+    // 마이페이지 데이터 수정
+    @Transactional
+    public void updateMyPageInfo(String firebaseUid, UserProfileUpdateRequestDto request) {
+        User user = userRepository.findByFirebaseUid(firebaseUid)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        UserProfile profile = userProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("프로필을 찾을 수 없습니다."));
+
+        // 1. User 업데이트 (엔티티에 Setter 역할을 하는 update 메서드 생성 권장)
+        User.BarrierFreeType barrierType = User.BarrierFreeType.NONE;
+        try {
+            if (request.getBarrierFreeType() != null) {
+                barrierType = User.BarrierFreeType.valueOf(request.getBarrierFreeType());
+            }
+        } catch (IllegalArgumentException ignored) {}
+
+
+
+        // 2. UserInterests 업데이트 (기존 삭제 후 새로 삽입)
+        userInterestsRepository.deleteByUserId(user.getId());
+
+        if (request.getInterestCodes() != null && !request.getInterestCodes().isEmpty()) {
+            // interestsRepository.findByCodeIn() 이 있다고 가정
+            List<Interests> newInterests = interestsRepository.findByCodeIn(request.getInterestCodes());
+            List<UserInterests> userInterests = newInterests.stream()
+                    .map(interest -> UserInterests.builder()
+                            .user(user)
+                            .interest(interest)
+                            .build())
+                    .toList();
+            userInterestsRepository.saveAll(userInterests);
+        }
+    }
 
 }

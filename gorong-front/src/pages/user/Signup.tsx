@@ -377,11 +377,18 @@ export default function Signup() {
             {showAddressModal && (
               <AddressSearchModal
                 onSelect={(result) => {
+                  // 1. 화면에 선택된 주소 표시
                   setSelectedAddress(result.roadAddr);
+                  
+                  // 2. 모달이 이미 변환해서 넘겨준 좌표를 State에 저장 (API 호출 제거됨!)
                   setSelectedCoords({
-                    lat: parseFloat(result.entY),
-                    lng: parseFloat(result.entX),
+                    lat: parseFloat(result.entY), // 위도
+                    lng: parseFloat(result.entX), // 경도
                   });
+
+                  console.log("Signup 최종 세팅된 좌표 - lat:", result.entY, "lng:", result.entX);
+                  
+                  // 3. 모달 닫기
                   setShowAddressModal(false);
                 }}
                 onClose={() => setShowAddressModal(false)}
