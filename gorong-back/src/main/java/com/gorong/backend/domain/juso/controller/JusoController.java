@@ -95,7 +95,7 @@ public class JusoController {
             String entYStr = juso.get("entY") != null ? juso.get("entY").toString().trim() : "";
 
             if (entXStr.isEmpty() || entYStr.isEmpty() || entXStr.equals("0") || entYStr.equals("0")) {
-                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0, "roadAddr", roadAddr));
+                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0));
             }
 
             double utmX = Double.parseDouble(entXStr);
@@ -107,7 +107,6 @@ public class JusoController {
             Map<String, Object> result = new HashMap<>();
             result.put("lat", wgs84[0]);
             result.put("lng", wgs84[1]);
-            result.put("roadAddr", roadAddr);
 
             return ResponseEntity.ok(result);
         } catch (Exception e) {
