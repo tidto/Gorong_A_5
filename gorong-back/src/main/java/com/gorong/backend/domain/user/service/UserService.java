@@ -154,7 +154,7 @@ public class UserService {
 
         if (request.getInterestCodes() != null && !request.getInterestCodes().isEmpty()) {
             // interestsRepository.findByCodeIn() 이 있다고 가정
-            List<Interests> newInterests = interestsRepository.findByCodeIn(request.getInterestCodes());
+            List<Interests> newInterests = interestsRepository.findByTourCategoryCodeIn(request.getInterestCodes());
             List<UserInterests> userInterests = newInterests.stream()
                     .map(interest -> UserInterests.builder()
                             .user(user)

@@ -11,5 +11,5 @@ public interface InterestsRepository extends JpaRepository<Interests, Long> {
     List<Interests> findAllByIdIn(List<Long> ids);
 
     // 프론트엔드에서 넘어오는 관심사 코드("A01", "A02" 등)로 찾을 때 사용
-    List<Interests> findByCodeIn(List<String> codes);
+    List<Interests> findByTourCategoryCodeIn(List<String> codes);
 }
