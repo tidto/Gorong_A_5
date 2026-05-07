@@ -32,6 +32,9 @@ public class UserService {
     private final InterestsRepository interestsRepository;
     private final UserInterestsRepository userInterestsRepository;
 
+    // ✅ GeometryFactory를 빈으로 재사용 (SRID 4326 = WGS84)
+    private static final GeometryFactory GEO_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
+
     @Transactional(readOnly = true)
     public boolean checkUserExistsByUid(String firebaseUid) {
         return userRepository.existsByFirebaseUid(firebaseUid);
@@ -42,6 +45,17 @@ public class UserService {
         return userRepository.findByFirebaseUid(firebaseUid);
     }
 
+    /**
+     * ✅ lat/lng가 null이거나 0이면 null을 반환 (0,0은 좌표 변환 실패를 의미)
+     */
+    private Point buildPoint(Double lat, Double lng) {
+        if (lat == null || lng == null) return null;
+        if (lat == 0.0 && lng == 0.0) return null; // 좌표 변환 실패 fallback
+        Point point = GEO_FACTORY.createPoint(new Coordinate(lng, lat)); // x=lng, y=lat
+        point.setSRID(4326);
+        return point;
+    }
+
     @Transactional
     public void signUpUser(SignUpRequestDto requestDto, String firebaseUid) {
 
@@ -49,14 +63,8 @@ public class UserService {
             throw new IllegalArgumentException("이미 가입된 계정입니다.");
         }
 
-        Point baseLocation = null;
-        if (requestDto.getLatitude() != null && requestDto.getLongitude() != null) {
-            GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
-            baseLocation = geometryFactory.createPoint(
-                    new Coordinate(requestDto.getLongitude(), requestDto.getLatitude())
-            );
-            baseLocation.setSRID(4326);
-        }
+        // ✅ 수정: 0,0 좌표(변환 실패)는 null로 처리
+        Point baseLocation = buildPoint(requestDto.getLatitude(), requestDto.getLongitude());
 
         // 1. barrierFreeType 파싱 (없으면 NONE)
         User.BarrierFreeType barrierFreeType = User.BarrierFreeType.NONE;
@@ -139,7 +147,6 @@ public class UserService {
         UserProfile profile = userProfileRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("프로필을 찾을 수 없습니다."));
 
-        // ✅ 수정 1: User 업데이트 실제 반영
         User.BarrierFreeType barrierType = null;
         if (request.getBarrierFreeType() != null) {
             try { barrierType = User.BarrierFreeType.valueOf(request.getBarrierFreeType()); }
@@ -147,16 +154,10 @@ public class UserService {
         }
         user.updateProfile(barrierType, request.getIsForeigner());
 
-        // ✅ 수정 2: UserProfile 업데이트 실제 반영 (위치 포함)
-        Point newLocation = null;
-        if (request.getLatitude() != null && request.getLongitude() != null) {
-            GeometryFactory gf = new GeometryFactory(new PrecisionModel(), 4326);
-            newLocation = gf.createPoint(new Coordinate(request.getLongitude(), request.getLatitude()));
-            newLocation.setSRID(4326);
-        }
+        //  0,0 좌표(변환 실패)는 null로 처리
+        Point newLocation = buildPoint(request.getLatitude(), request.getLongitude());
         profile.updateProfile(request.getNickname(), request.getBaseAddress(), newLocation);
 
-        // ✅ 수정 3: 관심사 업데이트
         userInterestsRepository.deleteByUserId(user.getId());
         if (request.getInterestCodes() != null && !request.getInterestCodes().isEmpty()) {
             List<Interests> newInterests = interestsRepository.findByTourCategoryCodeIn(request.getInterestCodes());
