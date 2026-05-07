@@ -32,6 +32,9 @@ dependencies {
     // Database (PostgreSQL & Spring Data JPA)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.postgresql:postgresql'
+    // PostGIS <-> JTS Point 변환을 위한 Hibernate Spatial (jts-core 포함됨)
+    implementation 'org.hibernate.orm:hibernate-spatial:7.0.0.Beta1'
+
     // Firebase Admin SDK (서버용 Firebase 라이브러리)
     implementation 'com.google.firebase:firebase-admin:9.2.0'
     implementation 'org.locationtech.jts:jts-core:1.19.0'
