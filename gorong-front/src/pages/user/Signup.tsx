@@ -178,6 +178,14 @@ export default function Signup() {
     setLoading(true);
     setError('');
     try {
+      // ✅ 수정: auth.currentUser에서 최신 토큰을 명시적으로 가져옴
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setError('로그인 세션이 만료되었습니다. 다시 로그인해 주세요.');
+        return;
+      }
+      const idToken = await currentUser.getIdToken(true); // true = 강제 갱신
+
       await axiosInstance.post('/v1/users/signup', {
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email,
@@ -191,21 +199,25 @@ export default function Signup() {
         barrierFreeType: 'NONE',
         interestIds: selectedInterests,
         gorongHz: null,
+      }, {
+        // ✅ 수정: 토큰을 명시적으로 헤더에 세팅 (interceptor 타이밍 이슈 방지)
+        headers: { Authorization: `Bearer ${idToken}` },
       });
 
       setUser({ nickname, email: firebaseUser.email ?? '' });
       toast(`${nickname}님, 고냥이에 오신 것을 환영합니다! 🐾`, 'success');
       navigate('/', { replace: true });
     } catch (err: any) {
-      // 백엔드 저장 실패 시 Firebase 계정도 롤백
-      try {
-        if (auth.currentUser) {
-          await auth.currentUser.delete()
-        }
-      } catch (deleteError) {
-        console.error('Firebase 계정 삭제 실패:', deleteError)
+      // ✅ 수정: 403은 서버 인증 문제이므로 Firebase 계정은 삭제하지 않음
+      //    (계정을 삭제하면 재시도 자체가 불가능해짐)
+      const status = err.response?.status;
+      if (status === 409) {
+        setError('이미 가입된 계정입니다.');
+      } else if (status === 403) {
+        setError('인증 오류가 발생했습니다. 페이지를 새로고침 후 다시 시도해 주세요.');
+      } else {
+        setError(err.response?.data?.message || '회원가입 중 오류가 발생했습니다.');
       }
-      setError(err.response?.data?.message || '회원가입 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
