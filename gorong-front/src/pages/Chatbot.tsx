@@ -1,208 +1,142 @@
-import React, { useState, useRef, useEffect } from 'react'
-import Button from '../components/Button'
-import Input from '../components/Input'
-import Card from '../components/Card'
-import { MessageCircle, Send, Bot, MapPin, Calendar, Users } from 'lucide-react'
+import React, { useEffect, useRef, useState } from "react";
+import Button from "../components/Button";
+import Input from "../components/Input";
+import { Bot, Send } from "lucide-react";
+import axiosInstance from "../api/axiosInstance";
 
-interface Recommendation {
-  id: number
-  type: string
-  title: string
-  description: string
-  distance?: string
-  participants?: number
-  time?: string
+type ChatMessage = {
+  id: number;
+  type: "user" | "bot";
+  content: string;
+  time: string;
+};
+
+const quickReplies = ["행사 추천해줘", "동행 모집 찾아줘", "길찾기 도와줘", "리뷰 작성 방법 알려줘", "프로필 수정 방법 알려줘"];
+
+function nowTime() {
+  return new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
-interface ChatMessage {
-  id: number
-  type: 'user' | 'bot'
-  content: string
-  time: string
-  recommendations?: Recommendation[]
+function errorMessage(e: any) {
+  const msg = e?.response?.data?.message;
+  if (typeof msg === "string" && msg.trim()) return msg;
+  if (typeof e?.message === "string" && e.message.trim()) return e.message;
+  return "현재 챗봇 서버가 응답하지 않습니다. 잠시 후 다시 시도해주세요.";
 }
-
-const mockRecommendations = [
-  {
-    id: 1,
-    type: 'event',
-    title: '초보자 요가 클래스',
-    description: '편안한 요가로 스트레스를 해소해보세요',
-    distance: '0.5km',
-  },
-  {
-    id: 2,
-    type: 'group',
-    title: '요가 동행 모집',
-    description: '함께 요가 클래스에 참여할 분을 찾습니다',
-    participants: 3,
-  },
-  {
-    id: 3,
-    type: 'route',
-    title: '요가장까지 최적 경로',
-    description: '도보 10분, 버스로 5분',
-    time: '10분',
-  },
-]
-
-const quickReplies = [
-  '행사 추천해줘',
-  '동행 모집 찾아줘',
-  '길찾기 도와줘',
-  '리뷰 작성 방법',
-  '프로필 설정',
-]
 
 export default function Chatbot() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 1,
-      type: 'bot',
-      content: '안녕하세요! Go냥이 AI 어시스턴트입니다. 무엇을 도와드릴까요?',
-      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      type: "bot",
+      content: "안녕하세요. Go냥이 AI 어시스턴트입니다. 무엇을 도와드릴까요?",
+      time: nowTime(),
     },
-  ])
-  const [inputMessage, setInputMessage] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  ]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    scrollToBottom();
+  }, [messages, isTyping]);
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return
+  async function sendMessage(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
 
+    setErr(null);
     const userMessage: ChatMessage = {
-      id: messages.length + 1,
-      type: 'user',
-      content: inputMessage,
-      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-    }
+      id: Date.now(),
+      type: "user",
+      content: trimmed,
+      time: nowTime(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputMessage("");
+    setIsTyping(true);
 
-    setMessages(prev => [...prev, userMessage])
-    setInputMessage('')
-    setIsTyping(true)
-
-    // AI 응답 시뮬레이션
-    setTimeout(() => {
-      let botResponse = ''
-
-      if (inputMessage.includes('행사') || inputMessage.includes('추천')) {
-        botResponse = '관심사에 맞는 행사를 추천해드릴게요!'
-      } else if (inputMessage.includes('동행') || inputMessage.includes('모집')) {
-        botResponse = '현재 진행중인 동행 모집을 확인해보세요.'
-      } else if (inputMessage.includes('길찾기') || inputMessage.includes('경로')) {
-        botResponse = '목적지까지의 최적 경로를 안내해드릴게요.'
-      } else if (inputMessage.includes('리뷰')) {
-        botResponse = '리뷰 작성은 행사 참여 후 가능합니다. 솔직한 후기를 남겨주세요!'
-      } else if (inputMessage.includes('프로필')) {
-        botResponse = '프로필 설정에서 관심사와 정보를 업데이트할 수 있습니다.'
-      } else {
-        botResponse = '더 자세한 질문을 해주시면 도움드리겠습니다!'
-      }
-
+    try {
+      const res = await axiosInstance.post("/chatbot/chat", { message: trimmed });
+      const answer = typeof res.data?.answer === "string" ? res.data.answer : "";
       const botMessage: ChatMessage = {
-        id: messages.length + 2,
-        type: 'bot',
-        content: botResponse,
-        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        recommendations: inputMessage.includes('추천') ? mockRecommendations : undefined,
-      }
-
-      setMessages(prev => [...prev, botMessage])
-      setIsTyping(false)
-    }, 1000)
-  }
-
-  const handleQuickReply = (reply: string) => {
-    setInputMessage(reply)
+        id: Date.now() + 1,
+        type: "bot",
+        content: answer?.trim() || "답변을 생성하지 못했습니다. 잠시 후 다시 시도해주세요.",
+        time: nowTime(),
+      };
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (e: any) {
+      setErr(errorMessage(e));
+      const botMessage: ChatMessage = {
+        id: Date.now() + 2,
+        type: "bot",
+        content: "죄송해요. 지금은 답변을 제공하기 어려워요.",
+        time: nowTime(),
+      };
+      setMessages((prev) => [...prev, botMessage]);
+    } finally {
+      setIsTyping(false);
+    }
   }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="bg-white rounded-3xl shadow-lg overflow-hidden h-[600px] flex flex-col">
-        {/* 채팅 헤더 */}
         <div className="bg-primary-500 text-white p-4 flex items-center gap-3">
           <Bot className="w-6 h-6" />
           <div>
             <h1 className="text-xl font-bold">Go냥이 AI 어시스턴트</h1>
-            <p className="text-sm opacity-90">행사 추천, 길찾기, 궁금한 점을 물어보세요</p>
+            <p className="text-sm opacity-90">행사 추천, 길찾기, 후기 작성 등 궁금한 점을 물어보세요.</p>
           </div>
         </div>
 
-        {/* 메시지 영역 */}
+        {err ? <div className="bg-red-50 text-red-700 text-sm px-4 py-2 border-b border-red-100">{err}</div> : null}
+
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div className={`max-w-xs lg:max-w-md ${
-                message.type === 'user' ? 'order-first' : ''
-              }`}>
-                <div className={`rounded-2xl px-4 py-3 ${
-                  message.type === 'user'
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-gray-100 text-gray-900'
-                }`}>
-                  <p className="text-sm">{message.content}</p>
-
-                  {/* 추천 항목들 */}
-                  {message.recommendations && (
-                    <div className="mt-3 space-y-2">
-                      {message.recommendations.map((rec) => (
-                        <div key={rec.id} className="bg-white/20 rounded-lg p-3 text-xs">
-                          <div className="flex items-center gap-2 mb-1">
-                            {rec.type === 'event' && <Calendar className="w-3 h-3" />}
-                            {rec.type === 'group' && <Users className="w-3 h-3" />}
-                            {rec.type === 'route' && <MapPin className="w-3 h-3" />}
-                            <span className="font-semibold">{rec.title}</span>
-                          </div>
-                          <p className="text-white/80">{rec.description}</p>
-                          {rec.distance && <p className="text-white/60">거리: {rec.distance}</p>}
-                          {rec.participants && <p className="text-white/60">참여자: {rec.participants}명</p>}
-                          {rec.time && <p className="text-white/60">소요시간: {rec.time}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-xs lg:max-w-md ${message.type === "user" ? "order-first" : ""}`}>
+                <div
+                  className={`rounded-2xl px-4 py-3 ${
+                    message.type === "user" ? "bg-primary-500 text-white" : "bg-gray-100 text-gray-900"
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">{message.time}</p>
               </div>
             </div>
           ))}
 
-          {/* 타이핑 인디케이터 */}
-          {isTyping && (
+          {isTyping ? (
             <div className="flex justify-start">
               <div className="bg-gray-100 rounded-2xl px-4 py-3">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 퀵 리플라이 */}
-        {messages.length === 1 && (
+        {messages.length === 1 ? (
           <div className="px-4 pb-4">
             <p className="text-sm text-gray-600 mb-3">빠른 질문:</p>
             <div className="flex flex-wrap gap-2">
-              {quickReplies.map((reply, index) => (
+              {quickReplies.map((reply) => (
                 <button
-                  key={index}
-                  onClick={() => handleQuickReply(reply)}
+                  key={reply}
+                  onClick={() => setInputMessage(reply)}
                   className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
                 >
                   {reply}
@@ -210,24 +144,26 @@ export default function Chatbot() {
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* 입력 영역 */}
         <div className="border-t border-gray-200 p-4">
           <div className="flex gap-3">
             <Input
               placeholder="메시지를 입력하세요..."
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendMessage(inputMessage);
+              }}
               className="flex-1"
             />
-            <Button onClick={handleSendMessage} disabled={!inputMessage.trim() || isTyping}>
+            <Button onClick={() => sendMessage(inputMessage)} disabled={!inputMessage.trim() || isTyping}>
               <Send className="w-4 h-4" />
             </Button>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
+
