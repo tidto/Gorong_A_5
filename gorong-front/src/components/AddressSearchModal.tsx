@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { X, MapPin, Search, ChevronRight } from 'lucide-react'
 import axiosInstance from '../api/axiosInstance'
+import axios from 'axios'
+
+// juso API는 인증 불필요(permitAll) — 토큰을 붙이지 않는 별도 인스턴스
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+const publicAxios = axios.create({ baseURL: API_BASE })
 
 export interface AddressResult {
   roadAddr: string
@@ -105,7 +110,7 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
             onClick={async () => {
               try {
               // roadAddr로 좌표를 다시 검색하지 않고, 검색 결과에 이미 있는 entX/entY를 WGS84로 변환만 요청
-              const coordRes = await axiosInstance.get('/v1/juso/coord/convert', {
+              const coordRes = await publicAxios.get('/v1/juso/coord/convert', {
               params: { entX: addr.entX, entY: addr.entY }
               })
               const { lat, lng } = coordRes.data
