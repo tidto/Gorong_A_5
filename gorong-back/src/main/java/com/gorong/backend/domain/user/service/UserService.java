@@ -41,9 +41,9 @@ public class UserService {
     }
 
     @Transactional
-    public void signUpUser(SignUpRequestDto requestDto) {
+    public void signUpUser(SignUpRequestDto requestDto, String firebaseUid) {
 
-        if (userRepository.existsByFirebaseUid(requestDto.getFirebaseUid())) {
+        if (userRepository.existsByFirebaseUid(firebaseUid)) {
             throw new IllegalArgumentException("이미 가입된 계정입니다.");
         }
 
@@ -65,7 +65,7 @@ public class UserService {
 
         // 2. users 테이블 저장
         User newUser = User.builder()
-                .firebaseUid(requestDto.getFirebaseUid())
+                .firebaseUid(firebaseUid)
                 .email(requestDto.getEmail())
                 .roleType(User.RoleType.USER)
                 .barrierFreeType(barrierFreeType)

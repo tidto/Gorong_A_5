@@ -59,12 +59,8 @@ public class UserController {
 
         FirebaseToken decodedToken = (FirebaseToken) authentication.getPrincipal();
 
-        if (!decodedToken.getUid().equals(requestDto.getFirebaseUid())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("인증된 토큰 정보와 요청한 UID가 일치하지 않습니다.");
-        }
-
-        userService.signUpUser(requestDto);
+        // 클라이언트 UID 대신 토큰 UID를 직접 사용 (더 안전)
+        userService.signUpUser(requestDto, decodedToken.getUid());
         return ResponseEntity.ok("고롱 Go Road ING! 환영합니다. 당신의 발걸음이 문화/행사에 큰 힘이 됩니다.");
     }
 }

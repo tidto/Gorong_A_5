@@ -107,11 +107,11 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
                   const coordRes = await axiosInstance.get('/v1/juso/coord', {
                     params: { roadAddr: addr.roadAddr }
                   })
-                  const coordData = coordRes.data?.results?.juso?.[0]
+                  const { lat, lng } = coordRes.data
                   onSelect({
                     ...addr,
-                    entX: coordData?.entX ?? '0',
-                    entY: coordData?.entY ?? '0',
+                    entX: String(lng ?? 0),
+                    entY: String(lat ?? 0),
                   })
                 } catch {
                   onSelect({ ...addr, entX: '0', entY: '0' })
