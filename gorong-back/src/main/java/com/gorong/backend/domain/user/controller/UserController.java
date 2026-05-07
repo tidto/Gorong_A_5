@@ -1,7 +1,9 @@
 package com.gorong.backend.domain.user.controller;
 
 import com.google.firebase.auth.FirebaseToken;
+import com.gorong.backend.domain.user.dto.MyPageResponseDto;
 import com.gorong.backend.domain.user.dto.SignUpRequestDto;
+import com.gorong.backend.domain.user.dto.UserProfileUpdateRequestDto;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
@@ -62,5 +64,23 @@ public class UserController {
         // 클라이언트 UID 대신 토큰 UID를 직접 사용 (더 안전)
         userService.signUpUser(requestDto, decodedToken.getUid());
         return ResponseEntity.ok("고롱 Go Road ING! 환영합니다. 당신의 발걸음이 문화/행사에 큰 힘이 됩니다.");
+    }
+
+    // ... 기존 login, signup 유지 ...
+
+    @GetMapping("/me")
+    public ResponseEntity<MyPageResponseDto> getMyPage(Authentication authentication) {
+        FirebaseToken decodedToken = (FirebaseToken) authentication.getPrincipal();
+        MyPageResponseDto responseDto = userService.getMyPageInfo(decodedToken.getUid());
+        return ResponseEntity.ok(responseDto);
+    }
+
+    @PutMapping("/me/profile")
+    public ResponseEntity<String> updateMyPage(
+            @RequestBody UserProfileUpdateRequestDto requestDto,
+            Authentication authentication) {
+        FirebaseToken decodedToken = (FirebaseToken) authentication.getPrincipal();
+        userService.updateMyPageInfo(decodedToken.getUid(), requestDto);
+        return ResponseEntity.ok("프로필 정보가 성공적으로 업데이트되었습니다.");
     }
 }
