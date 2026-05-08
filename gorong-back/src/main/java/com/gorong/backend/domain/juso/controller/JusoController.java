@@ -48,7 +48,7 @@ public class JusoController {
     }
 
     // ==========================================
-    // roadAddr로 좌표 조회 + UTM-K → WGS84 변환
+    // UTM-K → WGS84 변환
     // ==========================================
     @GetMapping("/coord")
     public ResponseEntity<?> coord(
