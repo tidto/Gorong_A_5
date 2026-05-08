@@ -17,6 +17,9 @@ import MiniHome from '../pages/minihome/MiniHome'
 import Profile from '../pages/user/Profile'
 import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
+import { setNavigate } from '../utils/Navigationhelper'
+import { useEffect } from 'react'
 
 // 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -30,10 +33,18 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 
   return children
 }
+function NavigationInitializer() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    setNavigate(navigate)
+  }, [navigate])
+  return null
+}
 
 export default function AppRouter() {
   return (
     <Router>
+      <NavigationInitializer /> {/* navigate를 초기화하는 컴포넌트 */}
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
