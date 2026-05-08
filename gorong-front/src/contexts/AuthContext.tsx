@@ -42,15 +42,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 파이어베이스에 로그인이 안 되어있으면 우리 DB 정보도 초기화
         setUser(null)
         localStorage.removeItem('gorong-db-user')
+        localStorage.removeItem('gorong-firebase-uid') 
       } else {
         // (선택) 로컬에 저장해둔 우리 DB 유저 정보가 있다면 복구
         const stored = localStorage.getItem('gorong-db-user')
-        if (stored) {
-          try {
-            setUser(JSON.parse(stored))
-          } catch {
-            localStorage.removeItem('gorong-db-user')
-          }
+        const storedUid = localStorage.getItem('gorong-firebase-uid')
+
+        if (stored && storedUid === currentUser.uid) {
+          try { setUser(JSON.parse(stored)) }
+          catch { localStorage.removeItem('gorong-db-user') }
+        } else {
+          // 다른 계정이거나 처음 로그인 → 캐시 무효화
+          localStorage.removeItem('gorong-db-user')
+          localStorage.removeItem('gorong-firebase-uid')
+          setUser(null)  // ← 명시적으로 null 세팅
         }
       }
       setIsLoading(false)
@@ -65,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signOut(auth)
       setUser(null)
       localStorage.removeItem('gorong-db-user')
+      localStorage.removeItem('gorong-firebase-uid')
     } catch (error) {
       console.error('로그아웃 실패:', error)
     }
@@ -84,8 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser)
     if (newUser) {
       localStorage.setItem('gorong-db-user', JSON.stringify(newUser))
+      localStorage.setItem('gorong-firebase-uid', auth.currentUser?.uid ?? '')
     } else {
       localStorage.removeItem('gorong-db-user')
+      localStorage.removeItem('gorong-firebase-uid')
     }
   }
 

@@ -26,8 +26,8 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
   const auth = useAuth()
   const location = useLocation()  // ← 추가
 
-  if (!auth.loggedIn) {
-    // 현재 경로를 state.from에 담아서 login으로 이동
+  if (!auth.loggedIn || !auth.user) {
+      // 현재 경로를 state.from에 담아서 login으로 이동
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
