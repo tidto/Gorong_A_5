@@ -18,7 +18,7 @@ import Profile from '../pages/user/Profile'
 import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { setNavigate } from '../utils/Navigationhelper'
+import { setNavigate } from '../utils/navigationHelper'
 import { useEffect } from 'react'
 
 // 이 부분만 수정

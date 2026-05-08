@@ -1,7 +1,7 @@
 import axios from 'axios';
 // ⭐️ 수정: 여기서도 config 파일의 auth를 사용합니다.
 import { auth } from '../firebase/firebaseConfig'; 
-import { navigateTo } from '../utils/Navigationhelper';
+import { navigateTo } from '../utils/navigationHelper'
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
