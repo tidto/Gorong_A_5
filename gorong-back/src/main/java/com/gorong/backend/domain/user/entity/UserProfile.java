@@ -2,7 +2,9 @@ package com.gorong.backend.domain.user.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Point;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -35,6 +37,7 @@ public class UserProfile {
     @Column(name = "base_address", columnDefinition = "TEXT")
     private String baseAddress;
 
+    @JdbcTypeCode(SqlTypes.GEOMETRY)
     @Column(name = "base_location", columnDefinition = "geometry(Point, 4326)")
     private Point baseLocation;
 
