@@ -35,7 +35,7 @@ public class UserProfile {
     @Column(name = "base_address", columnDefinition = "TEXT")
     private String baseAddress;
 
-    @Column(name = "base_location")
+    @Column(name = "base_location", columnDefinition = "geometry(Point, 4326)")
     private Point baseLocation;
 
     // @Builder.Default 와 = 38.5 를 삭제했습니다! (생성자에서 알아서 해주니까요)
