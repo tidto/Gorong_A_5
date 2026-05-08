@@ -37,7 +37,6 @@ public class UserProfile {
     @Column(name = "base_address", columnDefinition = "TEXT")
     private String baseAddress;
 
-    @JdbcTypeCode(SqlTypes.GEOMETRY)
     @Column(name = "base_location", columnDefinition = "geometry(Point, 4326)")
     private Point baseLocation;
 
