@@ -64,6 +64,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe()
   }, [])
 
+  // 토큰 만료 감지 (새로고침이나 탭 전환 시)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && firebaseUser) {
+        try {
+          await firebaseUser.getIdToken(true)  // 토큰 강제 갱신
+        } catch {
+          // 토큰 갱신 실패 → 강제 로그아웃
+          await logout()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [firebaseUser])
+
   // 3. 로그아웃 함수 (파이어베이스와 로컬스토리지 모두 삭제)
   const logout = async () => {
     try {
@@ -101,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({ 
       firebaseUser, 
       user, 
-      loggedIn: Boolean(firebaseUser), // 파이어베이스 인증 & 우리 DB 정보 둘 다 있어야 완벽한 로그인
+      loggedIn: Boolean(firebaseUser && user), // 파이어베이스 인증 & 우리 DB 정보 둘 다 있어야 완벽한 로그인
       isLoading, 
       setUser: saveUser, 
       logout, 

@@ -3,6 +3,7 @@ package com.gorong.backend.global.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,6 +17,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
@@ -35,6 +37,7 @@ public class SecurityConfig {
                         // 주소popup
                         .requestMatchers("/api/v1/juso/**").permitAll()
                         .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 )
                 // 우리가 만든 Firebase 필터를 껴넣음
                 .addFilterBefore(new FirebaseTokenFilter(), UsernamePasswordAuthenticationFilter.class);
