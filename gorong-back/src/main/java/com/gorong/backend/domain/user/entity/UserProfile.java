@@ -41,15 +41,15 @@ public class UserProfile {
     private Point baseLocation;
 
     // @Builder.Default 와 = 38.5 를 삭제했습니다! (생성자에서 알아서 해주니까요)
-    @Column(name = "purr_tempurature", nullable = false, columnDefinition = "numeric(3,1)")
+    @Column(name = "purr_temperature", nullable = false, columnDefinition = "numeric(3,1)")
     private Double purrTemperature;
 
     @Column(name = "total_walk_distance", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalWalkDistance;
 
     @UpdateTimestamp
-    @Column(name = "update_at")
-    private OffsetDateTime updateAt;
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
 
     // 오직 이 생성자에만 @Builder를 달아서 통제합니다.
     // 온보딩 결과 주파수 업데이트 메서드

@@ -36,8 +36,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup").permitAll()
                         // 주소popup
                         .requestMatchers("/api/v1/juso/**").permitAll()
-                        .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                        // anyRequest는 항상 마지막
+                        .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함
                 )
                 // 우리가 만든 Firebase 필터를 껴넣음
                 .addFilterBefore(new FirebaseTokenFilter(), UsernamePasswordAuthenticationFilter.class);
