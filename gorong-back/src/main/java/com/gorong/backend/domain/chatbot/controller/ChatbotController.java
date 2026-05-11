@@ -5,6 +5,7 @@ import com.gorong.backend.domain.chatbot.dto.ChatResponseDto;
 import com.gorong.backend.domain.chatbot.service.GeminiChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/chatbot")
 @RequiredArgsConstructor
+@Slf4j
 public class ChatbotController {
 
     private final GeminiChatService geminiChatService;
@@ -35,8 +37,18 @@ public class ChatbotController {
                     "message", e.getMessage()
             ));
         } catch (RuntimeException e) {
+            log.warn("Chatbot request failed", e);
+            String detail = null;
+            if (e.getCause() != null) {
+                String causeMsg = e.getCause().getMessage();
+                if (causeMsg != null && causeMsg.length() > 500) {
+                    causeMsg = causeMsg.substring(0, 500) + "...";
+                }
+                detail = e.getCause().getClass().getSimpleName() + ": " + causeMsg;
+            }
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
-                    "message", e.getMessage()
+                    "message", e.getMessage(),
+                    "detail", detail
             ));
         }
     }
