@@ -12,4 +12,7 @@ public class UserProfileUpdateRequestDto {
     private String barrierFreeType;
     private Boolean isForeigner;
     private List<String> interestCodes;
+
+    private Double latitude;
+    private Double longitude;
 }

@@ -1,36 +1,41 @@
 import axios from 'axios';
-// ⭐️ 수정: 여기서도 config 파일의 auth를 사용합니다.
+import { signOut } from 'firebase/auth'
 import { auth } from '../firebase/firebaseConfig'; 
-
-// In local dev we always target the local backend to avoid accidentally calling a remote URL from `.env`.
-const localApiBase = 'http://127.0.0.1:8080/api';
-const baseURL = import.meta.env.DEV ? localApiBase : (import.meta.env.VITE_API_BASE_URL || localApiBase);
+import { navigateTo } from '../utils/navigationHelper'
 
 const axiosInstance = axios.create({
-  baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: false,
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
 });
 
+// request 인터셉터 (토큰 추가) - 현재 유저 정보를 가져옵니다.
 axiosInstance.interceptors.request.use(
   async (config) => {
-    const url = config.url ?? '';
-    const isChatbotRequest = url.startsWith('/chatbot/') || url.includes('/chatbot/');
-
-    // 현재 유저 정보를 가져옵니다.
     const user = auth.currentUser;
-
-    if (user && !isChatbotRequest) {
+    if (user) {
       const token = await user.getIdToken(true);
-      config.headers = config.headers ?? {};
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
+  (error) => Promise.reject(error)
+);
+
+// response 인터셉터 (에러 처리) ← 완전히 분리
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error.response?.status
+
+    if (status === 401) {
+      await signOut(auth)
+      localStorage.removeItem('gorong-db-user')
+      localStorage.removeItem('gorong-firebase-uid')
+      navigateTo('/login')
+    } else if (status === 403) navigateTo('/error/403')
+    else if (status === 404) navigateTo('/error/404')
+    else if (status === 500) navigateTo('/error/500')
+
+    return Promise.reject(error)
   }
 );
 

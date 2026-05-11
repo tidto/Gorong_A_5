@@ -48,23 +48,40 @@ public class JusoController {
     }
 
     // ==========================================
-    // 좌표 검색 + UTM-K → WGS84 변환
+    // UTM-K → WGS84 변환
     // ==========================================
     @GetMapping("/coord")
-    public ResponseEntity<?> coord(@RequestParam String roadAddr) {
+    public ResponseEntity<?> coord(
+            @RequestParam String admCd,
+            @RequestParam String rnMgtSn,
+            @RequestParam String udrtYn,
+            @RequestParam String buldMnnm,
+            @RequestParam String buldSlno) {
         try {
-            String encodedAddr = URLEncoder.encode(roadAddr, StandardCharsets.UTF_8);
-
             String rawUrl = "https://business.juso.go.kr/addrlink/addrCoordApi.do"
-                    + "?roadAddr=" + encodedAddr
+                    + "?admCd=" + admCd
+                    + "&rnMgtSn=" + rnMgtSn
+                    + "&udrtYn=" + udrtYn
+                    + "&buldMnnm=" + buldMnnm
+                    + "&buldSlno=" + buldSlno
                     + "&confmKey=" + jusoCoordApiKey
                     + "&resultType=json";
 
             RestTemplate restTemplate = new RestTemplate();
+            @SuppressWarnings("unchecked")
             Map<String, Object> response = (Map<String, Object>) restTemplate.getForObject(new URI(rawUrl), Object.class);
 
-            // UTM-K 좌표 추출
+            if (response == null) {
+                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0));
+            }
+
+            @SuppressWarnings("unchecked")
             Map<String, Object> results = (Map<String, Object>) response.get("results");
+            if (results == null) {
+                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0));
+            }
+
+            @SuppressWarnings("unchecked")
             java.util.List<Map<String, Object>> jusoList = (java.util.List<Map<String, Object>>) results.get("juso");
 
             if (jusoList == null || jusoList.isEmpty()) {
@@ -72,18 +89,55 @@ public class JusoController {
             }
 
             Map<String, Object> juso = jusoList.get(0);
-            double utmX = Double.parseDouble(juso.get("entX").toString());
-            double utmY = Double.parseDouble(juso.get("entY").toString());
+
+            // ✅ entX/entY가 빈 문자열이거나 null인 경우 방어 처리
+            String entXStr = juso.get("entX") != null ? juso.get("entX").toString().trim() : "";
+            String entYStr = juso.get("entY") != null ? juso.get("entY").toString().trim() : "";
+
+            if (entXStr.isEmpty() || entYStr.isEmpty() || entXStr.equals("0") || entYStr.equals("0")) {
+                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0));
+            }
+
+            double utmX = Double.parseDouble(entXStr);
+            double utmY = Double.parseDouble(entYStr);
 
             // UTM-K → WGS84 변환
             double[] wgs84 = convertUtmkToWgs84(utmX, utmY);
 
             Map<String, Object> result = new HashMap<>();
-            result.put("lat", wgs84[0]);  // 위도
-            result.put("lng", wgs84[1]);  // 경도
-            result.put("roadAddr", roadAddr);
+            result.put("lat", wgs84[0]);
+            result.put("lng", wgs84[1]);
 
             return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("좌표 변환 실패: " + e.getMessage());
+        }
+    }
+
+    // ==========================================
+    // entX/entY 직접 변환 (UTM-K → WGS84)
+    // ==========================================
+    @GetMapping("/coord/convert")
+    public ResponseEntity<?> convertCoord(
+            @RequestParam String entX,
+            @RequestParam String entY) {
+        try {
+            String xStr = entX.trim();
+            String yStr = entY.trim();
+
+            if (xStr.isEmpty() || yStr.isEmpty()) {
+                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0));
+            }
+
+            double x = Double.parseDouble(xStr);
+            double y = Double.parseDouble(yStr);
+
+            if (x == 0 || y == 0) {
+                return ResponseEntity.ok(Map.of("lat", 0.0, "lng", 0.0));
+            }
+
+            double[] wgs84 = convertUtmkToWgs84(x, y);
+            return ResponseEntity.ok(Map.of("lat", wgs84[0], "lng", wgs84[1]));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("좌표 변환 실패: " + e.getMessage());
         }
@@ -93,16 +147,14 @@ public class JusoController {
     // UTM-K(EPSG:5179) → WGS84(EPSG:4326) 변환
     // ==========================================
     private double[] convertUtmkToWgs84(double utmX, double utmY) {
-        // UTM-K 파라미터
-        double a = 6378137.0;           // 장반경
-        double f = 1 / 298.257222101;   // 편평률
-        double b = a * (1 - f);         // 단반경
+        double a = 6378137.0;
+        double f = 1 / 298.257222101;
+        double b = a * (1 - f);
         double e2 = 1 - (b * b) / (a * a);
-        double e = Math.sqrt(e2);
 
         double k0 = 0.9996;
-        double originLat = Math.toRadians(38.0);   // 기준 위도
-        double originLng = Math.toRadians(127.5);  // 기준 경도
+        double originLat = Math.toRadians(38.0);
+        double originLng = Math.toRadians(127.5);
         double falseEasting = 1000000.0;
         double falseNorthing = 2000000.0;
 
