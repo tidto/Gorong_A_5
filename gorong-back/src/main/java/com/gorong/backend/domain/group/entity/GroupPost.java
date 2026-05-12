@@ -1,0 +1,41 @@
+package com.gorong.backend.domain.group.entity;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.gorong.backend.domain.user.entity.User;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@Entity
+@Getter
+@Setter
+public class GroupPost {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne // 그룹과 유저는 다대일 관계
+    @JoinColumn(name = "user_id")
+    private User author; // 작성자 정보
+
+    private String title;
+    private String content;
+    private String location;
+    private Integer maxCapacity;
+    private String event;
+    private String condition;
+    private String meetingDate;
+    private String meetingTime;
+    private int currentCapacity = 1; // 기본 호스트 1명 시작
+    private int waitingCount = 0;// 대기자 수
+
+
+    @JsonProperty("authorName")
+    public String getAuthorName() {
+        return (this.author != null) ? this.author.getEmail() : "익명";
+    }
+
+    // GroupPost.java에 추가
+    private String status = "RECRUITING"; // RECRUITING, CLOSED, FINISHED 등
+}

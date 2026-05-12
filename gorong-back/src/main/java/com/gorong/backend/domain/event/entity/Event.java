@@ -1,5 +1,6 @@
 package com.gorong.backend.domain.event.entity;
 
+import com.gorong.backend.domain.event.dto.TourItemDto;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -60,7 +61,36 @@ public class Event {
     @Column(name = "modified_time", columnDefinition = "TEXT")
     private String modifiedTime;
 
+    @Column(name = "parking", columnDefinition = "TEXT")
+    private String parking;
+
+    @Column(name = "elevator", columnDefinition = "TEXT")
+    private String elevator;
+
+    @Column(name = "restroom", columnDefinition = "TEXT")
+    private String restroom;
+
+    @Column(name = "route", columnDefinition = "TEXT")
+    private String route;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    public void updateFromDto(TourItemDto dto) {
+        this.title = dto.getTitle();
+        this.addr = dto.getAddr1(); // DTO의 addr1 -> Entity의 addr
+        this.mapX = dto.getMapx();  // DTO의 mapx -> Entity의 mapX
+        this.mapY = dto.getMapy();  // DTO의 mapy -> Entity의 mapY
+        this.firstImage = dto.getFirstimage();
+
+        this.parking = dto.getParking();
+        this.elevator = dto.getElevator();
+        this.restroom = dto.getRestroom();
+        this.route = dto.getRoute();
+
+        if (dto.getOverview() != null) {
+            this.description = dto  .getOverview();
+        }
+    }
 }
