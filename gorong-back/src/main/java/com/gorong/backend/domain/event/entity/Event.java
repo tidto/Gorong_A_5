@@ -61,6 +61,18 @@ public class Event {
     @Column(name = "modified_time", columnDefinition = "TEXT")
     private String modifiedTime;
 
+    @Column(name = "parking", columnDefinition = "TEXT")
+    private String parking;
+
+    @Column(name = "elevator", columnDefinition = "TEXT")
+    private String elevator;
+
+    @Column(name = "restroom", columnDefinition = "TEXT")
+    private String restroom;
+
+    @Column(name = "route", columnDefinition = "TEXT")
+    private String route;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
