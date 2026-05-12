@@ -82,7 +82,7 @@ export default function MapScreen() {
         {/* GPS 동선 — 선 또는 발자국 */}
         {isRecording && trail.length > 1 && !showPawPrint && (
           <Polyline
-            coordinates={trail.map(p => ({ latitude: p.lat, longitude: p.lng }))}
+            coordinates={trail}
             strokeColor="#FF6B35"
             strokeWidth={3}
           />
@@ -91,7 +91,7 @@ export default function MapScreen() {
           i % 5 === 0 && (  // 5개마다 발자국
             <Marker
               key={i}
-              coordinate={{ latitude: point.lat, longitude: point.lng }}
+              coordinate={{ latitude: point.latitude, longitude: point.longitude }}
             >
               <Text style={{ fontSize: 16 }}>🐾</Text>
             </Marker>

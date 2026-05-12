@@ -1,36 +1,41 @@
-// 백엔드 REST 호출
 import axios from 'axios'
-import { useAuthStore } from '../store/authStore'
+import auth from '@react-native-firebase/auth'
 
 const API_BASE_URL = 'http://98.84.85.31/api/v1'
-
 const api = axios.create({ baseURL: API_BASE_URL })
 
-// 토큰 자동 주입
-api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token
-  if (token) config.headers.Authorization = `Bearer ${token}`
+// 매 요청마다 최신 토큰 자동 갱신 (1시간 만료 해결)
+api.interceptors.request.use(async (config) => {
+  const currentUser = auth().currentUser
+  if (currentUser) {
+    const token = await currentUser.getIdToken()  // 만료 시 자동 갱신
+    config.headers.Authorization = `Bearer ${token}`
+  }
   return config
 })
 
-// 도착 인증
-export const verifyArrival = (venueId: string) =>
-  api.post('/arrivals', { venueId })
+// 주변 행사 조회 (TourAPI는 백엔드가 처리)
+export const fetchNearbyVenues = (lat: number, lng: number, radius = 5000) =>
+  api.get('/app/venues/nearby', { params: { lat, lng, radius } })
 
-// 모임 채팅방 생성
-export const createGroupChat = (venueId: string, maxMembers = 4) =>
-  api.post('/groups', { venueId, maxMembers })
+// 도착 인증 (위경도 포함 → 백엔드 PostGIS 검증)
+export const verifyArrival = (venueId: string, lat: number, lng: number) =>
+  api.post('/app/arrivals', { venueId, lat, lng })
+
+// 모임 생성
+export const createGroup = (venueId: string, maxMembers = 4) =>
+  api.post('/app/groups', { venueId, maxMembers })
 
 // 모임 참가
 export const joinGroup = (groupId: string) =>
-  api.post(`/groups/${groupId}/join`)
+  api.post(`/app/groups/${groupId}/join`)
 
 // 모임 모였다 인증
 export const confirmGathered = (groupId: string) =>
-  api.post(`/groups/${groupId}/gather`)
+  api.post(`/app/groups/${groupId}/gather`)
 
 // GPS 동선 저장
 export const saveTrail = (venueId: string, trail: { lat: number; lng: number; timestamp: number }[]) =>
-  api.post('/trails', { venueId, trail })
+  api.post('/app/trails', { venueId, trail })
 
 export default api
