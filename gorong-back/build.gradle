@@ -27,12 +27,13 @@ repositories {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.hibernate.orm:hibernate-spatial'
     // Spring Boot Web & Security
     implementation 'org.springframework.boot:spring-boot-starter-web'
     // Database (PostgreSQL & Spring Data JPA)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.postgresql:postgresql'
+
+    implementation 'org.hibernate.orm:hibernate-spatial'
     // Firebase Admin SDK (서버용 Firebase 라이브러리)
     implementation 'com.google.firebase:firebase-admin:9.2.0'
     implementation 'org.locationtech.jts:jts-core:1.19.0'
