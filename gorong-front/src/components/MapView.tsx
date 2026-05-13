@@ -84,7 +84,7 @@ export default function MapView({ data, onDetailClick }: MapViewProps) {
 
         if (!window.kakao || !window.kakao.maps) {
             const script = document.createElement('script');
-            script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=ab5c798e9276eae445ee5cf4e4ea329c&autoload=false`;
+            script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${import.meta.env.VITE_KAKAO_MAP_KEY}&autoload=false`;
             script.async = true;
             script.onload = initMap;
             document.head.appendChild(script);
