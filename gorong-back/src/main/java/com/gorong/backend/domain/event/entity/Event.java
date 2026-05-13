@@ -89,6 +89,19 @@ public class Event {
         this.restroom = dto.getRestroom();
         this.route = dto.getRoute();
 
+        String apiCat = dto.getCat1();
+        if (apiCat != null) {
+            switch (apiCat) {
+                case "A01": this.tourCategoryCode = "NA"; break; // 자연관광
+                case "A02": this.tourCategoryCode = "VE"; break; // 문화/역사
+                case "A03": this.tourCategoryCode = "LS"; break; // 레포츠
+                case "A04": this.tourCategoryCode = "SH"; break; // 쇼핑
+                case "A05": this.tourCategoryCode = "FD"; break; // 음식
+                case "C01": this.tourCategoryCode = "C01"; break; // 추천코스
+                default: this.tourCategoryCode = "ETC";
+            }
+        }
+
         if (dto.getOverview() != null) {
             this.description = dto  .getOverview();
         }
