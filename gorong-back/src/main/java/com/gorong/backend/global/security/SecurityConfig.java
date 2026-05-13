@@ -3,6 +3,7 @@ package com.gorong.backend.global.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -23,39 +24,36 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // 💡 [핵심 해결책] Security 단에서 CORS 허용 (프론트 Network Error 방지)
+                // 1. CORS 설정 적용
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable()) // API 서버이므로 CSRF 비활성화
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // JWT/Token 방식이므로 세션 안 씀
+
+                // 2. CSRF 비활성화 (POST, PUT 요청 허용을 위해 필수)
+                .csrf(csrf -> csrf.disable())
+
+                // 3. JWT 방식이므로 세션 사용 안 함
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
                 .authorizeHttpRequests(auth -> auth
-                        // 브라우저의 OPTIONS(사전 요청)는 무조건 통과시켜야 CORS 에러가 안 납니다.
+                        // 브라우저의 OPTIONS(Preflight) 요청은 무조건 통과
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 💡 카카오/네이버 전용 주소 삭제.
-                        // 프론트엔드와 맞춰서 v1 로그인/회원가입 API 주소로 수정했습니다.
-                        .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup").permitAll()
-                        // 주소popup
-                        .requestMatchers("/api/v1/juso/**").permitAll()
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        // app 엔드포인트
-                        .requestMatchers(
-                                "/api/v1/users/login",
-                                "/api/v1/users/signup",
-                                "/api/v1/juso/**",
-                                "/api/v1/app/venues/**"   // ← 추가 (행사 조회는 비로그인도 가능)
-                        ).permitAll()
-                        // 💡 [추가] 모집 게시판 관련 API 허용 (조회는 비로그인도 가능하게)
-                        .requestMatchers(HttpMethod.GET, "/api/groups/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/groups/**").authenticated() // 생성은 로그인 필요
-                        .requestMatchers(HttpMethod.PUT, "/api/groups/**").authenticated()  // 수정/참여는 로그인 필요
+                        // ✅ [수정] 모집 게시판 관련 모든 API를 테스트를 위해 일시적으로 전면 허용
+                        // 기존에 .authenticated()로 되어있던 POST, PUT을 .permitAll()로 변경합니다.
+                        .requestMatchers("/api/groups/**").permitAll()
 
-                        // 💬 웹소켓(채팅) 엔드포인트 허용
+                        // 기존 허용 목록들
+                        .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup").permitAll()
+                        .requestMatchers("/api/v1/juso/**").permitAll()
+                        .requestMatchers("/api/v1/app/venues/**").permitAll()
                         .requestMatchers("/ws-chat/**").permitAll()
-                                       
-                        // anyRequest는 항상 마지막
-                        .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함
+
+                        // 관리자 권한
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+
+                        // 그 외의 모든 요청은 인증 필요
+                        .anyRequest().authenticated()
                 )
-                // 우리가 만든 Firebase 필터를 껴넣음
+                // 4. Firebase 필터 추가
                 .addFilterBefore(new FirebaseTokenFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -66,13 +64,17 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 현재는 개발의 편의를 위해 모든 출처("*")를 열어둠
+        // 모든 도메인 허용 (개발 환경)
         configuration.setAllowedOriginPatterns(List.of("*"));
+        // 모든 HTTP 메서드 허용
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        // 모든 헤더 허용
         configuration.setAllowedHeaders(List.of("*"));
+        // 쿠키/인증 정보 허용
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        // 모든 경로에 위 설정 적용
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
