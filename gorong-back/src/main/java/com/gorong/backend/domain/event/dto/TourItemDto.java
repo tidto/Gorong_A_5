@@ -28,4 +28,8 @@ public class TourItemDto {
     private String elevator;
     private String restroom;
     private String route;
+
+    // 추가
+    private String areacode;    // [필수] getAreacode() 대응 (대구/경북 필터링용)
+    private String cat1;        // [필수] getCat1() 대응 (A01 -> NA 매핑용)
 }
