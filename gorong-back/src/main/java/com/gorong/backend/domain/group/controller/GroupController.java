@@ -1,5 +1,6 @@
 package com.gorong.backend.domain.group.controller;
 
+import com.gorong.backend.domain.group.dto.GroupDto;
 import com.gorong.backend.domain.group.entity.GroupPost;
 import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.group.service.GroupService;
@@ -12,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/groups")
-@CrossOrigin(origins = "http://localhost:5173") // 리액트 포트 허용
+@CrossOrigin(origins = "*") // 리액트 포트 허용
 public class GroupController {
 
     @Autowired
@@ -97,6 +98,22 @@ public class GroupController {
         Long userId = 1L; // 임시 테스트용 ID
         List<Long> joinedIds = groupService.getJoinedGroupIdsByUserId(userId);
         return ResponseEntity.ok(joinedIds);
+    }
+
+    @PostMapping("/api/groups")
+    public ResponseEntity<GroupPost> createGroup(@RequestBody GroupDto dto) {
+        GroupPost post = new GroupPost();
+        post.setTitle(dto.getTitle());
+        post.setContent(dto.getContent());
+        post.setEvent(dto.getEvent());
+        // 만약 location이 비어있다면 event 값으로 채워줌
+        post.setLocation(dto.getEvent());
+        post.setMaxCapacity(dto.getMaxCapacity());
+        post.setMeetingDate(dto.getMeetingDate());
+        post.setMeetingTime(dto.getMeetingTime());
+        post.setCondition(dto.getCondition());
+
+        return ResponseEntity.ok(groupRepository.save(post));
     }
 
 
