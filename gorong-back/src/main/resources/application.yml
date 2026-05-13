@@ -7,7 +7,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate # 처음 테이블 생성 시에는 update 또는 create
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
