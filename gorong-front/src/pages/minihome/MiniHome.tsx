@@ -8,6 +8,7 @@ import {
   getMiniHomePage,
 } from "../../api/minihome/miniHomeApi";
 import type { ActivityItem, MiniHomePage } from "../../types/minihome/minihome";
+import { useAuth } from "../../contexts/AuthContext";
 
 function intOr(v: string, fallback: number) {
   const n = Number.parseInt(v, 10);
@@ -48,7 +49,15 @@ function 에러메시지(e: any) {
 }
 
 export default function MiniHome() {
-  const [userId, setUserId] = useState(1);
+  const { firebaseUser, isLoading: authLoading } = useAuth();
+  // 로그인한 사용자의 UID를 숫자로 변환하여 사용 (또는 테스트용으로 직접 입력)
+  const [userId, setUserId] = useState<number>(() => {
+    if (firebaseUser?.uid) {
+      const hashCode = firebaseUser.uid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      return Math.abs(hashCode % 1000000) || 1;
+    }
+    return 1;
+  });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [page, setPage] = useState<MiniHomePage | null>(null);
@@ -146,8 +155,24 @@ export default function MiniHome() {
         <div>
           <h1 className="text-3xl font-extrabold text-orange-700">미니홈피</h1>
           <p className="text-sm text-slate-600">PostgreSQL 테이블 구조 기반</p>
+          {firebaseUser && (
+            <p className="text-sm text-orange-600 font-medium mt-2">
+              로그인: {firebaseUser.email || firebaseUser.uid}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-col sm:flex-row">
+          {authLoading ? (
+            <div className="text-sm text-slate-600">인증 확인 중...</div>
+          ) : firebaseUser ? (
+            <div className="text-sm text-green-600 font-medium">
+              ✓ 로그인 완료
+            </div>
+          ) : (
+            <div className="text-sm text-red-600 font-medium">
+              ✗ 로그인 필요
+            </div>
+          )}
           <div className="rounded-lg border border-orange-200 bg-white px-3 py-2">
             <div className="text-[11px] font-semibold text-slate-600">사용자 ID</div>
             <input
