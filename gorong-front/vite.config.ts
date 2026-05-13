@@ -7,7 +7,6 @@ export default defineConfig({
     port: 3000,
     open: true,
     headers: {
-      // 팝업이 부모 창과 통신할 수 있도록 허용
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
     },
     proxy: {
@@ -16,5 +15,9 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
-  }
+  },
+  // 📌 이 부분을 추가하세요!
+  define: {
+    global: 'window',
+  },
 })

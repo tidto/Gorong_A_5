@@ -2,10 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import Home from '../pages/Home'
 import EventList from '../pages/EventList'
 import EventDetail from '../pages/EventDetail'
-import GroupJoin from '../pages/GroupJoin'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
-import Group from '../pages/Group'
 import Chat from '../pages/Chat'
 import CatTower from '../pages/minihome/CatTower'
 import History from '../pages/History'
@@ -20,6 +18,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { setNavigate } from '../utils/navigationHelper'
 import { useEffect } from 'react'
+import GroupListPage from "../pages/Group/GroupListPage.tsx"
+import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
 
 // 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -50,6 +50,7 @@ export default function AppRouter() {
           <Route path="/" element={<Home />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
+            <Route path="/groups/create" element={<GroupCreatePage />} />
           <Route
             path="/events"
             element={
@@ -63,14 +64,6 @@ export default function AppRouter() {
             element={
               <ProtectedRoute>
                 <EventDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/events/:id/join"
-            element={
-              <ProtectedRoute>
-                <GroupJoin />
               </ProtectedRoute>
             }
           />
@@ -94,7 +87,7 @@ export default function AppRouter() {
             path="/group"
             element={
               <ProtectedRoute>
-                <Group />
+                <GroupListPage/>
               </ProtectedRoute>
             }
           />
