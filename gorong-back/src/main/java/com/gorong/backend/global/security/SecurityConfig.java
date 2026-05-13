@@ -37,6 +37,13 @@ public class SecurityConfig {
                         // 주소popup
                         .requestMatchers("/api/v1/juso/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                        // app 엔드포인트
+                        .requestMatchers(
+                                "/api/v1/users/login",
+                                "/api/v1/users/signup",
+                                "/api/v1/juso/**",
+                                "/api/v1/app/venues/**"   // ← 추가 (행사 조회는 비로그인도 가능)
+                        ).permitAll()
                         // anyRequest는 항상 마지막
                         .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함
                 )
