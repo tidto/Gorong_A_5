@@ -6,9 +6,9 @@ import org.springframework.web.client.RestTemplate;
 import java.net.URI;
 
 @Service
-public class TourApiService {
+public class GroupTourApiService {
 
-    @Value("${tourapi.key}")
+    @Value("${TOUR_API_KEY}")
     private String serviceKey;
 
     public String getTourEvents() {

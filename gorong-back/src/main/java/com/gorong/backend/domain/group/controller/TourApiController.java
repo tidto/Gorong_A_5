@@ -1,6 +1,6 @@
 package com.gorong.backend.domain.group.controller;
 
-import com.gorong.backend.domain.group.service.TourApiService;
+import com.gorong.backend.domain.group.service.GroupTourApiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,11 +12,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TourApiController {
 
-    private final TourApiService tourApiService;
+    private final GroupTourApiService groupTourApiService;
 
     @GetMapping("/events") // 📌 최종 주소: /api/tour/events
     public ResponseEntity<String> getEvents() {
-        String data = tourApiService.getTourEvents();
+        String data = groupTourApiService.getTourEvents();
         return ResponseEntity.ok(data);
     }
 }
