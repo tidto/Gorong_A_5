@@ -75,6 +75,7 @@ public class UserController {
         return ResponseEntity.ok(responseDto);
     }
 
+    
     @PutMapping("/me/profile")
     public ResponseEntity<String> updateMyPage(
             @RequestBody UserProfileUpdateRequestDto requestDto,
