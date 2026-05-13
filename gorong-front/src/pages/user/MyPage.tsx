@@ -12,12 +12,12 @@ import {
 type BarrierFreeType = 'NONE' | 'PHYSICAL' | 'VISUAL' | 'AUDITORY'
 
 const INTERESTS = [
-  { id: 2, code: 'A01', name: '자연', emoji: '🌿', desc: '산, 계곡, 해수욕장, 국립공원' },
-  { id: 3, code: 'A02', name: '인문', emoji: '🏛️', desc: '박물관, 미술관, 유적지, 예술 공연' },
-  { id: 4, code: 'A03', name: '레포츠', emoji: '🧗', desc: '등산, 낚시, 서핑, 캠핑' },
-  { id: 5, code: 'A04', name: '쇼핑', emoji: '🛍️', desc: '전통시장, 면세점, 백화점' },
-  { id: 6, code: 'A05', name: '음식', emoji: '🍜', desc: '맛집, 카페거리, 전통주' },
-  { id: 7, code: 'C01', name: '추천코스', emoji: '🗺️', desc: '가족, 나홀로, 데이트 코스' },
+  { id: 2, code: 'NA', name: '자연관광', emoji: '🌿', desc: '산, 계곡, 해수욕장, 국립공원, 섬, 숲길' }, // A01 -> NA
+  { id: 3, code: 'VE', name: '문화/역사', emoji: '🏛️', desc: '박물관, 미술관, 유적지, 사찰, 예술 공연' }, // A02 -> VE
+  { id: 4, code: 'LS', name: '레포츠', emoji: '🧗', desc: '등산, 낚시, 서핑, 골프, 스키, 번지점프' },     // A03 -> LS
+  { id: 5, code: 'SH', name: '쇼핑', emoji: '🛍️', desc: '전통시장, 면세점, 백화점, 공예품' },         // A04 -> SH
+  { id: 6, code: 'FD', name: '음식', emoji: '🍜', desc: '맛집, 카페거리, 전통주 체험, 사찰음식' },       // A05 -> FD
+  { id: 7, code: 'C01', name: '추천코스', emoji: '🗺️', desc: '가족 코스, 나홀로 여행, 데이트 코스' },    // 변경 없음
 ]
 
 const BARRIER_FREE_OPTIONS = [

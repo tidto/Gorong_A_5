@@ -7,15 +7,17 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: none # 처음 테이블 생성 시에는 update 또는 create
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
         default_schema: gorong_schema
 
-tourapi:
-  key: ${TOUR_API_KEY}
+tour:
+  api:
+    service-key: ${TOUR_API_KEY}
+    base-url: https://apis.data.go.kr/B551011/KorService1
 
 juso:
   api:
