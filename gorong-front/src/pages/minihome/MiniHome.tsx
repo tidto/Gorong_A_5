@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import RiveCharacter from "../../components/RiveCharacter";
 import {
   addGalleryImage,
@@ -50,6 +51,7 @@ function 에러메시지(e: any) {
 
 export default function MiniHome() {
   const { firebaseUser, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
   // 로그인한 사용자의 UID를 숫자로 변환하여 사용 (또는 테스트용으로 직접 입력)
   const [userId, setUserId] = useState<number>(() => {
     if (firebaseUser?.uid) {
@@ -78,6 +80,11 @@ export default function MiniHome() {
       const data = await getMiniHomePage(userId);
       setPage(data);
     } catch (e: any) {
+      if (e?.message === "AUTH_REQUIRED") {
+        setErr("로그인이 필요합니다.");
+        navigate("/login");
+        return;
+      }
       const status = e?.response?.status;
       if (status === 404) {
         setNoMiniHome(true);
@@ -91,9 +98,15 @@ export default function MiniHome() {
   }
 
   useEffect(() => {
+    // Auth 초기화 전에는 currentUser가 null일 수 있어 토큰 없이 요청이 나가는 것을 방지
+    if (authLoading) return;
+    if (!firebaseUser) {
+      setErr("로그인이 필요합니다.");
+      return;
+    }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, firebaseUser]);
 
   const cat = page?.miniHome?.cat ?? null;
 
