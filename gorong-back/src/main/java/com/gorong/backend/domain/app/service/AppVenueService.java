@@ -18,7 +18,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AppVenueService {
 
-    @Value("${tourapi.key}")
+    @Value("${tour.api.service-key}")
     private String tourApiKey;
 
     // TourAPI 호출 후 앱에 반환 (키는 백엔드에만 존재)
