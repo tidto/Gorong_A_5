@@ -45,10 +45,8 @@ public class SecurityConfig {
                                 "/api/v1/app/venues/**"   // ← 추가 (행사 조회는 비로그인도 가능)
                         ).permitAll()
                         // 💡 [추가] 모집 게시판 관련 API 허용 (조회는 비로그인도 가능하게)
-                        .requestMatchers(HttpMethod.GET, "/api/groups/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/groups/**").authenticated() // 생성은 로그인 필요
-                        .requestMatchers(HttpMethod.PUT, "/api/groups/**").authenticated()  // 수정/참여는 로그인 필요
-
+                        .requestMatchers("/api/groups/**").permitAll()
+                        
                         // 💬 웹소켓(채팅) 엔드포인트 허용
                         .requestMatchers("/ws-chat/**").permitAll()
                                        

@@ -1,11 +1,9 @@
 package com.gorong.backend.domain.group.controller;
 
-import com.gorong.backend.domain.group.dto.GroupDto;
 import com.gorong.backend.domain.group.entity.GroupPost;
 import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.group.service.GroupService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,25 +11,26 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/groups")
-@CrossOrigin(origins = "*") // 리액트 포트 허용
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class GroupController {
-
-    @Autowired
-    private GroupService groupService; // 📌 이 줄이 있어야 빨간 줄이 사라집니다!
 
     private final GroupRepository groupRepository;
 
+    @Autowired
+    private GroupService groupService;
+
+    // 생성자 주입
     public GroupController(GroupRepository groupRepository) {
         this.groupRepository = groupRepository;
     }
 
-    // 목록 조회
+    // 1. 전체 목록 조회
     @GetMapping
     public List<GroupPost> getAllGroups() {
         return groupRepository.findAll();
     }
 
-    // 상세 조회
+    // 2. 상세 조회
     @GetMapping("/{id}")
     public ResponseEntity<GroupPost> getGroup(@PathVariable Long id) {
         return groupRepository.findById(id)
@@ -39,44 +38,31 @@ public class GroupController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 글 작성
+    // 3. 게시글 작성
     @PostMapping
     public GroupPost createGroup(@RequestBody GroupPost groupPost) {
+        // 리액트에서 location 값이 비어있을 경우 event 값으로 대체해주는 방어 코드
+        if (groupPost.getLocation() == null || groupPost.getLocation().isEmpty()) {
+            groupPost.setLocation(groupPost.getEvent());
+        }
         return groupRepository.save(groupPost);
     }
+
+    // 4. 모임 참여하기 (인원 수 증가)
     @PutMapping("/{id}/join")
     public ResponseEntity<GroupPost> joinGroup(@PathVariable Long id) {
         return groupRepository.findById(id).map(group -> {
-            // 현재 인원이 최대 인원보다 적을 때만 증가
             if (group.getCurrentCapacity() < group.getMaxCapacity()) {
                 group.setCurrentCapacity(group.getCurrentCapacity() + 1);
-                GroupPost updatedGroup = groupRepository.save(group);
-                return ResponseEntity.ok(updatedGroup);
+                return ResponseEntity.ok(groupRepository.save(group));
             } else {
-                // 정원이 찼다면 400 Bad Request 반환
+                // 정원 초과 시 400 Bad Request
                 return ResponseEntity.badRequest().<GroupPost>build();
             }
         }).orElseGet(() -> ResponseEntity.notFound().build());
-        // 🔥 orElse 대신 orElseGet을 사용하고 명확하게 ResponseEntity를 반환합니다.
     }
 
-    @PutMapping("/{id}/wait")
-    public ResponseEntity<GroupPost> waitGroup(@PathVariable Long id) {
-        return groupRepository.findById(id).map(group -> {
-            group.setWaitingCount(group.getWaitingCount() + 1);
-            GroupPost updatedGroup = groupRepository.save(group);
-            return ResponseEntity.ok(updatedGroup);
-        }).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-    // 1. 글 삭제 API
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteGroup(@PathVariable Long id) {
-        groupRepository.deleteById(id);
-        return ResponseEntity.ok().build();
-    }
-
-
-    // 수정 처리 (PUT)
+    // 5. 게시글 수정
     @PutMapping("/{id}")
     public ResponseEntity<GroupPost> updateGroup(@PathVariable Long id, @RequestBody GroupPost updatedPost) {
         return groupRepository.findById(id)
@@ -93,29 +79,22 @@ public class GroupController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    // 6. 게시글 삭제
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteGroup(@PathVariable Long id) {
+        if (groupRepository.existsById(id)) {
+            groupRepository.deleteById(id);
+            return ResponseEntity.ok().build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    // 7. 사용자가 참여한 그룹 ID 리스트 조회
     @GetMapping("/joined-ids")
     public ResponseEntity<List<Long>> getJoinedGroupIds() {
-        Long userId = 1L; // 임시 테스트용 ID
+        Long userId = 1L; // 테스트용 임시 사용자 ID
         List<Long> joinedIds = groupService.getJoinedGroupIdsByUserId(userId);
         return ResponseEntity.ok(joinedIds);
     }
-
-    @PostMapping("/api/groups")
-    public ResponseEntity<GroupPost> createGroup(@RequestBody GroupDto dto) {
-        GroupPost post = new GroupPost();
-        post.setTitle(dto.getTitle());
-        post.setContent(dto.getContent());
-        post.setEvent(dto.getEvent());
-        // 만약 location이 비어있다면 event 값으로 채워줌
-        post.setLocation(dto.getEvent());
-        post.setMaxCapacity(dto.getMaxCapacity());
-        post.setMeetingDate(dto.getMeetingDate());
-        post.setMeetingTime(dto.getMeetingTime());
-        post.setCondition(dto.getCondition());
-
-        return ResponseEntity.ok(groupRepository.save(post));
-    }
-
-
 }
-
