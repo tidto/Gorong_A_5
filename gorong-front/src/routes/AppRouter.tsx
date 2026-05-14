@@ -21,6 +21,7 @@ import { useEffect } from 'react'
 import GroupListPage from "../pages/Group/GroupListPage.tsx"
 import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
 import ErrorPage from '../pages/ErrorPage'
+import GroupEditPage from "../pages/Group/GroupEditPage.tsx";
 
 // 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -52,6 +53,7 @@ export default function AppRouter() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
             <Route path="/groups/create" element={<GroupCreatePage />} />
+            <Route path="/groups/edit/:id" element={<GroupEditPage />} />
           <Route
             path="/events"
             element={
