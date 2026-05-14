@@ -23,10 +23,17 @@ import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
 import ErrorPage from '../pages/ErrorPage'
 import GroupEditPage from "../pages/Group/GroupEditPage.tsx";
 
-// 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const auth = useAuth()
-  const location = useLocation()  // ← 추가
+  const location = useLocation() 
+
+  // isLoading 중엔 판단 보류 : firebase 인증 상태가 아직 초기화되지 않았을 수 있음
+  if (auth.isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>)
+  }
 
   if (!auth.loggedIn || !auth.user) {
       // 현재 경로를 state.from에 담아서 login으로 이동

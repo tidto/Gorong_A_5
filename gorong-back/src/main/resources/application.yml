@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com:5432/gorong_db?currentSchema=gorong_schema
+    url: jdbc:postgresql://gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com:5432/gorong_db?currentSchema=gorong_schema&option=-c%20search_path%3Dgorong_schema%2Cpublic
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
