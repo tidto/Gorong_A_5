@@ -84,11 +84,24 @@ public class GroupController {
         if (groupPost.getLocation() == null || groupPost.getLocation().isEmpty()) {
             groupPost.setLocation(groupPost.getEvent());
         }
+
         User currentUser = getCurrentUser();
         if (currentUser != null) {
             groupPost.setAuthor(currentUser);
         }
-        return ResponseEntity.ok(groupRepository.save(groupPost));
+
+        GroupPost saved = groupRepository.save(groupPost);
+
+        // ✅ 작성자를 자동으로 참여자로 등록 (채팅방 입장 가능하게)
+        if (currentUser != null) {
+            try {
+                groupService.joinGroup(saved.getId(), currentUser.getId());
+            } catch (RuntimeException e) {
+                // 이미 참여 중이면 무시
+            }
+        }
+
+        return ResponseEntity.ok(saved);
     }
 
     // ── 4. 참여 ──────────────────────────────────────────────────────
