@@ -1,18 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-// ✅ 서버 주소 설정 (이 부분만 수정하면 됩니다)
-const API_BASE_URL = 'http://98.84.85.31:8080';
+import axiosInstance from '../../api/axiosInstance';  // ← 이게 핵심 변경점
 
 const GroupCreatePage = () => {
     const navigate = useNavigate();
 
-    // 입력 상태 관리 (event와 location 분리)
     const [formData, setFormData] = useState({
         title: '',
-        event: '',       // 참여할 행사 이름
-        location: '',    // 구체적인 모임 장소
+        event: '',
+        location: '',
         content: '',
         maxCapacity: 4,
         meetingDate: '',
@@ -28,8 +24,7 @@ const GroupCreatePage = () => {
     const handleSubmit = async (e: any) => {
         e.preventDefault();
         try {
-            // ✅ 백엔드 주소를 API_BASE_URL 변수로 변경
-            await axios.post(`${API_BASE_URL}/api/groups`, formData);
+            await axiosInstance.post('/groups', formData);  // ← 이게 핵심 변경점
             alert("모집글이 성공적으로 등록되었습니다! 🐈");
             navigate('/group');
         } catch (err) {
@@ -46,7 +41,6 @@ const GroupCreatePage = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ padding: '40px' }}>
-                    {/* 제목 */}
                     <div style={{ marginBottom: '30px' }}>
                         <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '10px' }}>제목</label>
                         <input
@@ -58,7 +52,6 @@ const GroupCreatePage = () => {
                         />
                     </div>
 
-                    {/* 행사명 & 장소 (2컬럼 배치) */}
                     <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '10px' }}>참여할 행사</label>
@@ -84,7 +77,6 @@ const GroupCreatePage = () => {
                         </div>
                     </div>
 
-                    {/* 설명 */}
                     <div style={{ marginBottom: '30px' }}>
                         <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '10px' }}>설명</label>
                         <textarea
@@ -96,7 +88,6 @@ const GroupCreatePage = () => {
                         />
                     </div>
 
-                    {/* 인원, 날짜, 시간 */}
                     <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '10px' }}>최대 인원</label>
@@ -116,7 +107,6 @@ const GroupCreatePage = () => {
                         </div>
                     </div>
 
-                    {/* 참여 조건 */}
                     <div style={{ marginBottom: '40px' }}>
                         <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '10px' }}>참여 조건</label>
                         <input
