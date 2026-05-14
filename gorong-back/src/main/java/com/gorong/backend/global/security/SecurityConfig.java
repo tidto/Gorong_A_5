@@ -44,6 +44,8 @@ public class SecurityConfig {
                                 "/api/v1/juso/**",
                                 "/api/v1/app/venues/**"   // ← 추가 (행사 조회는 비로그인도 가능)
                         ).permitAll()
+
+                        .requestMatchers("/api/chatbot/**").permitAll()
                         // 💡 [추가] 모집 게시판 관련 API 허용 (조회는 비로그인도 가능하게)
                         .requestMatchers("/api/groups/**").permitAll()
                         
