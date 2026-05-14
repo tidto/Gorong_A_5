@@ -48,9 +48,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/groups/**").permitAll()
                         
                         // 💬 웹소켓(채팅) 엔드포인트 허용
-                        .requestMatchers("/ws-chat/**").permitAll()
                         // minihome 
                         .requestMatchers("/api/minihomes/**").permitAll()
+                        .requestMatchers("/api/ws-chat/**","/ws-chat/**" ).permitAll()
+                        .requestMatchers("/api/chat/**").permitAll()
                                        
                         // anyRequest는 항상 마지막
                         .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함

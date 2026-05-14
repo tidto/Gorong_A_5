@@ -24,3 +24,8 @@ juso:
     key: ${JUSO_API_KEY}
   coord:
     key: ${JUSO_COORD_API_KEY}
+
+gemini:
+  api:
+    key: ${GEMINI_API_KEY}
+    model: ${GEMINI_MODEL} 
