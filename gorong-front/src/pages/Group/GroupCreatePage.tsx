@@ -31,7 +31,7 @@ const GroupCreatePage = () => {
             // ✅ 백엔드 주소를 API_BASE_URL 변수로 변경
             await axios.post(`${API_BASE_URL}/api/groups`, formData);
             alert("모집글이 성공적으로 등록되었습니다! 🐈");
-            navigate('/groups');
+            navigate('/group');
         } catch (err) {
             console.error(err);
             alert("등록 실패! 백엔드 서버 상태를 확인해주세요.");
