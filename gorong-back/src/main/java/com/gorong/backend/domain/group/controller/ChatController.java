@@ -4,7 +4,9 @@ package com.gorong.backend.domain.group.controller;
 import com.gorong.backend.domain.group.dto.ChatMessage;
 import com.gorong.backend.domain.group.entity.ChatMessageEntity;
 import com.gorong.backend.domain.group.repository.ChatMessageRepository;
-import com.gorong.backend.domain.group.service.GroupService;
+import com.gorong.backend.domain.user.entity.UserProfile;
+import com.gorong.backend.domain.user.repository.UserProfileRepository;
+import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -25,9 +27,19 @@ public class ChatController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatMessageRepository chatMessageRepository;
-    private final GroupService groupService;
+    private final UserRepository userRepository;             // ✅ 추가
+    private final UserProfileRepository userProfileRepository; // ✅ 추가
 
-    // ✅ 메시지 전송 - DB 저장 후 브로드캐스트
+    // ✅ 이메일 → 닉네임 조회 헬퍼
+    private String getNicknameByEmail(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userRepository.findByEmail(email)
+                .flatMap(user -> userProfileRepository.findByUserId(user.getId()))
+                .map(UserProfile::getNickname)
+                .orElse(null);
+    }
+
+    // ── 메시지 전송 (WebSocket) ─────────────────────────────────────
     @MessageMapping("/chat.sendMessage/{roomId}")
     public void sendMessage(
             @DestinationVariable String roomId,
@@ -36,30 +48,30 @@ public class ChatController {
         Long groupId = Long.parseLong(roomId);
 
         String senderEmail = chatMessage.getSenderEmail();
-        String senderDisplay = (senderEmail != null && !senderEmail.isBlank())
-                ? senderEmail
-                : (chatMessage.getUser() != null ? chatMessage.getUser() : "익명");
 
-        // ✅ DB 저장
-        ChatMessageEntity entity = ChatMessageEntity.builder()
+        // ✅ 이메일로 닉네임 조회, 없으면 이메일로 fallback
+        String nickname = getNicknameByEmail(senderEmail);
+        String displayName = (nickname != null) ? nickname : (senderEmail != null ? senderEmail : "익명");
+
+        // DB 저장 (senderEmail에 이메일, senderNickname에 닉네임)
+        chatMessageRepository.save(ChatMessageEntity.builder()
                 .groupId(groupId)
-                .senderEmail(senderDisplay)
-                .senderNickname(chatMessage.getUser())
+                .senderEmail(senderEmail)
+                .senderNickname(displayName) // ✅ 닉네임 저장
                 .content(chatMessage.getText())
-                .build();
-        chatMessageRepository.save(entity);
+                .build());
 
-        // 응답 구성 후 브로드캐스트
+        // ✅ 브로드캐스트 시 user 필드를 닉네임으로 세팅
         chatMessage.setRoomId(roomId);
-        chatMessage.setSenderEmail(senderDisplay);
-        chatMessage.setUser(senderDisplay);
+        chatMessage.setSenderEmail(senderEmail);
+        chatMessage.setUser(displayName);   // ← 닉네임으로
         chatMessage.setSentAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
         chatMessage.setType(ChatMessage.MessageType.CHAT);
 
         messagingTemplate.convertAndSend("/topic/group/" + roomId, chatMessage);
     }
 
-    // ✅ 채팅 이력 조회 REST API (입장 시 이전 메시지 불러오기용)
+    // ── 채팅 이력 조회 (REST) ───────────────────────────────────────
     @GetMapping("/api/chat/{groupId}/history")
     @ResponseBody
     public ResponseEntity<List<ChatMessage>> getChatHistory(@PathVariable Long groupId) {
@@ -69,28 +81,18 @@ public class ChatController {
                 .map(entity -> {
                     ChatMessage msg = new ChatMessage();
                     msg.setRoomId(String.valueOf(entity.getGroupId()));
-                    msg.setUser(entity.getSenderEmail());
                     msg.setSenderEmail(entity.getSenderEmail());
+                    // ✅ senderNickname이 있으면 닉네임, 없으면 이메일
+                    String displayName = (entity.getSenderNickname() != null && !entity.getSenderNickname().isBlank())
+                            ? entity.getSenderNickname()
+                            : entity.getSenderEmail();
+                    msg.setUser(displayName);
                     msg.setText(entity.getContent());
-                    msg.setSentAt(entity.getSentAt()
-                            .format(DateTimeFormatter.ofPattern("HH:mm")));
+                    msg.setSentAt(entity.getSentAt().format(DateTimeFormatter.ofPattern("HH:mm")));
                     msg.setType(ChatMessage.MessageType.CHAT);
                     return msg;
                 })
                 .collect(Collectors.toList());
         return ResponseEntity.ok(history);
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteGroup(@PathVariable Long id) {
-        // 💡 [수정] 레포지토리의 deleteById 대신 서비스의 안전 삭제 로직 호출
-        try {
-            groupService.deleteGroupSafely(id);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            // 만약 해당 id의 게시글이 없거나 삭제 중 오류가 나면 500 대신 깔끔하게 처리
-            e.printStackTrace(); // 콘솔에 에러 원인 출력
-            return ResponseEntity.internalServerError().build();
-        }
     }
 }

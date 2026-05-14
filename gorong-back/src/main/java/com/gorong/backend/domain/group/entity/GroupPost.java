@@ -33,10 +33,13 @@ public class GroupPost {
     private int currentCapacity = 1; // 기본 호스트 1명 시작
     private int waitingCount = 0;// 대기자 수
 
+    @Transient
+    private String authorNickname;
 
     @JsonProperty("authorName")
     public String getAuthorName() {
-        return (this.author != null) ? this.author.getEmail(): "익명";
+        if (authorNickname != null && !authorNickname.isBlank()) return authorNickname;
+        return (this.author != null) ? this.author.getEmail() : "익명";
     }
 
     // GroupPost.java에 추가
