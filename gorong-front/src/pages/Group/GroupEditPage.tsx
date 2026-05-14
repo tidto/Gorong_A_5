@@ -32,7 +32,7 @@ const GroupEditPage = () => {
             .catch(err => {
                 console.error("데이터 로딩 실패:", err);
                 alert("글 정보를 불러올 수 없습니다.");
-                navigate('/groups');
+                navigate('/group');
             });
     }, [id, navigate]);
 
