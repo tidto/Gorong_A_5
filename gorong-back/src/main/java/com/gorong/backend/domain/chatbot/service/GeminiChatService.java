@@ -33,11 +33,11 @@ public class GeminiChatService {
     );
 
     // Environment variable injection only (do not hardcode secrets).
-    @Value("${GEMINI_API_KEY:}")
+    @Value("${GEMINI_API_KEY}")
     private String geminiApiKey;
 
     // Model can be overridden via env var GEMINI_MODEL. Keep a working default.
-    @Value("${GEMINI_MODEL:gemini-2.5-flash}")
+    @Value("${GEMINI_MODEL}")
     private String geminiModel;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
