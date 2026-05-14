@@ -29,7 +29,7 @@ const GroupCreatePage = () => {
         e.preventDefault();
         try {
             // ✅ 백엔드 주소를 API_BASE_URL 변수로 변경
-            await axios.post(`${API_BASE_URL}/api/groups`, formData);
+            await axios.post(`${API_BASE_URL}/api/group`, formData);
             alert("모집글이 성공적으로 등록되었습니다! 🐈");
             navigate('/groups');
         } catch (err) {
