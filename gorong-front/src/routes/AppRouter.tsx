@@ -20,6 +20,7 @@ import { setNavigate } from '../utils/navigationHelper'
 import { useEffect } from 'react'
 import GroupListPage from "../pages/Group/GroupListPage.tsx"
 import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
+import ErrorPage from '../pages/ErrorPage'
 
 // 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -59,6 +60,11 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           />
+          <Route 
+            path="/error/:code" 
+            element={<ErrorPage />} 
+          />
+
           <Route
             path="/events/:id"
             element={
