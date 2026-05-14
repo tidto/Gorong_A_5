@@ -7,6 +7,9 @@ import lombok.Getter;
 import lombok.Setter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Getter
 @Setter
@@ -33,7 +36,7 @@ public class GroupPost {
 
     @JsonProperty("authorName")
     public String getAuthorName() {
-        return (this.author != null) ? this.author.getEmail() : "익명";
+        return (this.author != null) ? this.author.getEmail(): "익명";
     }
 
     // GroupPost.java에 추가

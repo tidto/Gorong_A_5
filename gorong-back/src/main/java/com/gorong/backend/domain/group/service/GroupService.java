@@ -52,4 +52,15 @@ public class GroupService {
                 .map(p -> p.getGroupPost().getId())
                 .collect(Collectors.toList());
     }
+
+    @Transactional
+    public void deleteGroupSafely(Long groupId) {
+        // 1. 자식 데이터(참여자) 먼저 싹 지우기
+        participantRepository.deleteAllByGroupPostId(groupId);
+
+        // 2. 부모 데이터(모임글) 지우기
+        groupPostRepository.deleteById(groupId);
+
+
+    }
 }
