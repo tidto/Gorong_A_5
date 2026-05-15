@@ -5,6 +5,7 @@ import Card from '../components/Card'
 import Input from '../components/Input'
 import { useAuth } from '../contexts/AuthContext'
 import { Camera } from 'lucide-react'
+import { createReview } from '../api/reviewService'
 
 export default function Review() {
   const { id } = useParams()
@@ -13,9 +14,22 @@ export default function Review() {
   const [reviewText, setReviewText] = useState('')
   const [rating, setRating] = useState(0)
   const [photoPreview, setPhotoPreview] = useState<string>('')
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const resolveUserId = () => {
+    const fromAuth = Number((auth.user as { id?: number } | null)?.id)
+    if (Number.isFinite(fromAuth) && fromAuth > 0) return fromAuth
+
+    const stored = localStorage.getItem('gorong-db-user')
+    if (!stored) return NaN
+    try {
+      const parsed = JSON.parse(stored) as { id?: number }
+      return Number(parsed?.id)
+    } catch {
+      return NaN
+    }
+  }
 
   useEffect(() => {
     if (!auth.loggedIn) {
@@ -25,7 +39,6 @@ export default function Review() {
 
   const onPhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null
-    setPhotoFile(file)
 
     if (!file) {
       setPhotoPreview('')
@@ -44,10 +57,36 @@ export default function Review() {
     if (!reviewText.trim() || rating === 0) {
       return
     }
+    const eventId = Number(id)
+    const userId = resolveUserId()
+    const authorName = auth.user?.nickname?.trim() || auth.user?.email?.trim() || '익명'
+
+    if (!Number.isFinite(eventId) || eventId <= 0) {
+      alert('유효한 행사 정보가 없습니다.')
+      return
+    }
+    if (!Number.isFinite(userId) || userId <= 0) {
+      alert('로그인 사용자 정보가 올바르지 않습니다. 다시 로그인해 주세요.')
+      return
+    }
+
     setSaving(true)
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    setSaving(false)
-    setIsSubmitted(true)
+    try {
+      await createReview({
+        rating,
+        title: reviewText.trim().slice(0, 50),
+        content: reviewText.trim(),
+        authorName,
+        userId,
+        eventId,
+      })
+      setIsSubmitted(true)
+    } catch (error) {
+      console.error('리뷰 저장 실패:', error)
+      alert('리뷰 저장 중 오류가 발생했습니다.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

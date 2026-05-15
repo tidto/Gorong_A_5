@@ -4,18 +4,17 @@ import axios from 'axios';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 
-// ✅ 서버 주소 설정 (이 부분만 수정하면 됩니다)
-const API_BASE_URL = 'http://98.84.85.31:8080';
-
 const GroupListPage = () => {
   const navigate = useNavigate();
   const [groups, setGroups] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
+  // --- 🔄 상태 관리 ---
   const [isJoining, setIsJoining] = useState(false);
   const [joinedGroupIds, setJoinedGroupIds] = useState<number[]>([]);
 
+  // --- 💬 채팅 관련 상태 ---
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
@@ -27,14 +26,13 @@ const GroupListPage = () => {
     fetchGroups();
   }, []);
 
-  // 1. 그룹 목록 조회
   const fetchGroups = () => {
-    axios.get(`${API_BASE_URL}/api/groups`)
+    axios.get('http://localhost:8080/api/groups')
         .then(res => setGroups(res.data))
         .catch(err => console.error("데이터 로딩 실패", err));
   };
 
-  // 2. 채팅 연결 로직
+  // 1. 채팅 연결 로직
   const connectChat = (groupId: number, groupTitle: string) => {
     if (connectedGroupId === groupId) {
       setIsChatOpen(true);
@@ -42,7 +40,7 @@ const GroupListPage = () => {
     }
     if (stompClient) stompClient.disconnect();
 
-    const socket = new SockJS(`${API_BASE_URL}/ws-chat`);
+    const socket = new SockJS('http://localhost:8080/ws-chat');
     const client = Stomp.over(socket);
     client.debug = () => {};
 
@@ -59,17 +57,19 @@ const GroupListPage = () => {
     });
   };
 
-  // 3. 참여 신청 핸들러
+  // 2. 참여 신청 핸들러
   const handleJoinRequest = async (group: any) => {
     if (isJoining || joinedGroupIds.includes(group.id)) return;
 
     try {
       if (group.currentCapacity < group.maxCapacity) {
         setIsJoining(true);
-        await axios.put(`${API_BASE_URL}/api/groups/${group.id}/join`);
+        await axios.put(`http://localhost:8080/api/groups/${group.id}/join`);
         alert(`'${group.title}' 참여 성공!`);
 
         setJoinedGroupIds(prev => [...prev, group.id]);
+
+        // ✅ 참여 성공 시 바로 채팅 연결 및 팝업 열기
         connectChat(group.id, group.title);
         setIsChatOpen(true);
         fetchGroups();
@@ -84,7 +84,7 @@ const GroupListPage = () => {
     }
   };
 
-  // 4. 메시지 전송
+  // 3. 메시지 전송
   const handleSend = () => {
     if (chatMessage.trim() === "" || !stompClient || !connectedGroupId) return;
     const payload = { roomId: connectedGroupId, user: '나', text: chatMessage };
@@ -92,11 +92,10 @@ const GroupListPage = () => {
     setChatMessage("");
   };
 
-  // 5. 삭제 핸들러
   const handleDelete = async (id: number) => {
     if (window.confirm("정말 이 모집글을 삭제하시겠습니까?")) {
       try {
-        await axios.delete(`${API_BASE_URL}/api/groups/${id}`);
+        await axios.delete(`http://localhost:8080/api/groups/${id}`);
         alert("삭제되었습니다.");
         fetchGroups();
       } catch (err) { console.error("삭제 실패", err); }
@@ -112,6 +111,7 @@ const GroupListPage = () => {
   return (
       <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '100px' }}>
         <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '0 20px' }}>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '30px' }}>
             <div>
               <h1 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 8px 0' }}>👥 모집게시판</h1>
@@ -196,6 +196,7 @@ const GroupListPage = () => {
           </div>
         </div>
 
+        {/* --- 💬 실시간 채팅 팝업 (가장 중요!) --- */}
         {isChatOpen && (
             <div style={{ position: 'fixed', bottom: '20px', right: '20px', width: '350px', height: '500px', backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', zIndex: 1000, overflow: 'hidden' }}>
               <div style={{ backgroundColor: '#ff8a3d', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

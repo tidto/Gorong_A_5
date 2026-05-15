@@ -32,16 +32,18 @@ public class TourApiService {
         return rt;
     }
 
+    /**
+     * [MapController 연결 메서드]
+     * DB에 데이터가 있으면 반환하고, 없으면 API를 통해 가져옵니다.
+     */
     @Transactional
     public List<TourItemDto> getSmartFestivalList() {
         List<Event> dbEvents = eventRepository.findAll();
 
         if (dbEvents.isEmpty()) {
-            System.out.println("📭 DB 비어있음 → API 동기화 시작");
             return getAndSyncApiData();
         }
 
-        System.out.println("✅ DB에서 " + dbEvents.size() + "개 로드");
         return dbEvents.stream()
                 .filter(this::isCulturalEvent)
                 .map(this::mapToDtoFromEntity)
@@ -61,90 +63,81 @@ public class TourApiService {
         return !(title.contains("카페") || title.contains("식당") || title.contains("커피") || title.contains("집밥"));
     }
 
+    /**
+     * API 데이터를 긁어와서 DB와 동기화하고 상세 정보까지 채웁니다.
+     */
     @Transactional
     public List<TourItemDto> getAndSyncApiData() {
         List<TourItemDto> dtoList = getFestivalList();
-        System.out.println("🌐 API에서 가져온 총 데이터: " + dtoList.size() + "개");
-
         for (TourItemDto dto : dtoList) {
             if (dto.getContentid() == null || dto.getContentid().isEmpty()) continue;
             try {
+                // 상세 API를 호출하여 무장애 정보(주차, 엘리베이터 등)를 채움
                 fillBarrierFreeDetail(dto);
+
                 Long eventId = Long.parseLong(dto.getContentid());
                 eventRepository.findById(eventId)
                         .ifPresentOrElse(
                                 existingEvent -> existingEvent.updateFromDto(dto),
                                 () -> {
-                                    Event newEvent = Event.builder().id(eventId).build();
+                                    Event newEvent = Event.builder()
+                                            .id(eventId)
+                                            .build();
+                                    // 엔티티 내부의 매핑 로직(A01 -> NA 등) 수행
                                     newEvent.updateFromDto(dto);
                                     eventRepository.save(newEvent);
                                 }
                         );
             } catch (Exception e) {
-                System.err.println("🚨 동기화 실패 (ID: " + dto.getContentid() + "): " + e.getMessage());
+                System.err.println("🚨 데이터 동기화 실패 (ID: " + dto.getContentid() + "): " + e.getMessage());
             }
         }
         return dtoList;
     }
 
+    /**
+     * 공공 API로부터 행사 목록을 가져옵니다.
+     */
     public List<TourItemDto> getFestivalList() {
         int[] contentTypes = {14, 15};
         List<TourItemDto> totalList = new ArrayList<>();
 
-        // 대구/경북 7개 거점 좌표 [경도(mapX), 위도(mapY)]
-        double[][] centers = {
-                {128.6225, 35.8714},  // 대구 중심
-                {128.5911, 35.8019},  // 대구 서구
-                {129.0756, 35.5665},  // 경주
-                {128.7322, 36.5760},  // 안동
-                {128.9963, 35.9078},  // 포항
-                {128.3445, 35.7300},  // 고령/성주
-                {128.6922, 36.0390},  // 영천
-        };
+        for (int typeId : contentTypes) {
+            String url = "https://apis.data.go.kr/B551011/KorWithService2/locationBasedList2"
+                    + "?serviceKey=" + tourApiConfig.getServiceKey()
+                    + "&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=Gorong&_type=json"
+                    + "&mapX=128.6225&mapY=35.895278&radius=2000"
+                    + "&contentTypeId=" + typeId;
 
-        for (double[] center : centers) {
-            for (int typeId : contentTypes) {
-                String url = "https://apis.data.go.kr/B551011/KorWithService2/locationBasedList2"
-                        + "?serviceKey=" + tourApiConfig.getServiceKey()
-                        + "&numOfRows=50&pageNo=1&MobileOS=ETC&MobileApp=Gorong&_type=json"
-                        + "&mapX=" + center[0]
-                        + "&mapY=" + center[1]
-                        + "&radius=30000"
-                        + "&contentTypeId=" + typeId;
+            try {
+                String res = restTemplate.getForObject(url, String.class);
+                if (res == null || res.startsWith("<")) {
+                    System.err.println("🚨 API 인증 실패 또는 잘못된 응답: " + res);
+                    continue;
+                }
 
-                try {
-                    String res = restTemplate.getForObject(url, String.class);
-                    if (res == null || res.startsWith("<")) {
-                        System.err.println("🚨 API 응답 오류: " + res);
-                        continue;
-                    }
+                JSONObject json = new JSONObject(res);
+                JSONObject body = json.optJSONObject("response").optJSONObject("body");
+                Object itemsObj = body.opt("items");
 
-                    JSONObject json = new JSONObject(res);
-                    JSONObject body = json.optJSONObject("response").optJSONObject("body");
-                    Object itemsObj = body.opt("items");
-
-                    if (itemsObj instanceof JSONObject) {
-                        JSONArray itemArr = ((JSONObject) itemsObj).optJSONArray("item");
-                        if (itemArr != null) {
-                            for (int i = 0; i < itemArr.length(); i++) {
-                                TourItemDto dto = mapToDtoFromJson(itemArr.getJSONObject(i));
-                                // contentid 기준 중복 제거
-                                boolean isDuplicate = totalList.stream()
-                                        .anyMatch(d -> d.getContentid().equals(dto.getContentid()));
-                                if (!isDuplicate) totalList.add(dto);
-                            }
+                if (itemsObj instanceof JSONObject) {
+                    JSONArray itemArr = ((JSONObject) itemsObj).optJSONArray("item");
+                    if (itemArr != null) {
+                        for (int i = 0; i < itemArr.length(); i++) {
+                            totalList.add(mapToDtoFromJson(itemArr.getJSONObject(i)));
                         }
                     }
-                } catch (Exception e) {
-                    System.err.println("🚨 목록 호출 실패: " + e.getMessage());
                 }
+            } catch (Exception e) {
+                System.err.println("🚨 목록 호출 실패: " + e.getMessage());
             }
         }
-
-        System.out.println("📦 총 수집: " + totalList.size() + "개");
         return totalList;
     }
 
+    /**
+     * 무장애 상세 정보를 가져와 DTO를 완성합니다.
+     */
     private void fillBarrierFreeDetail(TourItemDto dto) {
         String detailUrl = "https://apis.data.go.kr/B551011/KorWithService2/detailWithTour2"
                 + "?serviceKey=" + tourApiConfig.getServiceKey()
@@ -180,21 +173,13 @@ public class TourApiService {
         dto.setContentid(obj.optString("contentid"));
         dto.setTitle(obj.optString("title"));
         dto.setAddr1(obj.optString("addr1"));
-
-        String mapx = obj.optString("mapx", "").trim();
-        String mapy = obj.optString("mapy", "").trim();
-        if (mapx.isEmpty()) mapx = obj.optString("mapX", "").trim();
-        if (mapy.isEmpty()) mapy = obj.optString("mapY", "").trim();
-
-        dto.setMapx(mapx);
-        dto.setMapy(mapy);
+        dto.setMapx(obj.optString("mapx"));
+        dto.setMapy(obj.optString("mapy"));
         dto.setAreacode(obj.optString("areacode"));
         dto.setCat1(obj.optString("cat1"));
 
-        String img = obj.optString("firstimage", "").trim();
-        dto.setFirstimage(img.isEmpty()
-                ? "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?q=80&w=500"
-                : img);
+        String img = obj.optString("firstimage");
+        dto.setFirstimage((img == null || img.isEmpty()) ? "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?q=80&w=500" : img);
         return dto;
     }
 
@@ -203,8 +188,8 @@ public class TourApiService {
         dto.setContentid(String.valueOf(event.getId()));
         dto.setTitle(event.getTitle());
         dto.setAddr1(event.getAddr());
-        dto.setMapx(event.getMapX() != null ? event.getMapX().trim() : "");
-        dto.setMapy(event.getMapY() != null ? event.getMapY().trim() : "");
+        dto.setMapx(event.getMapX());
+        dto.setMapy(event.getMapY());
         dto.setFirstimage(event.getFirstImage());
         dto.setParking(event.getParking());
         dto.setElevator(event.getElevator());

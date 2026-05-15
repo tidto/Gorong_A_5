@@ -2,9 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// ✅ 서버 주소 설정 (이 부분만 수정하면 됩니다)
-const API_BASE_URL = 'http://98.84.85.31:8080';
-
 const GroupCreatePage = () => {
     const navigate = useNavigate();
 
@@ -28,10 +25,10 @@ const GroupCreatePage = () => {
     const handleSubmit = async (e: any) => {
         e.preventDefault();
         try {
-            // ✅ 백엔드 주소를 API_BASE_URL 변수로 변경
-            await axios.post(`${API_BASE_URL}/api/groups`, formData);
+            // 백엔드 엔티티 필드(event, location)에 각각 데이터 전송
+            await axios.post('http://localhost:8080/api/groups', formData);
             alert("모집글이 성공적으로 등록되었습니다! 🐈");
-            navigate('/group');
+            navigate('/groups');
         } catch (err) {
             console.error(err);
             alert("등록 실패! 백엔드 서버 상태를 확인해주세요.");

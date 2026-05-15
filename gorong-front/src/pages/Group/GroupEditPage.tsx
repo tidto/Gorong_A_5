@@ -2,9 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// ✅ 서버 주소 설정
-const API_BASE_URL = 'http://98.84.85.31:8080';
-
 const GroupEditPage = () => {
     const { id } = useParams(); // URL의 :id 값을 가져옴
     const navigate = useNavigate();
@@ -24,15 +21,14 @@ const GroupEditPage = () => {
 
     // 1. 페이지 접속 시 기존 데이터 불러오기
     useEffect(() => {
-        // ✅ 백엔드 주소를 API_BASE_URL 변수로 변경
-        axios.get(`${API_BASE_URL}/api/groups/${id}`)
+        axios.get(`http://localhost:8080/api/groups/${id}`)
             .then(res => {
                 setFormData(res.data);
             })
             .catch(err => {
                 console.error("데이터 로딩 실패:", err);
                 alert("글 정보를 불러올 수 없습니다.");
-                navigate('/group');
+                navigate('/groups');
             });
     }, [id, navigate]);
 
@@ -49,8 +45,7 @@ const GroupEditPage = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            // ✅ 백엔드 주소를 API_BASE_URL 변수로 변경
-            await axios.put(`${API_BASE_URL}/api/groups/${id}`, formData);
+            await axios.put(`http://localhost:8080/api/groups/${id}`, formData);
             alert("수정이 완료되었습니다! ✨");
             navigate('/groups'); // 목록으로 이동
         } catch (err) {
@@ -104,7 +99,7 @@ const GroupEditPage = () => {
     );
 };
 
-// 스타일 객체는 그대로 유지
+// 스타일 객체
 const inputStyle = {
     width: '100%',
     padding: '10px',
