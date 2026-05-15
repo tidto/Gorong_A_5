@@ -24,142 +24,154 @@ import ErrorPage from '../pages/ErrorPage'
 import GroupEditPage from "../pages/Group/GroupEditPage.tsx";
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
-    const auth = useAuth()
-    const location = useLocation()
+  const auth = useAuth()
+  const location = useLocation() 
 
-    if (!auth.loggedIn || !auth.user) {
-        return <Navigate to="/login" state={{ from: location }} replace />
-    }
+  // isLoading 중엔 판단 보류 : firebase 인증 상태가 아직 초기화되지 않았을 수 있음
+  if (auth.isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>)
+  }
 
-    return children
+  if (!auth.loggedIn || !auth.user) {
+      // 현재 경로를 state.from에 담아서 login으로 이동
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  return children
 }
-
 function NavigationInitializer() {
-    const navigate = useNavigate()
-    useEffect(() => {
-        setNavigate(navigate)
-    }, [navigate])
-    return null
+  const navigate = useNavigate()
+  useEffect(() => {
+    setNavigate(navigate)
+  }, [navigate])
+  return null
 }
 
 export default function AppRouter() {
-    return (
-        <Router>
-            <NavigationInitializer />
-            <Layout>
-                <Routes>
-                    {/* 누구나 접근 가능한 페이지 (Public) */}
-                    <Route path="/" element={<Home />} />
-                    <Route path="/signup" element={<Signup />} />
-                    <Route path="/login" element={<Login />} />
+  return (
+    <Router>
+      <NavigationInitializer /> {/* navigate를 초기화하는 컴포넌트 */}
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/login" element={<Login />} />
+            <Route path="/groups/create" element={<GroupCreatePage />} />
+            <Route path="/groups/edit/:id" element={<GroupEditPage />} />
+          <Route
+            path="/events"
+            element={
+              <ProtectedRoute>
+                <EventList />
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/error/:code" 
+            element={<ErrorPage />} 
+          />
 
-                    {/* [수정] 상세 페이지는 ProtectedRoute를 제거하여 비로그인 접근 허용 */}
-                    <Route path="/events/:id" element={<EventDetail />} />
+          <Route
+            path="/events/:id"
+            element={
+                <EventDetail />
+            }
+          />
+          <Route
+            path="/events/:id/review"
+            element={
+              <ProtectedRoute>
+                <Review />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reviews"
+            element={
+              <ProtectedRoute>
+                <ReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/group"
+            element={
+              <ProtectedRoute>
+                <GroupListPage/>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/:id"
+            element={
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cattower"
+            element={
+              <ProtectedRoute>
+                <CatTower />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <History />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mypage"
+            element={
+              <ProtectedRoute>
+                <MyPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chatbot"
+            element={
+              <ProtectedRoute>
+                <Chatbot />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/minihome"
+            element={
+              <ProtectedRoute>
+                <MiniHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+                <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+                <p className="text-gray-600 mb-6">페이지를 찾을 수 없습니다.</p>
+              </div>
+            }
+          />
+        </Routes>
+      </Layout>
+    </Router>
+  )
 
-                    <Route path="/error/:code" element={<ErrorPage />} />
-
-                    {/* 인증이 필요한 페이지 (Protected) */}
-                    <Route
-                        path="/events"
-                        element={
-                            <ProtectedRoute>
-                                <EventList />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route path="/groups/create" element={<GroupCreatePage />} />
-                    <Route path="/groups/edit/:id" element={<GroupEditPage />} />
-                    <Route
-                        path="/events/:id/review"
-                        element={
-                            <ProtectedRoute>
-                                <Review />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/reviews"
-                        element={
-                            <ProtectedRoute>
-                                <ReviewPage />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/group"
-                        element={
-                            <ProtectedRoute>
-                                <GroupListPage/>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/chat/:id"
-                        element={
-                            <ProtectedRoute>
-                                <Chat />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/cattower"
-                        element={
-                            <ProtectedRoute>
-                                <CatTower />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/history"
-                        element={
-                            <ProtectedRoute>
-                                <History />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/mypage"
-                        element={
-                            <ProtectedRoute>
-                                <MyPage />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/chatbot"
-                        element={
-                            <ProtectedRoute>
-                                <Chatbot />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/minihome"
-                        element={
-                            <ProtectedRoute>
-                                <MiniHome />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/profile"
-                        element={
-                            <ProtectedRoute>
-                                <Profile />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="*"
-                        element={
-                            <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-                                <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                                <p className="text-gray-600 mb-6">페이지를 찾을 수 없습니다.</p>
-                            </div>
-                        }
-                    />
-                </Routes>
-            </Layout>
-        </Router>
-    )
 }
