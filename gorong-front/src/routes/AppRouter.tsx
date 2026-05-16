@@ -77,9 +77,7 @@ export default function AppRouter() {
           <Route
             path="/events/:id"
             element={
-              <ProtectedRoute>
                 <EventDetail />
-              </ProtectedRoute>
             }
           />
           <Route
@@ -177,4 +175,3 @@ export default function AppRouter() {
   )
 
 }
-
