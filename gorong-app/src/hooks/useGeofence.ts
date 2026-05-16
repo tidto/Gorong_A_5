@@ -7,15 +7,17 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): nu
   const R = 6371000
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLon = (lon2 - lon1) * Math.PI / 180
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 export function useGeofence(venues: Venue[]) {
   const [insideVenueId, setInsideVenueId] = useState<string | null>(null)
-  const [isVerified, setIsVerified] = useState(false)  // 도착 인증 여부
+  const [isVerified, setIsVerified] = useState(false)
   const prevInside = useRef<string | null>(null)
-  const verifiedVenues = useRef<Set<string>>(new Set())  // 이미 인증한 장소
+  const verifiedVenues = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     let subscription: Location.LocationSubscription
@@ -37,9 +39,18 @@ export function useGeofence(venues: Venue[]) {
 
           if (enteredId !== prevInside.current) {
             if (enteredId) {
-              await handleEnter(enteredId)
-            } else if (prevInside.current) {
-              handleExit(prevInside.current)
+              // UI용 거리 계산은 클라이언트, 실제 인증은 백엔드 PostGIS 검증
+              if (!verifiedVenues.current.has(enteredId)) {
+                try {
+                  await verifyArrival(enteredId, latitude, longitude)  // lat/lng 포함
+                  verifiedVenues.current.add(enteredId)
+                  setIsVerified(true)
+                } catch (err) {
+                  console.error('도착 인증 실패:', err)
+                }
+              }
+            } else {
+              setIsVerified(false)
             }
             prevInside.current = enteredId
             setInsideVenueId(enteredId)
@@ -50,26 +61,6 @@ export function useGeofence(venues: Venue[]) {
 
     return () => subscription?.remove()
   }, [venues])
-
-  const handleEnter = async (venueId: string) => {
-    console.log(`진입: ${venueId}`)
-    // 최초 진입 시에만 도착 인증
-    if (!verifiedVenues.current.has(venueId)) {
-      try {
-        await verifyArrival(venueId)
-        verifiedVenues.current.add(venueId)
-        setIsVerified(true)
-        console.log(`도착 인증 완료: ${venueId}`)
-      } catch (err) {
-        console.error('도착 인증 실패:', err)
-      }
-    }
-  }
-
-  const handleExit = (venueId: string) => {
-    console.log(`이탈: ${venueId}`)
-    setIsVerified(false)
-  }
 
   return { insideVenueId, isVerified }
 }

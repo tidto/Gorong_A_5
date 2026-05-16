@@ -1,36 +1,38 @@
 import { create } from 'zustand'
 import { User } from '../types'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { auth } from '../config/firebaseConfig'
+import { signOut } from 'firebase/auth'
 
 interface AuthStore {
   user: User | null
-  token: string | null
-  setUser: (user: User, token: string) => void
-  logout: () => void
+  setUser: (user: User | null) => void
+  logout: () => Promise<void>
   loadFromStorage: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
-  token: null,
 
-  setUser: (user, token) => {
-    set({ user, token })
-    AsyncStorage.setItem('gorong-user', JSON.stringify(user))
-    AsyncStorage.setItem('gorong-token', token)
+  setUser: (user) => {
+    set({ user })
+    if (user) {
+      AsyncStorage.setItem('gorong-user', JSON.stringify(user))
+    } else {
+      AsyncStorage.removeItem('gorong-user')
+    }
   },
 
-  logout: () => {
-    set({ user: null, token: null })
+  logout: async () => {
+    await signOut(auth)  // Firebase 로그아웃
+    set({ user: null })
     AsyncStorage.removeItem('gorong-user')
-    AsyncStorage.removeItem('gorong-token')
   },
 
   loadFromStorage: async () => {
     const userStr = await AsyncStorage.getItem('gorong-user')
-    const token = await AsyncStorage.getItem('gorong-token')
-    if (userStr && token) {
-      set({ user: JSON.parse(userStr), token })
+    if (userStr) {
+      set({ user: JSON.parse(userStr) })
     }
   }
 }))

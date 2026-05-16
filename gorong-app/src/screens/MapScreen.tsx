@@ -4,8 +4,9 @@ import MapView, { Marker, Circle, Polyline } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { useGeofence } from '../hooks/useGeofence'
 import { useTrailRecording } from '../hooks/useTrailRecording'
-import { fetchNearbyVenues } from '../services/tourApi'
+import { fetchNearbyVenues } from '../services/api'  // tourApi → api
 import { Venue } from '../types'
+import { useChat } from '../hooks/useChat'  // 지오펜스 진입 시 채팅 연결 위해 추가
 
 export default function MapScreen() {
   const [venues, setVenues] = useState<Venue[]>([])
@@ -14,6 +15,9 @@ export default function MapScreen() {
 
   const { insideVenueId, isVerified } = useGeofence(venues)
   const { isRecording, trail, startRecording, stopRecording } = useTrailRecording()
+
+  // useChat에 insideVenueId 전달
+  const { messages, sendMessage, isConnected } = useChat(insideVenueId)
 
   // 현재 위치 가져오기
   useEffect(() => {
@@ -82,13 +86,13 @@ export default function MapScreen() {
         {/* GPS 동선 — 선 또는 발자국 */}
         {isRecording && trail.length > 1 && !showPawPrint && (
           <Polyline
-            coordinates={trail}
+            coordinates={trail}  // useTrailRecording이 {latitude, longitude} 반환
             strokeColor="#FF6B35"
             strokeWidth={3}
           />
         )}
         {isRecording && showPawPrint && trail.map((point, i) => (
-          i % 5 === 0 && (  // 5개마다 발자국
+          i % 5 === 0 && (
             <Marker
               key={i}
               coordinate={{ latitude: point.latitude, longitude: point.longitude }}

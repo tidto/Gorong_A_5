@@ -6,19 +6,19 @@ export interface Venue {
   name: string
   lat: number
   lng: number
-  radius: number          // 지오펜스 반경 (미터)
+  radius: number            // 지오펜스 반경 (미터)
   address: string
-  category: string        // TourAPI 카테고리
+  category: string           // TourAPI 카테고리 
   barrierFreeInfo?: string
   imageUrl?: string
 }
 
 // 유저
+// token 제거 (Firebase가 관리)
 export interface User {
   uid: string
   email: string
   nickname: string
-  token: string
 }
 
 // 채팅 메시지
@@ -33,8 +33,8 @@ export interface ChatMessage {
 
 // GPS 동선
 export interface TrailPoint {
-  lat: number
-  lng: number
+  latitude: number   // latitude/longitude로 통일
+  longitude: number
   timestamp: number
 }
 
@@ -44,7 +44,7 @@ export interface Group {
   venueId: string
   leaderId: string
   memberIds: string[]
-  maxMembers: number      // 최대 4명
+  maxMembers: number        // 최대 4명
   chatRoomId: string
-  isGathered: boolean     // 모였다 인증 여부
+  isGathered: boolean       // 모였다 인증 여부
 }
