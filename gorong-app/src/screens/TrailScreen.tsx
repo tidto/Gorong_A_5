@@ -1,9 +1,9 @@
 import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native'
-import { useTrailRecording } from '../hooks/useTrailRecording'
+import { useTrailStore } from '../store/trailStore'
 
 export default function TrailScreen() {
-  const { isRecording, trail, startRecording, stopRecording } = useTrailRecording()
+  const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
 
   return (
     <View style={styles.container}>

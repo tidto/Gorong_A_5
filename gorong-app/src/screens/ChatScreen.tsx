@@ -4,10 +4,13 @@ import {
   FlatList, StyleSheet, KeyboardAvoidingView, Platform
 } from 'react-native'
 import { useChat } from '../hooks/useChat'
+import { useAuthStore } from '../store/authStore'
 
 export default function ChatScreen() {
   const [input, setInput] = useState('')
-  const { messages, sendMessage, isConnected } = useChat()
+  const { insideVenueId } = useAuthStore() 
+  const { messages, sendMessage, isConnected } = useChat(insideVenueId)  // ← venueId 전달
+  
 
   return (
     <KeyboardAvoidingView

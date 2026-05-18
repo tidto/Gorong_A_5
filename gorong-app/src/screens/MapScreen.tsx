@@ -3,21 +3,27 @@ import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native'
 import MapView, { Marker, Circle, Polyline } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { useGeofence } from '../hooks/useGeofence'
-import { useTrailRecording } from '../hooks/useTrailRecording'
+import { useTrailStore } from '../store/trailStore'
 import { fetchNearbyVenues } from '../services/api'  // tourApi → api
 import { Venue } from '../types'
-import { useChat } from '../hooks/useChat'  // 지오펜스 진입 시 채팅 연결 위해 추가
+// import { useChat } from '../hooks/useChat'
+import { useAuthStore } from '../store/authStore'
 
 export default function MapScreen() {
   const [venues, setVenues] = useState<Venue[]>([])
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [showPawPrint, setShowPawPrint] = useState(false)  // 발자국/선 토글
-
+  
+  const { setInsideVenueId } = useAuthStore()
   const { insideVenueId, isVerified } = useGeofence(venues)
-  const { isRecording, trail, startRecording, stopRecording } = useTrailRecording()
+  const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
 
   // useChat에 insideVenueId 전달
-  const { messages, sendMessage, isConnected } = useChat(insideVenueId)
+  // const { messages, sendMessage, isConnected } = useChat(insideVenueId)
+
+  useEffect(() => {
+    setInsideVenueId(insideVenueId)
+  }, [insideVenueId])
 
   // 현재 위치 가져오기
  // 수정 후

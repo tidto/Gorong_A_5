@@ -7,8 +7,11 @@ import { signOut } from 'firebase/auth'
 
 interface AuthStore {
   user: User | null
-  isHydrated: boolean                              // 추가: 스토리지 로드 완료 여부
-  setUser: (user: User | null) => Promise<void>    // 변경: async로
+  isHydrated: boolean                              
+  insideVenueId: string | null              
+  setInsideVenueId: (id: string | null) => void  
+  setUser: (user: User | null) => Promise<void>     
+  
   logout: () => Promise<void>
   loadFromStorage: () => Promise<void>
 }
@@ -16,6 +19,8 @@ interface AuthStore {
 export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
   isHydrated: false,   // 초기값 false
+  insideVenueId: null,                                  
+  setInsideVenueId: (id) => set({ insideVenueId: id }),
 
   setUser: async (user) => {
     set({ user })
