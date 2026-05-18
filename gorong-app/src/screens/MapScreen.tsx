@@ -20,20 +20,28 @@ export default function MapScreen() {
   const { messages, sendMessage, isConnected } = useChat(insideVenueId)
 
   // 현재 위치 가져오기
-  useEffect(() => {
-    ;(async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') return
+ // 수정 후
+useEffect(() => {
+  ;(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('위치 권한 필요', '지도 기능을 사용하려면 위치 권한이 필요합니다.')
+      return
+    }
 
-      const loc = await Location.getCurrentPositionAsync({})
-      const { latitude, longitude } = loc.coords
-      setUserLocation({ lat: latitude, lng: longitude })
+    const loc = await Location.getCurrentPositionAsync({})
+    const { latitude, longitude } = loc.coords
+    setUserLocation({ lat: latitude, lng: longitude })
 
-      // TourAPI에서 주변 행사 불러오기
-      const nearbyVenues = await fetchNearbyVenues(latitude, longitude)
-      setVenues(nearbyVenues)
-    })()
-  }, [])
+    try {
+      const response = await fetchNearbyVenues(latitude, longitude)
+      setVenues(response.data)   // ← .data 추가
+    } catch (err) {
+      console.error('주변 행사 조회 실패:', err)
+      Alert.alert('오류', '주변 행사 정보를 불러오지 못했습니다.')
+    }
+  })()
+}, [])
 
   // 도착 인증 알림
   useEffect(() => {
