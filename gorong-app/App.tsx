@@ -17,17 +17,21 @@ function MainApp() {
   const { loadFromStorage, isHydrated } = useAuthStore()
 
   useEffect(() => {
-    loadFromStorage()
+    console.log('앱 시작')
+
+    loadFromStorage().then(() => {
+      console.log('loadFromStorage 완료')
+    })
   }, [])
 
   // AsyncStorage에서 유저 정보 읽어오는 동안 로딩 표시
-  if (!isHydrated) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-      </View>
-    )
-  }
+  // if (!isHydrated) {
+  //   return (
+  //     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+  //       <ActivityIndicator size="large" color="#FF6B35" />
+  //     </View>
+  //   )
+  // }
 
   return (
     <NavigationContainer>
