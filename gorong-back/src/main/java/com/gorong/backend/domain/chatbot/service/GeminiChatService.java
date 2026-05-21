@@ -48,24 +48,50 @@ public class GeminiChatService {
         if (message == null || message.trim().isEmpty()) {
             throw new IllegalArgumentException("message must not be blank.");
         }
+        return generate(SYSTEM_PROMPT + "\n\n사용자: " + message.trim());
+    }
+
+    public String generate(String prompt) {
+        return generate(prompt, null);
+    }
+
+    /** 행사 추천용: 낮은 temperature로 일관된 JSON/답변 생성 */
+    public String generateRecommendation(String prompt) {
+        return generate(prompt, 0.2);
+    }
+
+    /** 인사·서비스 안내 등 일반 대화용 */
+    public String generate(String prompt, double temperature) {
+        return generate(prompt, Double.valueOf(temperature));
+    }
+
+    private String generate(String prompt, Double temperature) {
+        if (prompt == null || prompt.trim().isEmpty()) {
+            throw new IllegalArgumentException("prompt must not be blank.");
+        }
         if (geminiApiKey == null || geminiApiKey.trim().isEmpty()) {
             throw new IllegalStateException("Server configuration error: GEMINI_API_KEY is not set.");
         }
 
         try {
-            // Pass API key via header (avoid putting secrets in the URL).
             String url = "https://generativelanguage.googleapis.com/v1beta/models/"
                     + URLEncoder.encode(geminiModel.trim(), StandardCharsets.UTF_8)
                     + ":generateContent";
 
-            String prompt = SYSTEM_PROMPT + "\n\n사용자: " + message.trim();
-            Map<String, Object> part = Map.of("text", prompt);
+            Map<String, Object> part = Map.of("text", prompt.trim());
             Map<String, Object> content = Map.of(
                     "role", "user",
                     "parts", List.of(part)
             );
             Map<String, Object> body = new HashMap<>();
             body.put("contents", List.of(content));
+            if (temperature != null) {
+                body.put("generationConfig", Map.of(
+                        "temperature", temperature,
+                        "topP", 0.85,
+                        "maxOutputTokens", 2048
+                ));
+            }
 
             String json = objectMapper.writeValueAsString(body);
 
@@ -79,7 +105,6 @@ public class GeminiChatService {
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-                // Do not include the full request URL here (it contains the API key).
                 String snippet = resp.body();
                 if (snippet != null && snippet.length() > 500) {
                     snippet = snippet.substring(0, 500) + "...";

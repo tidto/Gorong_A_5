@@ -2,6 +2,7 @@ import React from "react";
 import { Shirt, X } from "lucide-react";
 import Button from "../Button";
 import type { UserItem } from "../../types/minihome/item";
+import type { GrowthStage } from "../../utils/minihome/growth";
 
 export type SlotType = "HEAD" | "BODY" | "ACCESSORY";
 
@@ -24,12 +25,21 @@ export default function DecorationModal(props: {
   draft: Record<SlotType, DecorItem | null>;
   setDraft: React.Dispatch<React.SetStateAction<Record<SlotType, DecorItem | null>>>;
   items: DecorItem[];
-  usingMock: boolean;
+  itemsLoading?: boolean;
+  itemsEmpty?: boolean;
+  itemsLoadError?: string | null;
+  decorationErr?: string | null;
+  canEdit?: boolean;
+  growthStage: GrowthStage;
   onClose: () => void;
   onSave: () => void;
   Preview: React.ReactNode;
 }) {
-  const { open, saving, saveInfo, slot, setSlot, draft, setDraft, items, usingMock, onClose, onSave, Preview } = props;
+  const {
+    open, saving, saveInfo, slot, setSlot, draft, setDraft, items,
+    itemsLoading, itemsEmpty, itemsLoadError, decorationErr,
+    canEdit = true, onClose, onSave, Preview,
+  } = props;
   if (!open) return null;
 
   return (
@@ -83,6 +93,12 @@ export default function DecorationModal(props: {
           </div>
 
           <div className="space-y-3">
+            {decorationErr ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {decorationErr}
+              </div>
+            ) : null}
+
             {saveInfo ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{saveInfo}</div>
             ) : null}
@@ -92,9 +108,21 @@ export default function DecorationModal(props: {
               <div className="text-xs text-gray-500">아이템을 클릭하면 선택한 슬롯({slotLabel(slot)})에 적용됩니다.</div>
             </div>
 
-            {usingMock ? (
+            {itemsLoadError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {itemsLoadError}
+              </div>
+            ) : null}
+
+            {itemsLoading ? (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                보유 아이템을 불러오는 중...
+              </div>
+            ) : null}
+
+            {!itemsLoading && itemsEmpty ? (
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                보유 아이템이 없어 테스트용 아이템(프론트 mock)을 표시합니다. DB에는 저장/INSERT 하지 않습니다.
+                보유 아이템이 없습니다.
               </div>
             ) : null}
 
@@ -133,8 +161,8 @@ export default function DecorationModal(props: {
               <Button variant="secondary" onClick={onClose} disabled={saving}>
                 취소
               </Button>
-              <Button variant="primary" onClick={onSave} disabled={saving}>
-                {saving ? "저장 중..." : "저장"}
+              <Button variant="primary" onClick={onSave} disabled={saving || !canEdit}>
+                {saving ? "저장 중..." : canEdit ? "저장" : "조회 전용"}
               </Button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -7,21 +8,22 @@ import rehypeSanitize from "rehype-sanitize";
 import { Bot, Send } from "lucide-react";
 import Button from "../../components/Button";
 import Input from "../../components/Input";
-import { postChatbotChat } from "../../api/chatbot/chatbotApi";
+import { postChatRecommend } from "../../api/chatbot/chatbotApi";
+import type { ChatbotRecommendedEvent } from "../../types/chatbot/chatbot";
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  recommendedEvents?: ChatbotRecommendedEvent[];
   createdAt: number;
 };
 
 const quickReplies = [
-  "주변 행사 추천해줘",
-  "동행 모집 글 쓰는 방법 알려줘",
-  "여행 일정 짜는 법 알려줘",
-  "리뷰 작성 방법 알려줘",
-  "프로필 수정 방법 알려줘",
+  "혼자 가기 좋은 행사 추천해줘",
+  "사진 찍기 좋은 행사 알려줘",
+  "비 오는 날 실내 행사 추천해줘",
+  "이번 주말 갈 만한 행사 추천해줘",
 ];
 
 function formatTime(ts: number) {
@@ -36,17 +38,18 @@ function normalizeErrorMessage(e: unknown) {
     }
 
     const status = e.response.status;
+    if (status === 401) return "로그인이 필요해요. 다시 로그인한 뒤 이용해줘.";
     if (status === 403) return "권한이 없어서 요청을 처리할 수 없어요. 다시 로그인하거나 권한을 확인해줘.";
     if (status === 404) return "요청한 API를 찾지 못했어. (주소/포트 확인)";
     if (status === 429) return "요청이 너무 많아. 잠시 쉬었다가 다시 부탁해줘.";
-    if (status >= 500) return "서버가 잠깐 아픈가봐. 조금만 있다가 다시 말 걸어줘.";
+    if (status >= 500) return "AI 추천을 불러오지 못했습니다.";
 
     const msg = (e.response.data as any)?.message;
     if (typeof msg === "string" && msg.trim()) return msg;
   }
 
   if (e instanceof Error && e.message.trim()) return e.message;
-  return "지금은 답변을 드리기 어려워요. 잠시 후 다시 시도해줘.";
+  return "AI 추천을 불러오지 못했습니다.";
 }
 
 function MarkdownBubble({ content }: { content: string }) {
@@ -106,13 +109,14 @@ function MarkdownBubble({ content }: { content: string }) {
 }
 
 export default function Chatbot() {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const now = Date.now();
     return [
       {
         id: `a_${now}`,
         role: "assistant",
-        content: "안녕! 나는 Go냥이야. 행사 추천, 리뷰, 동행까지 같이 도와줄게. 무엇을 도와줄까?",
+        content: "안녕! 나는 Go냥이야. DB에 등록된 행사 안에서만 맞춤 행사를 추천해줄게. 어떤 행사를 찾고 있어?",
         createdAt: now,
       },
     ];
@@ -159,13 +163,15 @@ export default function Chatbot() {
     setIsTyping(true);
 
     try {
-      const data = await postChatbotChat({ message: trimmed });
+      const data = await postChatRecommend({ message: trimmed });
       const answer = typeof data?.answer === "string" ? data.answer : "";
+      const recommendedEvents = Array.isArray(data?.recommendedEvents) ? data.recommendedEvents : [];
 
       const botMessage: ChatMessage = {
         id: `a_${Date.now()}`,
         role: "assistant",
         content: answer.trim() || "답변 생성에 실패했어. 한 번만 더 물어봐줄래?",
+        recommendedEvents,
         createdAt: Date.now(),
       };
       setMessages((prev) => [...prev, botMessage]);
@@ -217,6 +223,24 @@ export default function Chatbot() {
                     <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{m.content}</p>
                   )}
                 </div>
+                {m.role === "assistant" && m.recommendedEvents?.length ? (
+                  <div className="mt-2 space-y-2">
+                    {m.recommendedEvents.map((event) => (
+                      <button
+                        key={`${m.id}_${event.eventId}`}
+                        type="button"
+                        onClick={() => navigate(`/events/${event.eventId}`)}
+                        className="block w-full rounded-xl border border-primary-100 bg-white px-4 py-3 text-left shadow-sm transition hover:border-primary-300 hover:bg-primary-50"
+                      >
+                        <div className="text-sm font-bold text-gray-900">{event.title}</div>
+                        <div className="mt-1 text-[11px] text-gray-500">
+                          {[event.place, event.date].filter(Boolean).join(" · ")}
+                        </div>
+                        <div className="mt-1 text-xs leading-relaxed text-gray-600">{event.reason}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <p className={`text-[11px] text-gray-500 mt-1 ${m.role === "user" ? "text-right" : "text-left"}`}>
                   {formatTime(m.createdAt)}
                 </p>

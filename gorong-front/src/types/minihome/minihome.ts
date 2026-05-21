@@ -24,6 +24,8 @@ export type ActivityItem = {
   activityType: string | null;
   referenceId: number | null;
   temperatureChange: number;
+  title?: string | null;
+  description?: string | null;
   createAt: string;
 };
 
@@ -56,10 +58,13 @@ export type EquipItem = {
 
 export type MiniHomePage = {
   miniHome: MiniHome;
+  ownerNickname?: string | null;
   stats: {
     activityCount: number;
     temperatureTotal: number;
     level: number;
+    growthStage?: string;
+    galleryCount?: number;
   };
   activities: ActivityItem[];
   galleries: GalleryItem[];

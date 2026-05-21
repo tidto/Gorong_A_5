@@ -7,6 +7,6 @@ import java.util.Optional;
 
 public interface GoCatRepository extends JpaRepository<GoCat, Long> {
     Optional<GoCat> findByMiniHomeId(Long miniHomeId);
-    Optional<GoCat> findByUserId(Long userId);
+    Optional<GoCat> findFirstByUserIdOrderByGoCatIdAsc(Long userId);
 }
 
