@@ -4,6 +4,7 @@ import com.gorong.backend.domain.minihome.dto.ActivityCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipRequestDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomeEquipmentsSaveRequestDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipmentDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeItemDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomePageResponseDto;
@@ -27,6 +28,10 @@ import com.gorong.backend.domain.minihome.repository.ItemRepository;
 import com.gorong.backend.domain.minihome.repository.MiniHomeGalleryRepository;
 import com.gorong.backend.domain.minihome.repository.MiniHomeRepository;
 import com.gorong.backend.domain.minihome.repository.UserItemRepository;
+import com.gorong.backend.domain.user.entity.User;
+import com.gorong.backend.domain.user.entity.UserProfile;
+import com.gorong.backend.domain.user.repository.UserProfileRepository;
+import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -52,10 +57,12 @@ public class MiniHomeService {
     private final CatEquipRepository catEquipRepository;
     private final ItemRepository itemRepository;
     private final UserItemRepository userItemRepository;
+    private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
 
     public MiniHomeResponseDto getMiniHome(Long userId) {
         requireUserId(userId);
-        MiniHome miniHome = miniHomeRepository.findByUserId(userId)
+        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
                 .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
         return MiniHomeResponseDto.from(miniHome, cat);
@@ -65,7 +72,7 @@ public class MiniHomeService {
     public MiniHomeResponseDto createMiniHome(Long userId) {
         requireUserId(userId);
 
-        MiniHome miniHome = miniHomeRepository.findByUserId(userId).orElseGet(() ->
+        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId).orElseGet(() ->
                 miniHomeRepository.save(MiniHome.builder()
                         .userId(userId)
                         .userId2(userId)
@@ -84,7 +91,19 @@ public class MiniHomeService {
                         .build())
         );
 
+        seedStarterItems(userId);
+
         return MiniHomeResponseDto.from(miniHome, cat);
+    }
+
+    @Transactional
+    public MiniHomePageResponseDto getOrCreateMiniHomePage(Long userId) {
+        if (miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId).isEmpty()) {
+            createMiniHome(userId);
+        } else {
+            seedStarterItems(userId);
+        }
+        return getMiniHomePage(userId);
     }
 
     @Transactional
@@ -92,7 +111,7 @@ public class MiniHomeService {
         requireUserId(userId);
         if (req == null) throw new IllegalArgumentException("요청 본문이 비어 있습니다.");
 
-        MiniHome miniHome = miniHomeRepository.findByUserId(userId)
+        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
                 .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
 
         if (req.getDescription() != null) miniHome.setDescription(req.getDescription());
@@ -107,7 +126,7 @@ public class MiniHomeService {
     public MiniHomePageResponseDto getMiniHomePage(Long userId) {
         requireUserId(userId);
 
-        MiniHome miniHome = miniHomeRepository.findByUserId(userId)
+        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
                 .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
 
@@ -119,6 +138,11 @@ public class MiniHomeService {
 
         int temperatureTotal = cat != null ? readTemperatureTotal(cat) : 0;
         int level = calcLevel(temperatureTotal);
+        String growthStage = growthStageFromExp(temperatureTotal);
+
+        String ownerNickname = userProfileRepository.findByUserId(userId)
+                .map(UserProfile::getNickname)
+                .orElse("사용자");
 
         List<MiniHomeGallery> galleries = miniHomeGalleryRepository.findByMiniHomeIdOrderByCreateAtDesc(miniHome.getMiniHomeId());
         Map<Long, List<GalleryImage>> imagesByGalleryId = galleries.stream().collect(
@@ -141,10 +165,13 @@ public class MiniHomeService {
 
         return MiniHomePageResponseDto.builder()
                 .miniHome(MiniHomeResponseDto.from(miniHome, cat))
+                .ownerNickname(ownerNickname)
                 .stats(MiniHomePageResponseDto.StatsDto.builder()
                         .activityCount(activityCount)
                         .temperatureTotal(temperatureTotal)
                         .level(level)
+                        .growthStage(growthStage)
+                        .galleryCount(galleries.size())
                         .build())
                 .activities(activities.stream().map(MiniHomePageResponseDto.ActivityDto::from).toList())
                 .galleries(galleries.stream().map(g -> MiniHomePageResponseDto.GalleryDto.from(
@@ -163,28 +190,66 @@ public class MiniHomeService {
             throw new IllegalArgumentException("activityType은 필수입니다.");
         }
 
-        int delta = req.getTemperatureChange() != null ? req.getTemperatureChange() : defaultTempForType(req.getActivityType());
+        return recordActivity(
+                userId,
+                req.getActivityType(),
+                req.getReferenceId(),
+                req.getTemperatureChange(),
+                req.getTitle(),
+                req.getDescription()
+        );
+    }
+
+    private MiniHomePageResponseDto.ActivityDto recordActivity(
+            Long userId,
+            String activityType,
+            Long referenceId,
+            Integer temperatureChange,
+            String title,
+            String description
+    ) {
+        int delta = temperatureChange != null ? temperatureChange : defaultTempForType(activityType);
+        String normalizedType = activityType == null ? "" : activityType.trim().toUpperCase();
+        String resolvedTitle = title != null && !title.isBlank() ? title : defaultTitleForType(normalizedType);
+        String resolvedDescription = description;
 
         ActivityLog saved = activityLogRepository.save(ActivityLog.builder()
                 .userId(userId)
-                .activityType(req.getActivityType())
-                .referenceId(req.getReferenceId())
+                .activityType(normalizedType)
+                .referenceId(referenceId)
                 .temperatureChange(delta)
                 .build());
 
-        // GR033 캐릭터 성장 연동: GO_CAT.APPEARANCE_STATE(JSONB)에 누적 경험치(temperatureTotal)와 level을 저장합니다.
-        GoCat cat = goCatRepository.findByUserId(userId).orElse(null);
-        if (cat != null) {
-            int total = readTemperatureTotal(cat) + delta;
-            Map<String, Object> state = cat.getAppearanceState() != null ? new HashMap<>(cat.getAppearanceState()) : defaultAppearance();
-            state.put("temperatureTotal", total);
-            state.put("level", calcLevel(total));
-            cat.setAppearanceState(state);
-            cat.setCharacterType(characterTypeForLevel(calcLevel(total)));
-            goCatRepository.save(cat);
-        }
+        applyExpToCat(userId, delta);
 
-        return MiniHomePageResponseDto.ActivityDto.from(saved);
+        MiniHomePageResponseDto.ActivityDto dto = MiniHomePageResponseDto.ActivityDto.from(saved);
+        if ((title != null && !title.isBlank()) || (description != null && !description.isBlank())) {
+            return MiniHomePageResponseDto.ActivityDto.builder()
+                    .activityId(dto.getActivityId())
+                    .activityType(dto.getActivityType())
+                    .referenceId(dto.getReferenceId())
+                    .temperatureChange(dto.getTemperatureChange())
+                    .title(resolvedTitle)
+                    .description(resolvedDescription)
+                    .createAt(dto.getCreateAt())
+                    .build();
+        }
+        return dto;
+    }
+
+    private void applyExpToCat(Long userId, int delta) {
+        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId).orElse(null);
+        if (cat == null) return;
+
+        int total = readTemperatureTotal(cat) + delta;
+        String stage = growthStageFromExp(total);
+        Map<String, Object> state = cat.getAppearanceState() != null ? new HashMap<>(cat.getAppearanceState()) : defaultAppearance();
+        state.put("temperatureTotal", total);
+        state.put("level", calcLevel(total));
+        state.put("growthStage", stage);
+        cat.setAppearanceState(state);
+        cat.setCharacterType(stage);
+        goCatRepository.save(cat);
     }
 
     @Transactional
@@ -198,7 +263,7 @@ public class MiniHomeService {
             throw new IllegalArgumentException("title은 100자 이하여야 합니다.");
         }
 
-        MiniHome miniHome = miniHomeRepository.findByUserId(userId)
+        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
                 .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
 
         MiniHomeGallery gallery = miniHomeGalleryRepository.save(MiniHomeGallery.builder()
@@ -228,6 +293,17 @@ public class MiniHomeService {
                 .takenAt(req.getTakenAt())
                 .build());
 
+        miniHomeRepository.findById(gallery.getMiniHomeId()).ifPresent(mh ->
+                recordActivity(
+                        mh.getUserId(),
+                        "GALLERY_UPLOADED",
+                        image.getGalleryImageId(),
+                        20,
+                        "갤러리 업로드",
+                        req.getImageUrl()
+                )
+        );
+
         return MiniHomePageResponseDto.GalleryImageDto.from(image);
     }
 
@@ -249,7 +325,7 @@ public class MiniHomeService {
     public List<MiniHomeEquipmentDto> getEquipments(Long userId) {
         requireUserId(userId);
 
-        GoCat cat = goCatRepository.findByUserId(userId)
+        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId)
                 .orElseThrow(() -> new IllegalArgumentException("고양이 정보를 찾을 수 없습니다. userId=" + userId));
 
         List<CatEquip> equips = catEquipRepository.findByGoCatIdAndIsActiveOrderByEquippedAtDesc(cat.getGoCatId(), true);
@@ -284,7 +360,7 @@ public class MiniHomeService {
         Item item = itemRepository.findById(req.getItemId())
                 .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다. itemId=" + req.getItemId()));
 
-        GoCat cat = goCatRepository.findByUserId(userId)
+        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId)
                 .orElseThrow(() -> new IllegalArgumentException("고양이 정보를 찾을 수 없습니다. userId=" + userId));
 
         // 기존 슬롯 착용 해제(소프트 비활성화)
@@ -305,6 +381,29 @@ public class MiniHomeService {
     }
 
     @Transactional
+    public void saveEquipments(Long userId, List<MiniHomeEquipmentsSaveRequestDto.SlotEquipDto> equipments) {
+        requireUserId(userId);
+        if (equipments == null || equipments.isEmpty()) {
+            throw new IllegalArgumentException("장착할 슬롯 정보가 필요합니다.");
+        }
+
+        for (MiniHomeEquipmentsSaveRequestDto.SlotEquipDto slotEquip : equipments) {
+            String slot = normalizeSlot(slotEquip.getSlotType());
+            if (!ALLOWED_SLOTS.contains(slot)) {
+                throw new IllegalArgumentException("slotType은 HEAD, BODY, ACCESSORY 중 하나여야 합니다.");
+            }
+            if (slotEquip.getItemId() == null) {
+                unequip(userId, slot);
+            } else {
+                MiniHomeEquipRequestDto equipReq = new MiniHomeEquipRequestDto();
+                equipReq.setItemId(slotEquip.getItemId());
+                equipReq.setSlotType(slot);
+                equip(userId, equipReq);
+            }
+        }
+    }
+
+    @Transactional
     public void unequip(Long userId, String slotType) {
         requireUserId(userId);
         String slot = normalizeSlot(slotType);
@@ -312,7 +411,7 @@ public class MiniHomeService {
             throw new IllegalArgumentException("slotType은 HEAD, BODY, ACCESSORY 중 하나여야 합니다.");
         }
 
-        GoCat cat = goCatRepository.findByUserId(userId)
+        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId)
                 .orElseThrow(() -> new IllegalArgumentException("고양이 정보를 찾을 수 없습니다. userId=" + userId));
 
         catEquipRepository.findFirstByGoCatIdAndIsActiveAndSlotTypeOrderByEquippedAtDesc(cat.getGoCatId(), true, slot)
@@ -322,11 +421,33 @@ public class MiniHomeService {
                 });
     }
 
+    private void seedStarterItems(Long userId) {
+        grantStarterItem(userId, "STARTER_HAT", "기본 모자", "HEAD");
+        grantStarterItem(userId, "STARTER_BODY", "기본 옷", "BODY");
+        grantStarterItem(userId, "STARTER_ACC", "기본 리본", "ACCESSORY");
+    }
+
+    private void grantStarterItem(Long userId, String itemCode, String itemName, String itemType) {
+        Item item = itemRepository.findByItemCode(itemCode).orElseGet(() ->
+                itemRepository.save(Item.builder()
+                        .itemCode(itemCode)
+                        .itemName(itemName)
+                        .itemType(itemType)
+                        .build())
+        );
+        if (!userItemRepository.existsByUserIdAndItemId(userId, item.getItemId())) {
+            userItemRepository.save(UserItem.builder()
+                    .userId(userId)
+                    .itemId(item.getItemId())
+                    .build());
+        }
+    }
+
     private static Map<String, Object> defaultAppearance() {
         Map<String, Object> m = new HashMap<>();
         m.put("temperatureTotal", 0);
         m.put("level", 1);
-        m.put("stage", 1);
+        m.put("growthStage", "BASIC");
         return m;
     }
 
@@ -337,24 +458,36 @@ public class MiniHomeService {
         return 0;
     }
 
-    private static int calcLevel(int temperatureTotal) {
-        return Math.max(1, (temperatureTotal / 100) + 1);
+    static String growthStageFromExp(int exp) {
+        if (exp >= 600) return "MASTER";
+        if (exp >= 300) return "ADULT";
+        if (exp >= 100) return "TEEN";
+        return "BASIC";
     }
 
-    private static String characterTypeForLevel(int level) {
-        if (level >= 10) return "MASTER";
-        if (level >= 5) return "ADULT";
-        if (level >= 2) return "TEEN";
-        return "BASIC";
+    private static int calcLevel(int temperatureTotal) {
+        return Math.max(1, (temperatureTotal / 100) + 1);
     }
 
     private static int defaultTempForType(String type) {
         if (type == null) return 0;
         String t = type.trim().toUpperCase();
         return switch (t) {
-            case "REVIEW_WRITTEN" -> 30;
-            case "EVENT_PARTICIPATED" -> 50;
+            case "REVIEW_WRITTEN", "REVIEW_WRITE", "REVIEW_CREATED" -> 30;
+            case "EVENT_PARTICIPATED", "EVENT_PARTICIPATION" -> 50;
+            case "GALLERY_UPLOADED", "GALLERY_UPLOAD" -> 20;
+            case "ITEM_EQUIP" -> 5;
             default -> 10;
+        };
+    }
+
+    private static String defaultTitleForType(String type) {
+        return switch (type) {
+            case "REVIEW_WRITTEN", "REVIEW_WRITE", "REVIEW_CREATED" -> "리뷰 작성";
+            case "EVENT_PARTICIPATED", "EVENT_PARTICIPATION" -> "행사 참여";
+            case "GALLERY_UPLOADED", "GALLERY_UPLOAD" -> "갤러리 업로드";
+            case "ITEM_EQUIP" -> "아이템 장착";
+            default -> "활동 기록";
         };
     }
 

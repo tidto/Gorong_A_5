@@ -1,65 +1,24 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "../../components/Card";
-import Button from "../../components/Button";
 import { BarChart3, Share2 } from "lucide-react";
-import { useRive, Layout, Fit, Alignment } from "@rive-app/react-canvas";
+import GoCatVisual from "../../components/minihome/GoCatVisual";
 
 import SummaryCards from "../../components/minihome/SummaryCards";
 import GoCatCard from "../../components/minihome/GoCatCard";
 import ActivityHistory from "../../components/minihome/ActivityHistory";
 import GallerySection from "../../components/minihome/GallerySection";
-import DecorationModal, {
-  type DecorItem,
-  type SlotType,
-} from "../../components/minihome/DecorationModal";
+import DecorationModal from "../../components/minihome/DecorationModal";
 
 import { useMiniHomeUserId } from "./hooks/useMiniHomeUserId";
-import { createMiniHome, getMiniHomePage } from "../../api/minihome/miniHomeApi";
-import {
-  equipItem,
-  getEquipments,
-  getUserItems,
-  unequipSlot,
-} from "../../api/minihome/itemApi";
+import { useGoCatDecoration } from "./hooks/useGoCatDecoration";
+import { getMyMiniHomePage } from "../../api/minihome/miniHomeApi";
 
+import GrowthProgress from "../../components/minihome/GrowthProgress";
+import CatTowerProfileCard from "../../components/minihome/CatTowerProfileCard";
 import type { MiniHomePage } from "../../types/minihome/minihome";
-import type { Equipment, UserItem } from "../../types/minihome/item";
-
-const SLOTS: SlotType[] = ["HEAD", "BODY", "ACCESSORY"];
-
-const MOCK_ITEMS: (UserItem & { slotType: SlotType })[] = [
-  {
-    userItemId: -1,
-    itemId: -101,
-    itemCode: "MOCK_RIBBON",
-    itemName: "리본",
-    itemType: "HEAD",
-    imageUrl: null,
-    acquiredAt: new Date(0).toISOString(),
-    slotType: "HEAD",
-  },
-  {
-    userItemId: -2,
-    itemId: -102,
-    itemCode: "MOCK_HAT",
-    itemName: "모자",
-    itemType: "BODY",
-    imageUrl: null,
-    acquiredAt: new Date(0).toISOString(),
-    slotType: "BODY",
-  },
-  {
-    userItemId: -3,
-    itemId: -103,
-    itemCode: "MOCK_NECKLACE",
-    itemName: "목걸이",
-    itemType: "ACCESSORY",
-    imageUrl: null,
-    acquiredAt: new Date(0).toISOString(),
-    slotType: "ACCESSORY",
-  },
-];
+import { computeGrowthState } from "../../utils/minihome/growth";
+import { equipPreviewFromDraft } from "../../utils/minihome/items";
 
 function errorMessage(e: any) {
   const msg = e?.response?.data?.message;
@@ -68,179 +27,79 @@ function errorMessage(e: any) {
   return "요청 처리 중 오류가 발생했습니다.";
 }
 
-function GoCatPreview() {
-  const [failed, setFailed] = useState(false);
-
-  const { RiveComponent } = useRive({
-    src: "/rive/cat.riv",
-    autoplay: true,
-    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
-    onLoadError: () => setFailed(true),
-  });
-
-  if (failed || !RiveComponent) {
-    return (
-      <div className="flex h-28 w-28 items-center justify-center rounded-full border border-orange-200 bg-orange-100 text-4xl">
-        🐾
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-28 w-28 overflow-hidden rounded-full border border-orange-200 bg-orange-50">
-      <RiveComponent />
-    </div>
-  );
-}
-
 export default function CatTower() {
   const navigate = useNavigate();
-  const { userId, displayName } = useMiniHomeUserId();
+  const { userId, displayName, firebaseUser, loadingUserId, userIdError, isReady } = useMiniHomeUserId();
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [page, setPage] = useState<MiniHomePage | null>(null);
 
   const [decorateOpen, setDecorateOpen] = useState(false);
-  const [slot, setSlot] = useState<SlotType>("HEAD");
-  const [items, setItems] = useState<UserItem[]>([]);
-  const [equipments, setEquipmentsState] = useState<Equipment[]>([]);
-  const [draft, setDraft] = useState<Record<SlotType, DecorItem | null>>({
-    HEAD: null,
-    BODY: null,
-    ACCESSORY: null,
+
+  const growth = useMemo(() => computeGrowthState(page), [page]);
+  const ownerUserId = page?.miniHome?.userId ?? 0;
+
+  const decoration = useGoCatDecoration(ownerUserId, growth.stage, decorateOpen, {
+    pageEquips: page?.activeEquips,
+    goCatId: page?.miniHome?.cat?.goCatId,
+    canEdit: true,
   });
-  const [saving, setSaving] = useState(false);
-  const [saveInfo, setSaveInfo] = useState<string | null>(null);
 
-  const equipBySlot = useMemo(() => {
-    const map: Record<SlotType, Equipment | null> = {
-      HEAD: null,
-      BODY: null,
-      ACCESSORY: null,
-    };
-
-    for (const e of equipments) {
-      const s = (e.slotType || "").toUpperCase();
-      if (s === "HEAD" || s === "BODY" || s === "ACCESSORY") {
-        if (!map[s]) map[s] = e;
-      }
-    }
-
-    return map;
-  }, [equipments]);
-
-  const usingMock = items.length === 0;
-
-  const itemsForSlot: DecorItem[] = useMemo(() => {
-    if (usingMock) return MOCK_ITEMS.filter((m) => m.slotType === slot);
-    return items;
-  }, [usingMock, items, slot]);
+  const {
+    slot,
+    setSlot,
+    selectedEquipment,
+    setSelectedEquipment,
+    equipBySlot,
+    itemsForSlot,
+    saving,
+    saveInfo,
+    decorationErr,
+    saveDecoration,
+  } = decoration;
 
   async function loadMiniHome() {
+    if (!isReady) return;
+
     setLoading(true);
     setErr(null);
 
     try {
-      const data = await getMiniHomePage(userId);
+      const data = await getMyMiniHomePage();
       setPage(data);
-    } catch (e: any) {
-      const status = e?.response?.status;
-
-      if (status === 404) {
-        await createMiniHome(userId);
-        const data = await getMiniHomePage(userId);
-        setPage(data);
-      } else {
-        setErr(errorMessage(e));
-      }
+    } catch (e: unknown) {
+      console.error("[CatTower] load failed", e);
+      setErr(errorMessage(e));
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadDecoration() {
-    setErr(null);
-    setSaveInfo(null);
-
-    try {
-      const [owned, equips] = await Promise.all([
-        getUserItems(userId),
-        getEquipments(userId),
-      ]);
-
-      setItems(owned);
-      setEquipmentsState(equips);
-
-      const byItemId = new Map<number, DecorItem>();
-      for (const it of owned) byItemId.set(it.itemId, it);
-
-      const map: Record<SlotType, Equipment | null> = {
-        HEAD: null,
-        BODY: null,
-        ACCESSORY: null,
-      };
-
-      for (const e of equips) {
-        const s = (e.slotType || "").toUpperCase();
-        if (s === "HEAD" || s === "BODY" || s === "ACCESSORY") {
-          if (!map[s]) map[s] = e;
-        }
-      }
-
-      setDraft({
-        HEAD: map.HEAD ? byItemId.get(map.HEAD.itemId) ?? null : null,
-        BODY: map.BODY ? byItemId.get(map.BODY.itemId) ?? null : null,
-        ACCESSORY: map.ACCESSORY
-          ? byItemId.get(map.ACCESSORY.itemId) ?? null
-          : null,
-      });
-    } catch (e: any) {
-      setErr(errorMessage(e));
-      setItems([]);
-      setEquipmentsState([]);
-      setDraft({ HEAD: null, BODY: null, ACCESSORY: null });
-    }
-  }
-
-  async function saveDecoration() {
-    setSaving(true);
-    setErr(null);
-    setSaveInfo(null);
-
-    try {
-      for (const s of SLOTS) {
-        const current = equipBySlot[s]?.itemId ?? null;
-        const next = draft[s]?.itemId ?? null;
-
-        if (current === next) continue;
-
-        if (next == null) {
-          await unequipSlot(userId, s);
-        } else {
-          await equipItem(userId, { itemId: next, slotType: s });
-        }
-      }
-
-      await loadDecoration();
+  async function handleSaveDecoration() {
+    const ok = await saveDecoration();
+    if (ok) {
       await loadMiniHome();
       setDecorateOpen(false);
-    } catch {
-      setSaveInfo("백엔드 연결 전이라 임시 저장되었습니다");
-    } finally {
-      setSaving(false);
     }
   }
 
   useEffect(() => {
+    if (loadingUserId || !isReady) return;
+    if (!firebaseUser) {
+      setErr("로그인이 필요합니다.");
+      return;
+    }
+    if (userIdError) {
+      setErr(userIdError);
+      return;
+    }
     loadMiniHome();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, isReady, loadingUserId, firebaseUser?.uid, userIdError]);
 
-  useEffect(() => {
-    if (decorateOpen) loadDecoration();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decorateOpen]);
+  const catName = page?.miniHome?.cat?.catName ?? "고냥이";
+  const profileLevel = page?.stats?.level ?? page?.miniHome?.cat?.level ?? 1;
 
   const summary = [
     {
@@ -260,22 +119,28 @@ export default function CatTower() {
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
         <div className="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-sm">
           <div className="bg-gradient-to-r from-orange-400 via-amber-400 to-pink-400 px-6 py-8 text-white">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="inline-flex rounded-full bg-white/20 px-4 py-2 text-sm font-bold backdrop-blur">
-                  🐱 CatTower Dashboard
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1 space-y-4">
+                <div>
+                  <div className="inline-flex rounded-full bg-white/20 px-4 py-2 text-sm font-bold backdrop-blur">
+                    🐱 CatTower Dashboard
+                  </div>
+                  <h1 className="mt-4 text-4xl font-extrabold">CatTower</h1>
+                  <p className="mt-2 max-w-xl text-sm font-semibold text-white/90">
+                    미니홈피, 활동 기록, 갤러리, Go냥이를 한 화면에서 관리하세요.
+                  </p>
                 </div>
-
-                <h1 className="mt-4 text-4xl font-extrabold">CatTower</h1>
-
-                <p className="mt-2 text-sm font-semibold text-white/90">
-                  {displayName}님의 미니홈피, 활동 기록, 갤러리, 고냥이를 한 화면에서 확인합니다.
-                </p>
-
-                <p className="mt-1 text-xs text-white/70">현재 userId: {userId}</p>
+                <CatTowerProfileCard
+                  nickname={displayName}
+                  catName={catName}
+                  growth={growth}
+                  level={profileLevel}
+                  isPublic={Boolean(page?.miniHome?.isPublic)}
+                  loading={loading && !page}
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+              <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap xl:shrink-0">
                 <button
                   onClick={() => navigate("/minihome")}
                   disabled={loading || saving}
@@ -315,10 +180,10 @@ export default function CatTower() {
             <div className="rounded-3xl bg-orange-50 p-5">
               <div className="text-xs font-bold text-orange-600">CAT NAME</div>
               <div className="mt-2 text-2xl font-extrabold text-slate-900">
-                {page?.miniHome?.cat?.catName ?? "고냥이"}
+                {catName}
               </div>
               <div className="mt-1 text-sm text-slate-500">
-                타입 {page?.miniHome?.cat?.characterType ?? "BASIC"}
+                {growth.stage} · {growth.stageLabel}
               </div>
             </div>
 
@@ -338,11 +203,15 @@ export default function CatTower() {
               <div className="mt-1 text-sm text-slate-500">나만의 갤러리</div>
             </div>
           </div>
+
+          <div className="border-t border-orange-100 px-6 pb-6 pt-2">
+            <GrowthProgress growth={growth} tone="card" />
+          </div>
         </div>
 
-        {err ? (
+        {err || decorationErr ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {err}
+            {err ?? decorationErr}
           </div>
         ) : null}
 
@@ -353,21 +222,31 @@ export default function CatTower() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card title="고냥이">
             <GoCatCard
-              catName={page?.miniHome?.cat?.catName ?? "고냥이"}
-              catType={page?.miniHome?.cat?.characterType ?? "-"}
+              catName={catName}
+              growth={growth}
               isPublic={Boolean(page?.miniHome?.isPublic)}
               equipBySlot={equipBySlot}
               onOpenDecoration={() => setDecorateOpen(true)}
             />
           </Card>
 
-          <Card title="활동 기록(최근 30개)">
-            <ActivityHistory activities={page?.activities ?? []} />
+          <Card title="활동 기록 (최근 10개)">
+            <ActivityHistory
+              activities={page?.activities ?? []}
+              limit={10}
+              variant="preview"
+              emptyMessage="등록된 활동 기록이 없습니다."
+            />
           </Card>
         </div>
 
-        <Card title="나만의 갤러리">
-          <GallerySection galleries={page?.galleries ?? []} />
+        <Card title="나만의 갤러리 (최근 3개)">
+          <GallerySection
+            galleries={page?.galleries ?? []}
+            limit={3}
+            variant="preview"
+            emptyMessage="등록된 갤러리가 없습니다."
+          />
         </Card>
 
         <DecorationModal
@@ -376,13 +255,23 @@ export default function CatTower() {
           saveInfo={saveInfo}
           slot={slot}
           setSlot={setSlot}
-          draft={draft}
-          setDraft={setDraft}
+          draft={selectedEquipment}
+          setDraft={setSelectedEquipment}
           items={itemsForSlot}
-          usingMock={usingMock}
+          itemsLoading={decoration.itemsLoading}
+          itemsEmpty={decoration.itemsEmpty}
+          itemsLoadError={decoration.itemsLoadError}
+          decorationErr={decoration.decorationErr}
+          canEdit={decoration.canEdit}
+          growthStage={growth.stage}
           onClose={() => setDecorateOpen(false)}
-          onSave={saveDecoration}
-          Preview={<GoCatPreview />}
+          onSave={handleSaveDecoration}
+          Preview={
+            <GoCatVisual
+              stage={growth.stage}
+              equipped={equipPreviewFromDraft(selectedEquipment)}
+            />
+          }
         />
       </div>
     </div>
