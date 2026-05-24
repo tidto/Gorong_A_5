@@ -25,13 +25,14 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const status = error.response?.status
+    const isBanBlocked = status === 403 && error.response?.data?.message === '계정 이용이 제한되었습니다.'
 
     if (status === 401) {
       await signOut(auth)
       localStorage.removeItem('gorong-db-user')
       localStorage.removeItem('gorong-firebase-uid')
       navigateTo('/login')
-    } else if (status === 403) navigateTo('/error/403')
+    } else if (status === 403 && !isBanBlocked) navigateTo('/error/403')
     else if (status === 404) navigateTo('/error/404')
     else if (status === 500) navigateTo('/error/500')
 

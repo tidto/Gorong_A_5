@@ -77,7 +77,7 @@ export default function MyPage() {
         latitude: coords?.lat ?? null,
         longitude: coords?.lng ?? null,
       })
-      auth.setUser({ nickname: profile.nickname, email: profile.email })
+      auth.setUser({ nickname: profile.nickname, email: profile.email, roleType: auth.user?.roleType })
       toast('저장됐습니다! 🐾', 'success')
     } catch {
       toast('저장 중 오류가 발생했습니다.', 'error')

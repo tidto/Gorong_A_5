@@ -204,7 +204,7 @@ export default function Signup() {
         headers: { Authorization: `Bearer ${idToken}` },
       });
 
-      setUser({ nickname, email: firebaseUser.email ?? '' });
+      setUser({ nickname, email: firebaseUser.email ?? '', roleType: 'USER' });
       toast(`${nickname}님, 고냥이에 오신 것을 환영합니다! 🐾`, 'success');
       navigate('/', { replace: true });
     } catch (err: any) {

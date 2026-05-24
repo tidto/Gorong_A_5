@@ -14,6 +14,10 @@ import java.time.OffsetDateTime;
 @AllArgsConstructor
 public class Report {
 
+    public enum ReportStatus {
+        PENDING, REVIEWING, ACTIONED, DISMISSED
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "report_id")
@@ -39,8 +43,29 @@ public class Report {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    public void resolve() { this.status = ReportStatus.RESOLVED; }
-    public void dismiss() { this.status = ReportStatus.DISMISSED; }
+    @Column(name = "admin_reason", columnDefinition = "TEXT")
+    private String adminReason;
 
-    public enum ReportStatus { PENDING, RESOLVED, DISMISSED }
+    @Column(name = "suspension_days")
+    private Integer suspensionDays;
+
+    @Column(name = "processed_at")
+    private OffsetDateTime processedAt;
+
+    public void reviewing() {
+        this.status = ReportStatus.REVIEWING;
+    }
+
+    public void actioned(String adminReason, Integer suspensionDays) {
+        this.status = ReportStatus.ACTIONED;
+        this.adminReason = adminReason;
+        this.suspensionDays = suspensionDays;
+        this.processedAt = OffsetDateTime.now();
+    }
+
+    public void dismiss(String adminReason) {
+        this.status = ReportStatus.DISMISSED;
+        this.adminReason = adminReason;
+        this.processedAt = OffsetDateTime.now();
+    }
 }

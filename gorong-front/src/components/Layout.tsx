@@ -20,6 +20,7 @@ function Header() {
     { path: '/cattower', label: 'CatTower', icon: Heart },
     { path: '/chatbot', label: 'AI Chat', icon: Bot },
   ]
+  const isAdmin = auth.user?.roleType === 'ADMIN'
 
   const isActive = (path: string) => location.pathname === path
 
@@ -78,6 +79,14 @@ function Header() {
           <div className="flex items-center gap-3">
             {auth.loggedIn ? (
               <>
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Admin
+                  </Link>
+                )}
                 <Link
                   to="/mypage"
                   className="text-gray-600 hover:text-gray-900 font-medium"

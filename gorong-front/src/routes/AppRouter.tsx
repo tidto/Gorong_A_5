@@ -22,6 +22,7 @@ import GroupListPage from "../pages/Group/GroupListPage.tsx"
 import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
 import ErrorPage from '../pages/ErrorPage'
 import GroupEditPage from "../pages/Group/GroupEditPage.tsx";
+import AdminPage from '../pages/admin/AdminPage'
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const auth = useAuth()
@@ -38,6 +39,29 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
   if (!auth.loggedIn || !auth.user) {
       // 현재 경로를 state.from에 담아서 login으로 이동
     return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  return children
+}
+
+function AdminRoute({ children }: { children: JSX.Element }) {
+  const auth = useAuth()
+  const location = useLocation()
+
+  if (auth.isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    )
+  }
+
+  if (!auth.loggedIn || !auth.user) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  if (auth.user.roleType !== 'ADMIN') {
+    return <Navigate to="/error/403" replace />
   }
 
   return children
@@ -158,6 +182,14 @@ export default function AppRouter() {
               <ProtectedRoute>
                 <Profile />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
             }
           />
           <Route

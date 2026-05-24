@@ -4,6 +4,7 @@ import RiveCharacter from '../components/RiveCharacter'
 import MapView from '../components/MapView'
 import Card from '../components/Card'
 import { useAuth } from '../contexts/AuthContext'
+import axiosInstance from '../api/axiosInstance'
 import { Search } from 'lucide-react'
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -24,6 +25,9 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+    const [banInfo, setBanInfo] = useState<any | null>(null)
+    const [appealText, setAppealText] = useState('')
+    const [isAppealSubmitting, setIsAppealSubmitting] = useState(false)
 
     const DEFAULT_IMAGE = '/images/default-event.png';
 
@@ -85,6 +89,26 @@ export default function Home() {
         fetchEvents();
     }, []);
 
+    useEffect(() => {
+        const fetchBanStatus = async () => {
+            if (!auth.loggedIn) {
+                setBanInfo(null)
+                return
+            }
+            try {
+                const res = await axiosInstance.get('/v1/users/me/ban')
+                if (res.data?.banned) {
+                    setBanInfo(res.data.ban)
+                } else {
+                    setBanInfo(null)
+                }
+            } catch {
+                setBanInfo(null)
+            }
+        }
+        fetchBanStatus()
+    }, [auth.loggedIn])
+
     // 3. 지도 및 리스트 필터링
     const displayEvents = useMemo(() => {
         return events.filter(event => {
@@ -138,14 +162,58 @@ export default function Home() {
     }, [displayEvents, auth.user, auth.loggedIn]);
 
     const handleDetailNavigation = useCallback((id: string) => {
+        if (banInfo) return
         if (id) {
             console.log("Navigating to:", id);
             navigate(`/events/${id}`);
         }
-    }, [navigate]);
+    }, [navigate, banInfo]);
+
+    const handleSubmitAppeal = async () => {
+        if (!appealText.trim()) return
+        setIsAppealSubmitting(true)
+        try {
+            const res = await axiosInstance.post('/v1/users/me/appeal', { appealText: appealText.trim() })
+            setBanInfo(res.data)
+            setAppealText('')
+        } finally {
+            setIsAppealSubmitting(false)
+        }
+    }
 
     return (
-        <div className="max-w-6xl mx-auto px-4 py-8 space-y-8 text-left">
+        <div className="max-w-6xl mx-auto px-4 py-8 space-y-8 text-left relative">
+            {banInfo && (
+                <div className="absolute inset-0 z-20 flex items-start justify-center bg-white/70 backdrop-blur-[2px] p-4">
+                    <div className="mt-6 w-full max-w-2xl rounded-2xl border border-red-200 bg-white p-6 shadow-xl">
+                        <h2 className="text-2xl font-bold text-red-700">서비스 이용 제한 중</h2>
+                        <p className="mt-2 text-sm text-gray-700">신고 누적 횟수: {banInfo.reportCount ?? 0}회</p>
+                        <p className="mt-1 text-sm text-gray-700">사유: {banInfo.banReason}</p>
+                        <p className="mt-1 text-sm text-gray-700">반론 상태: {banInfo.appealStatus}</p>
+                        {banInfo.appealStatus === 'NONE' ? (
+                            <div className="mt-4 space-y-3">
+                                <textarea
+                                    value={appealText}
+                                    onChange={(e) => setAppealText(e.target.value)}
+                                    rows={4}
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                    placeholder="반론은 1회만 제출할 수 있습니다."
+                                />
+                                <button
+                                    onClick={handleSubmitAppeal}
+                                    disabled={!appealText.trim() || isAppealSubmitting}
+                                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                                >
+                                    반론 제출
+                                </button>
+                            </div>
+                        ) : (
+                            <p className="mt-4 text-sm text-gray-600">반론이 이미 제출되어 추가 제출이 불가합니다.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+            <div className={banInfo ? 'pointer-events-none select-none blur-sm' : ''}>
             {/* 상단 웰컴 섹션 */}
             <section className="bg-gradient-to-br from-orange-50 to-white rounded-2xl p-8 border border-orange-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex-1 space-y-6">
@@ -204,7 +272,7 @@ export default function Home() {
                     ))}
                 </div>
             </section>
+            </div>
         </div>
     )
 }
-
