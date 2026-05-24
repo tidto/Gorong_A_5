@@ -11,4 +11,6 @@ public class ActivityCreateRequestDto {
     private String activityType;
     private Long referenceId;
     private Integer temperatureChange;
+    private String title;
+    private String description;
 }

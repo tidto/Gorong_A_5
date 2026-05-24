@@ -50,12 +50,14 @@ public class MiniHomeResponseDto {
             Object t = c.getAppearanceState() != null ? c.getAppearanceState().get("temperatureTotal") : null;
             if (t instanceof Number) temp = ((Number) t).intValue();
 
+            String growthStage = growthStageFromExp(temp);
+
             return GoCatDto.builder()
                     .goCatId(c.getGoCatId())
                     .miniHomeId(c.getMiniHomeId())
                     .userId(c.getUserId())
                     .catName(c.getCatName())
-                    .characterType(c.getCharacterType())
+                    .characterType(growthStage)
                     .appearanceState(c.getAppearanceState())
                     .temperatureTotal(temp)
                     .level(calcLevel(temp))
@@ -63,8 +65,14 @@ public class MiniHomeResponseDto {
         }
 
         private static int calcLevel(int temperatureTotal) {
-            // 간단 레벨 규칙: 0~99 => 레벨 1, 100~199 => 레벨 2 ...
             return Math.max(1, (temperatureTotal / 100) + 1);
+        }
+
+        static String growthStageFromExp(int exp) {
+            if (exp >= 600) return "MASTER";
+            if (exp >= 300) return "ADULT";
+            if (exp >= 100) return "TEEN";
+            return "BASIC";
         }
     }
 }

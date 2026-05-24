@@ -16,6 +16,7 @@ import java.util.List;
 public class MiniHomePageResponseDto {
 
     private MiniHomeResponseDto miniHome;
+    private String ownerNickname;
     private StatsDto stats;
     private List<ActivityDto> activities;
     private List<GalleryDto> galleries;
@@ -27,6 +28,8 @@ public class MiniHomePageResponseDto {
         private long activityCount;
         private int temperatureTotal;
         private int level;
+        private String growthStage;
+        private int galleryCount;
     }
 
     @Getter
@@ -36,16 +39,31 @@ public class MiniHomePageResponseDto {
         private String activityType;
         private Long referenceId;
         private Integer temperatureChange;
+        private String title;
+        private String description;
         private OffsetDateTime createAt;
 
         public static ActivityDto from(ActivityLog a) {
+            String type = a.getActivityType() == null ? "" : a.getActivityType().trim().toUpperCase();
             return ActivityDto.builder()
                     .activityId(a.getActivityId())
                     .activityType(a.getActivityType())
                     .referenceId(a.getReferenceId())
                     .temperatureChange(a.getTemperatureChange())
+                    .title(titleForType(type))
+                    .description(null)
                     .createAt(a.getCreateAt())
                     .build();
+        }
+
+        private static String titleForType(String type) {
+            return switch (type) {
+                case "REVIEW_WRITTEN", "REVIEW_WRITE", "REVIEW_CREATED" -> "리뷰 작성";
+                case "EVENT_PARTICIPATED", "EVENT_PARTICIPATION" -> "행사 참여";
+                case "GALLERY_UPLOADED", "GALLERY_UPLOAD" -> "갤러리 업로드";
+                case "ITEM_EQUIP" -> "아이템 장착";
+                default -> type.isBlank() ? "활동 기록" : type;
+            };
         }
     }
 
