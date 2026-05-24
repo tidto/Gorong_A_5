@@ -6,6 +6,8 @@ interface MapEvent {
     mapx?: string; mapX?: string;
     mapy?: string; mapY?: string;
     id?: string; contentid?: string;
+    firstimage?: string; firstImage?: string;
+    eventstartdate?: string; eventenddate?: string;
 }
 
 interface MapViewProps {
@@ -22,12 +24,12 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
     const userMarkerRef = useRef<any>(null);
     const [markerCount, setMarkerCount] = useState(0);
 
-    // [기본값] 영진전문대학교 정보관 좌표
     const YJU_LAT = 35.8956224;
     const YJU_LNG = 128.6224266;
 
+    const DEFAULT_IMAGE = '/images/default-event.png';
+
     const renderMarkers = (map: any) => {
-        // 기존 마커 및 오버레이 초기화
         markersRef.current.forEach(m => m.setMap(null));
         markersRef.current = [];
         if (activeOverlay.current) {
@@ -49,52 +51,68 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
             markersRef.current.push(marker);
             count++;
 
-            // 1. 커스텀 오버레이 컨테이너 생성
+            const eventImage = event.firstimage || event.firstImage || DEFAULT_IMAGE;
+
+            const formatPeriod = () => {
+                if (!event.eventstartdate || !event.eventenddate) return '일정 정보 없음';
+                const start = event.eventstartdate.replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3');
+                const end = event.eventenddate.replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3');
+                return `${start} ~ ${end}`;
+            };
+
             const content = document.createElement('div');
             content.style.cssText = `
-                padding: 12px; 
                 background: white; 
-                border-radius: 12px; 
-                border: 1px solid #e5e7eb; 
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
-                min-width: 160px;
-                pointer-events: auto; /* 클릭 이벤트 허용 */
+                border-radius: 16px; 
+                border: 1px solid #f3f4f6; 
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); 
+                width: 240px;
+                overflow: hidden;
+                pointer-events: auto;
+                font-family: system-ui, -apple-system, sans-serif;
             `;
 
             content.innerHTML = `
-                <div style="font-weight:bold; font-size:13px; color:#111827; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">
-                    ${event.title}
+                <div style="width: 100%; height: 110px; position: relative; background: #f3f4f6;">
+                    <img src="${eventImage}" 
+                         style="width: 100%; height: 100%; object-fit: cover; display: block;" 
+                         onerror="this.src='${DEFAULT_IMAGE}';"
+                         alt="${event.title}" />
                 </div>
-                <div style="font-size:11px; color:#6b7280; margin-bottom:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                    ${event.addr1 || '주소 정보 없음'}
+                <div style="padding: 12px; text-align: left;">
+                    <div style="font-weight: 800; font-size: 14px; color: #111827; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
+                        ${event.title}
+                    </div>
+                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        📅 ${formatPeriod()}
+                    </div>
+                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        📍 ${event.addr1 || '주소 정보 없음'}
+                    </div>
+                    <button id="btn-detail-${id}" style="width: 100%; background: #f97316; color: white; border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s;">
+                        상세보기
+                    </button>
                 </div>
-                <button id="btn-detail-${id}" style="width:100%; background:#f97316; color:white; border:none; border-radius:6px; padding:8px; cursor:pointer; font-size:12px; font-weight:bold;">
-                    상세보기
-                </button>
             `;
 
-            // 2. 오버레이 객체 생성 (clickable: true 필수)
             const overlay = new window.kakao.maps.CustomOverlay({
                 content,
                 position,
-                yAnchor: 1.4,
+                yAnchor: 1.35,
                 zIndex: 10,
                 clickable: true
             });
 
-            // 3. 마커 클릭 시 이벤트
             window.kakao.maps.event.addListener(marker, 'click', () => {
                 if (activeOverlay.current) activeOverlay.current.setMap(null);
                 overlay.setMap(map);
                 activeOverlay.current = overlay;
                 map.panTo(position);
 
-                // 오버레이가 지도에 붙은 후 버튼에 이벤트 리스너를 다시 확인/할당
                 const btn = content.querySelector(`#btn-detail-${id}`);
                 if (btn) {
                     btn.onclick = (e) => {
                         e.stopPropagation();
-                        console.log("Navigating to ID:", id); // 디버깅용 로그
                         onDetailClick(id);
                     };
                 }
@@ -126,16 +144,18 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
             if (!mapContainer.current) return;
             const isDefault = (lat === YJU_LAT && lng === YJU_LNG);
             const initialLevel = isDefault ? 9 : 4;
+            const centerPosition = new window.kakao.maps.LatLng(lat, lng);
 
             if (!mapRef.current) {
                 mapRef.current = new window.kakao.maps.Map(mapContainer.current, {
-                    center: new window.kakao.maps.LatLng(lat, lng),
+                    center: centerPosition,
                     level: initialLevel
                 });
             } else {
-                mapRef.current.setCenter(new window.kakao.maps.LatLng(lat, lng));
+                mapRef.current.setCenter(centerPosition);
                 mapRef.current.setLevel(initialLevel);
             }
+
             renderMarkers(mapRef.current);
             renderUserMarker(mapRef.current, lat, lng);
         });
@@ -145,6 +165,7 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
         const isUserLocationValid = userLocation && userLocation.lat !== 0 && userLocation.lng !== 0;
         const centerLat = isUserLocationValid ? userLocation!.lat : YJU_LAT;
         const centerLng = isUserLocationValid ? userLocation!.lng : YJU_LNG;
+
         const runInit = () => initMap(centerLat, centerLng);
 
         if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
@@ -162,6 +183,41 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
             script.onload = () => window.kakao.maps.load(runInit);
         }
     }, [data, userLocation]);
+
+    // ★ [정밀 수정] 크기 변경 감지 루프 내 이중 렌더링 스케줄러(Timeout + rAF) 도입
+    useEffect(() => {
+        if (!mapContainer.current) return;
+
+        let timeoutId: ReturnType<typeof setTimeout>;
+
+        const resizeObserver = new ResizeObserver(() => {
+            // 연속적인 호출 발생 시 이전 타이머 제거 (디바운싱 방어 코드)
+            if (timeoutId) clearTimeout(timeoutId);
+
+            // 브라우저의 다음 페인팅 주기 이후에 실행되도록 보장하여 치우침을 원천 차단
+            timeoutId = setTimeout(() => {
+                requestAnimationFrame(() => {
+                    if (mapRef.current) {
+                        mapRef.current.relayout();
+
+                        const isUserLocationValid = userLocation && userLocation.lat !== 0 && userLocation.lng !== 0;
+                        const centerLat = isUserLocationValid ? userLocation!.lat : YJU_LAT;
+                        const centerLng = isUserLocationValid ? userLocation!.lng : YJU_LNG;
+
+                        const centerPosition = new window.kakao.maps.LatLng(centerLat, centerLng);
+                        mapRef.current.setCenter(centerPosition);
+                    }
+                });
+            }, 200); // 200ms 여유를 주어 레이아웃이 최종 확정된 후 중앙 정렬 처리
+        });
+
+        resizeObserver.observe(mapContainer.current);
+
+        return () => {
+            resizeObserver.disconnect();
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+    }, [userLocation]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
