@@ -1,9 +1,28 @@
 import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native'
 import { useTrailStore } from '../store/trailStore'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+
+const TRAIL_ARCHIVE_KEY = 'gorong-trail-archive-count'
 
 export default function TrailScreen() {
   const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
+  const [archiveCount, setArchiveCount] = React.useState(0)
+
+  React.useEffect(() => {
+    ;(async () => {
+      const raw = await AsyncStorage.getItem(TRAIL_ARCHIVE_KEY)
+      setArchiveCount(Number(raw ?? 0))
+    })()
+  }, [])
+
+  const handleArchive = async () => {
+    if (trail.length < 2) return
+    const nextCount = archiveCount + 1
+    await AsyncStorage.setItem(`gorong-trail-${Date.now()}`, JSON.stringify(trail))
+    await AsyncStorage.setItem(TRAIL_ARCHIVE_KEY, String(nextCount))
+    setArchiveCount(nextCount)
+  }
 
   return (
     <View style={styles.container}>
@@ -21,16 +40,29 @@ export default function TrailScreen() {
           <Text style={styles.statValue}>{isRecording ? '🔴 기록 중' : '⏸ 대기'}</Text>
           <Text style={styles.statLabel}>상태</Text>
         </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{archiveCount}</Text>
+          <Text style={styles.statLabel}>보관된 동선</Text>
+        </View>
       </View>
 
-      <TouchableOpacity
-        style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
-        onPress={isRecording ? stopRecording : startRecording}
-      >
-        <Text style={styles.recordBtnText}>
-          {isRecording ? '⏹ 동선 기록 종료' : '▶ 동선 기록 시작'}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.actionsRow}>
+        <TouchableOpacity
+          style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
+          onPress={isRecording ? stopRecording : startRecording}
+        >
+          <Text style={styles.recordBtnText}>
+            {isRecording ? '⏹ 동선 기록 종료' : '▶ 동선 기록 시작'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.archiveBtn, trail.length < 2 && styles.archiveBtnDisabled]}
+          disabled={trail.length < 2}
+          onPress={handleArchive}
+        >
+          <Text style={styles.archiveBtnText}>보관</Text>
+        </TouchableOpacity>
+      </View>
 
       <FlatList
         data={trail.slice().reverse()}
@@ -68,12 +100,16 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: '700', color: '#333' },
   statLabel: { fontSize: 12, color: '#999', marginTop: 4 },
+  actionsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8 },
   recordBtn: {
-    marginHorizontal: 16, backgroundColor: '#FF6B35',
+    flex: 1, backgroundColor: '#FF6B35',
     borderRadius: 12, padding: 16, alignItems: 'center',
   },
   recordBtnActive: { backgroundColor: '#333' },
   recordBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  archiveBtn: { backgroundColor: '#2f855a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 16 },
+  archiveBtnDisabled: { backgroundColor: '#9ca3af' },
+  archiveBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   list: { flex: 1, marginTop: 16, paddingHorizontal: 16 },
   pointItem: {
     backgroundColor: '#fff', borderRadius: 10, padding: 12,
