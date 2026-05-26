@@ -30,7 +30,7 @@ public class GroupPost {
     private String condition;
     private String meetingDate;
     private String meetingTime;
-    private int currentCapacity = 1; // 기본 호스트 1명 시작
+    private int currentCapacity = 0; // 기본 호스트 1명 시작
     private int waitingCount = 0;// 대기자 수
 
     @Transient

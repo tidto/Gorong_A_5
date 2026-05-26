@@ -3,6 +3,7 @@ package com.gorong.backend.domain.group.controller;
 
 import com.google.firebase.auth.FirebaseToken;
 import com.gorong.backend.domain.group.entity.GroupPost;
+import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.group.service.GroupService;
 import com.gorong.backend.domain.user.entity.User;
@@ -25,16 +26,19 @@ public class GroupController {
     private final GroupRepository groupRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository; // ✅ 추가
+    private final GroupParticipantRepository participantRepository;
 
     @Autowired
     private GroupService groupService;
 
     public GroupController(GroupRepository groupRepository,
                            UserRepository userRepository,
-                           UserProfileRepository userProfileRepository) { // ✅ 추가
+                           UserProfileRepository userProfileRepository, // ✅ 추가
+                           GroupParticipantRepository participantRepository) {
         this.groupRepository = groupRepository;
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
+        this.participantRepository = participantRepository;
     }
 
     // Firebase 토큰 → User 엔티티
@@ -149,11 +153,13 @@ public class GroupController {
     // ── 6. 삭제 ──────────────────────────────────────────────────────
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteGroup(@PathVariable Long id) {
-        if (groupRepository.existsById(id)) {
-            groupRepository.deleteById(id);
-            return ResponseEntity.ok().build();
+        if (!groupRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.notFound().build();
+        // ✅ FK 제약 해소: 참여자 먼저 삭제
+        participantRepository.deleteByGroupPostId(id);
+        groupRepository.deleteById(id);
+        return ResponseEntity.ok().build();
     }
 
     // ── 7. 참여 목록 조회 ─────────────────────────────────────────────
