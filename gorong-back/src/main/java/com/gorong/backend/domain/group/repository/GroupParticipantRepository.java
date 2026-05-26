@@ -14,5 +14,5 @@ public interface GroupParticipantRepository extends JpaRepository<GroupParticipa
     boolean existsByUserAndGroupPost(User user, GroupPost groupPost);
 
     @Transactional
-    void deleteAllByGroupPostId(Long groupPostId);
+    void deleteByGroupPostId(Long groupPostId);
 }
