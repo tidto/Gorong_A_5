@@ -1,344 +1,513 @@
-import React, { useState, useMemo, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
-import Button from '../components/Button'
-import Input from '../components/Input'
-import Card from '../components/Card'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Send, Image, Users, MessageSquare, ChevronRight, Wifi, WifiOff, Loader2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { Send, Image, Users } from 'lucide-react'
+import { useChatRoom, fetchJoinedGroups, JoinedGroup } from '../hooks/useChatRoom'
 
-interface ChatMessage {
-  id: number
-  user: string
-  message: string
-  time: string
-  type: 'text' | 'image'
-  imageUrl?: string
-}
-
-interface Participant {
-  id: number
-  name: string
-  role: string
-  avatar: string
-}
-
-const mockMessages: ChatMessage[] = [
-  {
-    id: 1,
-    user: '요가러버',
-    message: '안녕하세요! 요가 클래스 동행 모집합니다.',
-    time: '10:30 AM',
-    type: 'text',
-  },
-  {
-    id: 2,
-    user: '행복한고양이',
-    message: '참여하고 싶어요! 요가 경험이 없어도 괜찮나요?',
-    time: '10:32 AM',
-    type: 'text',
-  },
-  {
-    id: 3,
-    user: '요가러버',
-    message: '네! 초보자도 환영입니다. 함께 즐겁게 해보아요 😊',
-    time: '10:33 AM',
-    type: 'text',
-  },
-  {
-    id: 4,
-    user: '스포츠러버',
-    message: '',
-    time: '10:35 AM',
-    type: 'image',
-    imageUrl: 'https://via.placeholder.com/200x150?text=Yoga+Class',
-  },
-]
-
-const mockParticipants: Participant[] = [
-  { id: 1, name: '요가러버', role: '호스트', avatar: '요' },
-  { id: 2, name: '행복한고양이', role: '참여자', avatar: '행' },
-  { id: 3, name: '스포츠러버', role: '참여자', avatar: '스' },
-  { id: 4, name: '요가초보', role: '참여자', avatar: '요' },
-]
+// ────────────────────────────────────────────────────────────
+// Chat.tsx — 실제 WebSocket 연동 + 참여중인 채팅방 사이드바
+// ────────────────────────────────────────────────────────────
 
 export default function Chat() {
-  const { id } = useParams()
-  const auth = useAuth()
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages)
-  const [newMessage, setNewMessage] = useState('')
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 참여중인 그룹 목록
+  const [joinedGroups, setJoinedGroups] = useState<JoinedGroup[]>([])
+  const [activeGroup, setActiveGroup] = useState<JoinedGroup | null>(null)
+  const [loadingGroups, setLoadingGroups] = useState(true)
+
+  // 입력 상태
+  const [inputText, setInputText] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
-  const [participants, setParticipants] = useState<Participant[]>(mockParticipants)
-  const [pinnedParticipantId, setPinnedParticipantId] = useState<number | null>(null)
 
+  const { messages, isConnecting, isConnected, connect, sendMessage } = useChatRoom()
+
+  // 참여중인 그룹 로드
   useEffect(() => {
-    const currentName = auth.user?.nickname
-    if (!currentName) return
+    setLoadingGroups(true)
+    fetchJoinedGroups().then(groups => {
+      setJoinedGroups(groups)
+      setLoadingGroups(false)
 
-    setParticipants((current) => {
-      if (current.some((participant) => participant.name === currentName)) return current
-      return [
-        ...current,
-        {
-          id: current.length + 1,
-          name: currentName,
-          role: '참여자',
-          avatar: '🐱',
-        },
-      ]
+      // URL의 id가 있으면 해당 그룹을 우선 활성화
+      if (id && groups.length > 0) {
+        const target = groups.find(g => String(g.id) === id)
+        if (target) {
+          setActiveGroup(target)
+          connect(target.id, target.title)
+        } else if (groups.length > 0) {
+          // id에 해당하는 그룹이 없으면 첫 번째 그룹 선택
+          setActiveGroup(groups[0])
+          connect(groups[0].id, groups[0].title)
+        }
+      } else if (groups.length > 0) {
+        setActiveGroup(groups[0])
+        connect(groups[0].id, groups[0].title)
+      }
     })
-  }, [auth.user?.nickname])
+  }, []) // eslint-disable-line
 
-  const lastMessageByUser = useMemo(() => {
-    return messages.reduce<Record<string, ChatMessage>>((acc, message) => {
-      acc[message.user] = message
-      return acc
-    }, {})
+  // 메시지 자동 스크롤
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const orderedParticipants = useMemo(() => {
-    return [...participants].sort((a, b) => {
-      if (a.id === pinnedParticipantId) return -1
-      if (b.id === pinnedParticipantId) return 1
-      return a.id - b.id
-    })
-  }, [participants, pinnedParticipantId])
+  const handleSelectRoom = useCallback((group: JoinedGroup) => {
+    if (activeGroup?.id === group.id) return
+    setActiveGroup(group)
+    connect(group.id, group.title)
+    navigate(`/chat/${group.id}`, { replace: true })
+  }, [activeGroup, connect, navigate])
 
-  const pinnedParticipant = participants.find((participant) => participant.id === pinnedParticipantId)
-  const activeBubbleUser = messages.length > 0 ? messages[messages.length - 1].user : null
-
-  const handleSendMessage = () => {
-    if (!newMessage.trim() && !selectedImage) return
-
-    const message: ChatMessage = {
-      id: messages.length + 1,
-      user: auth.user?.nickname || '익명',
-      message: newMessage,
-      time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-      type: selectedImage ? 'image' : 'text',
-      imageUrl: selectedImage ? URL.createObjectURL(selectedImage) : undefined,
-    }
-
-    setMessages([...messages, message])
-    setNewMessage('')
+  const handleSend = () => {
+    if (!inputText.trim() && !selectedImage) return
+    sendMessage(inputText)
+    setInputText('')
     setSelectedImage(null)
   }
 
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setSelectedImage(file)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
     }
   }
 
-  const handlePinParticipant = (participantId: number) => {
-    setPinnedParticipantId((current) =>
-      current === participantId ? null : participantId
-    )
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) setSelectedImage(file)
   }
 
+  // 참여자 목록 (메시지 보낸 유저들 + 나)
+  const participantSet = new Set(
+      messages.filter(m => m.user !== '시스템').map(m => m.user)
+  )
+  if (user?.email) participantSet.add(user.email)
+  const participants = Array.from(participantSet)
+
+  const myEmail = user?.email || ''
+  const myNickname = user?.nickname || '나'
+
+  const getDisplayName = (email: string) => email === myEmail ? myNickname : email.split('@')[0]
+  const getAvatar = (email: string) => getDisplayName(email).charAt(0).toUpperCase()
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-3xl shadow-lg overflow-hidden h-[600px] flex flex-col">
-        {/* 채팅 헤더 */}
-        <div className="bg-primary-500 text-white p-4 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold">채팅방 #{id}</h1>
-              <p className="text-sm opacity-90">요가 클래스 동행 모임</p>
+      <div style={{
+        display: 'flex',
+        height: 'calc(100vh - 90px)',
+        backgroundColor: '#f8fafc',
+        fontFamily: 'Pretendard, -apple-system, sans-serif',
+        maxWidth: '1200px',
+        margin: '24px auto',
+        borderRadius: '20px',
+        overflow: 'hidden',
+        boxShadow: '0 4px 32px rgba(0,0,0,0.08)',
+      }}>
+
+        {/* ── 좌측 사이드바: 참여중인 채팅방 목록 ── */}
+        <div style={{
+          width: '280px',
+          flexShrink: 0,
+          backgroundColor: 'white',
+          borderRight: '1px solid #f1f5f9',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <div style={{ padding: '24px 20px 16px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MessageSquare size={18} color="#ff8a3d" />
+              <span style={{ fontWeight: '700', fontSize: '16px', color: '#1e293b' }}>참여중인 채팅방</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              <span className="text-sm">{participants.length}명</span>
+            <div style={{ marginTop: '4px', fontSize: '12px', color: '#94a3b8' }}>
+              {loadingGroups ? '불러오는 중...' : `${joinedGroups.length}개 모임`}
             </div>
           </div>
-          {pinnedParticipant && (
-            <div className="rounded-3xl border border-white/40 bg-white/10 p-4 mb-4">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-white text-primary-700 flex items-center justify-center text-2xl">
-                  {pinnedParticipant.avatar}
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+            {loadingGroups ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                  <Loader2 size={20} color="#ff8a3d" style={{ animation: 'spin 1s linear infinite' }} />
                 </div>
-                <div>
-                  <div className="text-sm text-white/80">함께할 멤버</div>
-                  <div className="text-lg font-semibold">{pinnedParticipant.name}</div>
-                  <div className="text-xs text-white/70">{pinnedParticipant.role} · 선택됨</div>
+            ) : joinedGroups.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 16px', color: '#94a3b8' }}>
+                  <Users size={32} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                  <p style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                    참여중인 모임이 없어요.<br />
+                    <span
+                        onClick={() => navigate('/group')}
+                        style={{ color: '#ff8a3d', cursor: 'pointer', fontWeight: '600' }}
+                    >
+                  모집게시판
+                </span>에서 참여해보세요!
+                  </p>
                 </div>
-              </div>
-            </div>
-          )}
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {orderedParticipants.map((participant, index) => (
-              <button
-                key={participant.id}
-                type="button"
-                onClick={() => handlePinParticipant(participant.id)}
-                className={`flex-shrink-0 rounded-3xl border px-3 py-2 bg-white/10 text-left transition ${
-                  pinnedParticipantId === participant.id ? 'border-white text-white shadow-lg bg-white/20' : 'border-transparent text-white/90 hover:bg-white/20'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-white text-primary-700 flex items-center justify-center font-bold">
-                    {participant.avatar}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold">{participant.name}</div>
-                    <div className="text-xs opacity-80">{participant.role}</div>
-                  </div>
-                </div>
-                {lastMessageByUser[participant.name] && (
-                  <div className="mt-2 rounded-2xl bg-white/90 px-2 py-1 text-[11px] text-primary-700">
-                    {lastMessageByUser[participant.name].message || '사진 전송'}
-                  </div>
-                )}
-                <div className="text-[11px] mt-1 text-white/80">#{index + 1} 입장</div>
-              </button>
-            ))}
+            ) : (
+                joinedGroups.map(group => {
+                  const isActive = activeGroup?.id === group.id
+                  const isFull = group.currentCapacity >= group.maxCapacity
+                  return (
+                      <div
+                          key={group.id}
+                          onClick={() => handleSelectRoom(group)}
+                          style={{
+                            padding: '14px',
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            marginBottom: '6px',
+                            backgroundColor: isActive ? '#fff4ed' : 'transparent',
+                            border: isActive ? '1.5px solid #ff8a3d' : '1.5px solid transparent',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={e => {
+                            if (!isActive) (e.currentTarget as HTMLDivElement).style.backgroundColor = '#f8fafc'
+                          }}
+                          onMouseLeave={e => {
+                            if (!isActive) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent'
+                          }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontWeight: '600',
+                              fontSize: '14px',
+                              color: isActive ? '#ff8a3d' : '#1e293b',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}>
+                              {group.title}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
+                              📍 {group.location}
+                            </div>
+                          </div>
+                          {isActive && <ChevronRight size={14} color="#ff8a3d" style={{ flexShrink: 0 }} />}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+                    <span style={{
+                      fontSize: '11px',
+                      padding: '2px 8px',
+                      borderRadius: '20px',
+                      backgroundColor: isFull ? '#f1f5f9' : '#ecfdf5',
+                      color: isFull ? '#94a3b8' : '#10b981',
+                      fontWeight: '600',
+                    }}>
+                      {isFull ? '모집완료' : '모집중'}
+                    </span>
+                          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
+                      👥 {group.currentCapacity}/{group.maxCapacity}명
+                    </span>
+                        </div>
+                      </div>
+                  )
+                })
+            )}
+          </div>
+
+          {/* 모집게시판 바로가기 */}
+          <div style={{ padding: '12px', borderTop: '1px solid #f1f5f9' }}>
+            <button
+                onClick={() => navigate('/group')}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '10px',
+                  border: '1.5px dashed #fbd5b5',
+                  backgroundColor: 'transparent',
+                  color: '#ff8a3d',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+            >
+              + 새 모임 참여하기
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* 채팅 메시지 영역 */}
-          <div className="flex-1 flex flex-col">
-            <div className="px-4 pb-3">
-              <div className="flex items-end gap-4 overflow-x-auto">
-                {orderedParticipants.map((participant) => {
-                  const lastMessage = lastMessageByUser[participant.name]
-                  const isActive = participant.name === activeBubbleUser
-                  return (
-                    <div key={participant.id} className="relative flex flex-col items-center">
-                      <div className={`w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-lg font-bold text-primary-700 ${isActive ? 'ring-2 ring-primary-500' : ''}`}>
-                        {participant.avatar}
-                      </div>
-                      {lastMessage && (
-                        <div className={`absolute -top-16 w-40 rounded-2xl border bg-white p-2 text-xs text-gray-700 shadow-xl ${isActive ? 'opacity-100' : 'opacity-90'}`}>
-                          <div className="relative">
-                            <div className="mb-1 break-words text-left">{lastMessage.type === 'text' ? lastMessage.message : '이미지 전송'}</div>
-                            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 h-0 w-0 border-x-8 border-x-transparent border-t-8 border-t-white" />
+        {/* ── 우측 채팅 영역 ── */}
+        {activeGroup ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+              {/* 채팅방 헤더 */}
+              <div style={{
+                background: 'linear-gradient(135deg, #ff8a3d 0%, #ff6b1a 100%)',
+                padding: '0 24px',
+                color: 'white',
+              }}>
+                {/* 타이틀 + 상태 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '20px', paddingBottom: '14px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h1 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>{activeGroup.title}</h1>
+                      {isConnecting ? (
+                          <span style={{ fontSize: '11px', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> 연결 중...
+                    </span>
+                      ) : isConnected ? (
+                          <Wifi size={14} style={{ opacity: 0.9 }} />
+                      ) : (
+                          <WifiOff size={14} style={{ opacity: 0.6 }} />
+                      )}
+                    </div>
+                    <p style={{ fontSize: '13px', margin: '3px 0 0', opacity: 0.85 }}>
+                      📍 {activeGroup.location} {activeGroup.event ? `• 🎟️ ${activeGroup.event}` : ''}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.9 }}>
+                    <Users size={16} />
+                    <span style={{ fontSize: '14px', fontWeight: '600' }}>{activeGroup.currentCapacity}명</span>
+                  </div>
+                </div>
+
+                {/* 참여자 아바타 바 */}
+                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '16px' }}>
+                  {participants.map((email, i) => {
+                    const name = getDisplayName(email)
+                    const isMe = email === myEmail
+                    return (
+                        <div key={email} style={{
+                          flexShrink: 0,
+                          padding: '10px 14px',
+                          borderRadius: '14px',
+                          border: '1.5px solid rgba(255,255,255,0.35)',
+                          backgroundColor: 'rgba(255,255,255,0.12)',
+                          minWidth: '100px',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{
+                              width: '32px', height: '32px', borderRadius: '50%',
+                              backgroundColor: 'white',
+                              color: '#ff8a3d',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontWeight: '700', fontSize: '13px', flexShrink: 0,
+                            }}>
+                              {getAvatar(email)}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: 'white' }}>{name}</div>
+                              <div style={{ fontSize: '10px', opacity: 0.75 }}>
+                                {isMe ? '나' : `#${i + 1} 입장`}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      )}
-                      <div className="mt-2 text-xs text-gray-500 text-center">{participant.name}</div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* 메시지 목록 */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px', backgroundColor: '#fafafa' }}>
+                {messages.length === 0 && !isConnecting && (
+                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px 0', fontSize: '14px' }}>
+                      첫 번째 메시지를 보내보세요! 👋
                     </div>
+                )}
+                {messages.map((msg, idx) => {
+                  const isSystem = msg.user === '시스템'
+                  const isMe = msg.isMe || msg.user === myEmail
+
+                  if (isSystem) {
+                    return (
+                        <div key={idx} style={{ textAlign: 'center', marginBottom: '16px' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      backgroundColor: '#f1f5f9',
+                      color: '#94a3b8',
+                      fontSize: '12px',
+                      padding: '4px 14px',
+                      borderRadius: '20px',
+                      fontStyle: 'italic',
+                    }}>
+                      {msg.text}
+                    </span>
+                        </div>
+                    )
+                  }
+
+                  return (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        justifyContent: isMe ? 'flex-end' : 'flex-start',
+                        marginBottom: '14px',
+                        gap: '8px',
+                        alignItems: 'flex-end',
+                      }}>
+                        {!isMe && (
+                            <div style={{
+                              width: '32px', height: '32px', borderRadius: '50%',
+                              backgroundColor: '#ffe8d6',
+                              color: '#ff8a3d',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontWeight: '700', fontSize: '13px', flexShrink: 0,
+                            }}>
+                              {getAvatar(msg.user)}
+                            </div>
+                        )}
+                        <div style={{ maxWidth: '60%' }}>
+                          {!isMe && (
+                              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px', paddingLeft: '2px' }}>
+                                {getDisplayName(msg.user)}
+                              </div>
+                          )}
+                          <div style={{
+                            padding: '10px 14px',
+                            borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                            backgroundColor: isMe ? '#ff8a3d' : 'white',
+                            color: isMe ? 'white' : '#1e293b',
+                            fontSize: '14px',
+                            lineHeight: '1.5',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                            wordBreak: 'break-word',
+                          }}>
+                            {msg.text}
+                          </div>
+                          {msg.sentAt && (
+                              <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '3px', textAlign: isMe ? 'right' : 'left', paddingLeft: '2px' }}>
+                                {msg.sentAt}
+                              </div>
+                          )}
+                        </div>
+                        {isMe && (
+                            <div style={{
+                              width: '32px', height: '32px', borderRadius: '50%',
+                              backgroundColor: '#ff8a3d',
+                              color: 'white',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontWeight: '700', fontSize: '13px', flexShrink: 0,
+                            }}>
+                              {myNickname.charAt(0)}
+                            </div>
+                        )}
+                      </div>
                   )
                 })}
+                <div ref={messagesEndRef} />
               </div>
-            </div>
-            {/* 메시지 리스트 */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${
-                    message.user === auth.user?.nickname ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  {message.user !== auth.user?.nickname && (
-                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-semibold text-primary-700">
-                        {message.user.charAt(0)}
-                      </span>
-                    </div>
-                  )}
-                  <div className={`max-w-xs lg:max-w-md ${
-                    message.user === auth.user?.nickname ? 'order-first' : ''
-                  }`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-semibold text-gray-600">{message.user}</span>
-                      <span className="text-xs text-gray-400">{message.time}</span>
-                    </div>
-                    <div className={`rounded-2xl px-4 py-2 ${
-                      message.user === auth.user?.nickname
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}>
-                      {message.type === 'text' ? (
-                        <p className="text-sm">{message.message}</p>
-                      ) : (
-                        <img
-                          src={message.imageUrl}
-                          alt="전송된 이미지"
-                          className="rounded-lg max-w-full h-auto"
-                        />
-                      )}
-                    </div>
-                  </div>
-                  {message.user === auth.user?.nickname && (
-                    <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-semibold text-white">
-                        {auth.user?.nickname?.charAt(0)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
 
-            {/* 메시지 입력 영역 */}
-            <div className="border-t border-gray-200 p-4">
-              {selectedImage && (
-                <div className="mb-3 flex items-center gap-3">
-                  <img
-                    src={URL.createObjectURL(selectedImage)}
-                    alt="선택된 이미지"
-                    className="w-16 h-16 object-cover rounded-lg"
+              {/* 메시지 입력창 */}
+              <div style={{
+                padding: '16px 20px',
+                borderTop: '1px solid #f1f5f9',
+                backgroundColor: 'white',
+              }}>
+                {selectedImage && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                      <img
+                          src={URL.createObjectURL(selectedImage)}
+                          alt="미리보기"
+                          style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }}
+                      />
+                      <button
+                          onClick={() => setSelectedImage(null)}
+                          style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        취소
+                      </button>
+                    </div>
+                )}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                      type="text"
+                      placeholder={isConnecting ? '연결 중...' : '메시지를 입력하세요...'}
+                      value={inputText}
+                      onChange={e => setInputText(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      disabled={isConnecting || !isConnected}
+                      style={{
+                        flex: 1,
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        border: '1.5px solid #e2e8f0',
+                        outline: 'none',
+                        fontSize: '14px',
+                        backgroundColor: isConnected ? 'white' : '#f8fafc',
+                        color: '#1e293b',
+                        transition: 'border-color 0.15s',
+                      }}
+                      onFocus={e => (e.target.style.borderColor = '#ff8a3d')}
+                      onBlur={e => (e.target.style.borderColor = '#e2e8f0')}
                   />
-                  <Button
-                    variant="secondary"
-                    onClick={() => setSelectedImage(null)}
-                    className="text-xs"
+                  <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                      id="chat-image-input"
+                      style={{ display: 'none' }}
+                  />
+                  <label
+                      htmlFor="chat-image-input"
+                      style={{
+                        padding: '10px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        color: '#94a3b8',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
                   >
-                    취소
-                  </Button>
+                    <Image size={20} />
+                  </label>
+                  <button
+                      onClick={handleSend}
+                      disabled={(!inputText.trim() && !selectedImage) || isConnecting || !isConnected}
+                      style={{
+                        padding: '10px 18px',
+                        borderRadius: '12px',
+                        border: 'none',
+                        backgroundColor: (!inputText.trim() && !selectedImage) || !isConnected ? '#e2e8f0' : '#ff8a3d',
+                        color: (!inputText.trim() && !selectedImage) || !isConnected ? '#94a3b8' : 'white',
+                        cursor: (!inputText.trim() && !selectedImage) || !isConnected ? 'default' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'all 0.15s',
+                      }}
+                  >
+                    <Send size={18} />
+                  </button>
                 </div>
-              )}
-              <div className="flex gap-3">
-                <Input
-                  placeholder="메시지를 입력하세요..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-1"
-                />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                  id="chat-image"
-                />
-                <label
-                  htmlFor="chat-image"
-                  className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer"
-                >
-                  <Image className="w-5 h-5 text-gray-500" />
-                </label>
-                <Button onClick={handleSendMessage} disabled={!newMessage.trim() && !selectedImage}>
-                  <Send className="w-4 h-4" />
-                </Button>
               </div>
             </div>
-          </div>
-
-          {/* 참여자 목록 사이드바 */}
-          <div className="w-64 border-l border-gray-200 bg-gray-50 p-4">
-            <h3 className="font-semibold text-gray-900 mb-4">참여자 ({participants.length})</h3>
-            <div className="space-y-3">
-              {participants.map((participant) => (
-                <div key={participant.id} className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-semibold text-primary-700">
-                      {participant.avatar}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{participant.name}</p>
-                    <p className="text-xs text-gray-500">{participant.role}</p>
-                  </div>
-                </div>
-              ))}
+        ) : (
+            /* 채팅방 미선택 상태 */
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', color: '#94a3b8' }}>
+              {loadingGroups ? (
+                  <>
+                    <Loader2 size={32} color="#ff8a3d" style={{ animation: 'spin 1s linear infinite' }} />
+                    <p style={{ fontSize: '14px' }}>채팅방 불러오는 중...</p>
+                  </>
+              ) : (
+                  <>
+                    <MessageSquare size={48} style={{ opacity: 0.3 }} />
+                    <p style={{ fontSize: '15px' }}>좌측에서 채팅방을 선택하세요</p>
+                    <button
+                        onClick={() => navigate('/group')}
+                        style={{
+                          padding: '10px 20px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          backgroundColor: '#ff8a3d',
+                          color: 'white',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                        }}
+                    >
+                      모집게시판 가기
+                    </button>
+                  </>
+              )}
             </div>
-          </div>
-        </div>
+        )}
+
+        <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
       </div>
-    </div>
   )
 }
