@@ -1,3 +1,12 @@
+// ============================================================
+// 경로: src/pages/Chat.tsx
+//
+// 변경 사항:
+//  - useChatRoom 훅에서 isMyGroup, currentUserEmail 추가 구조분해
+//  - 불필요한 myEmail 이중 선언 제거 → currentUserEmail 로 통합
+//  - handleSelectRoom useCallback 의존성 배열 정리
+// ============================================================
+
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Send, Image, Users, MessageSquare, ChevronRight, Wifi, WifiOff, Loader2 } from 'lucide-react'
@@ -23,7 +32,19 @@ export default function Chat() {
   const [inputText, setInputText] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
 
-  const { messages, isConnecting, isConnected, connect, sendMessage } = useChatRoom()
+  // ✅ isMyGroup, currentUserEmail 추가 구조분해
+  const {
+    messages,
+    isConnecting,
+    isConnected,
+    currentUserEmail,
+    connect,
+    sendMessage,
+    isMyGroup,
+  } = useChatRoom()
+
+  // 닉네임 — AuthContext 에서 가져오거나 '나' 폴백
+  const myNickname = user?.nickname || '나'
 
   // 참여중인 그룹 로드
   useEffect(() => {
@@ -38,8 +59,7 @@ export default function Chat() {
         if (target) {
           setActiveGroup(target)
           connect(target.id, target.title)
-        } else if (groups.length > 0) {
-          // id에 해당하는 그룹이 없으면 첫 번째 그룹 선택
+        } else {
           setActiveGroup(groups[0])
           connect(groups[0].id, groups[0].title)
         }
@@ -48,7 +68,7 @@ export default function Chat() {
         connect(groups[0].id, groups[0].title)
       }
     })
-  }, []) // eslint-disable-line
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 메시지 자동 스크롤
   useEffect(() => {
@@ -62,12 +82,12 @@ export default function Chat() {
     navigate(`/chat/${group.id}`, { replace: true })
   }, [activeGroup, connect, navigate])
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!inputText.trim() && !selectedImage) return
     sendMessage(inputText)
     setInputText('')
     setSelectedImage(null)
-  }
+  }, [inputText, selectedImage, sendMessage])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -85,14 +105,14 @@ export default function Chat() {
   const participantSet = new Set(
       messages.filter(m => m.user !== '시스템').map(m => m.user)
   )
-  if (user?.email) participantSet.add(user.email)
+  if (currentUserEmail) participantSet.add(currentUserEmail)
   const participants = Array.from(participantSet)
 
-  const myEmail = user?.email || ''
-  const myNickname = user?.nickname || '나'
-
-  const getDisplayName = (email: string) => email === myEmail ? myNickname : email.split('@')[0]
-  const getAvatar = (email: string) => getDisplayName(email).charAt(0).toUpperCase()
+  // ✅ currentUserEmail 로 통합 (기존 myEmail 이중 선언 제거)
+  const getDisplayName = (email: string) =>
+      email === currentUserEmail ? myNickname : email.split('@')[0]
+  const getAvatar = (email: string) =>
+      getDisplayName(email).charAt(0).toUpperCase()
 
   return (
       <div style={{
@@ -257,9 +277,32 @@ export default function Chat() {
                       📍 {activeGroup.location} {activeGroup.event ? `• 🎟️ ${activeGroup.event}` : ''}
                     </p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.9 }}>
-                    <Users size={16} />
-                    <span style={{ fontSize: '14px', fontWeight: '600' }}>{activeGroup.currentCapacity}명</span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {/* ✅ 작성자 본인에게만 수정/삭제 버튼 표시 */}
+                    {isMyGroup(activeGroup) && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                              onClick={() => navigate(`/groups/edit/${activeGroup.id}`)}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                border: '1.5px solid rgba(255,255,255,0.6)',
+                                backgroundColor: 'transparent',
+                                color: 'white',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                              }}
+                          >
+                            ✏️ 수정
+                          </button>
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.9 }}>
+                      <Users size={16} />
+                      <span style={{ fontSize: '14px', fontWeight: '600' }}>{activeGroup.currentCapacity}명</span>
+                    </div>
                   </div>
                 </div>
 
@@ -267,7 +310,7 @@ export default function Chat() {
                 <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '16px' }}>
                   {participants.map((email, i) => {
                     const name = getDisplayName(email)
-                    const isMe = email === myEmail
+                    const isMe = email === currentUserEmail
                     return (
                         <div key={email} style={{
                           flexShrink: 0,
@@ -309,7 +352,8 @@ export default function Chat() {
                 )}
                 {messages.map((msg, idx) => {
                   const isSystem = msg.user === '시스템'
-                  const isMe = msg.isMe || msg.user === myEmail
+                  // ✅ msg.isMe 우선, 없으면 이메일로 보조 판정
+                  const isMe = msg.isMe ?? (msg.user === currentUserEmail)
 
                   if (isSystem) {
                     return (
@@ -367,7 +411,10 @@ export default function Chat() {
                             {msg.text}
                           </div>
                           {msg.sentAt && (
-                              <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '3px', textAlign: isMe ? 'right' : 'left', paddingLeft: '2px' }}>
+                              <div style={{
+                                fontSize: '10px', color: '#94a3b8', marginTop: '3px',
+                                textAlign: isMe ? 'right' : 'left', paddingLeft: '2px',
+                              }}>
                                 {msg.sentAt}
                               </div>
                           )}
@@ -436,7 +483,6 @@ export default function Chat() {
                       type="file"
                       accept="image/*"
                       onChange={handleImageSelect}
-                      className="hidden"
                       id="chat-image-input"
                       style={{ display: 'none' }}
                   />
