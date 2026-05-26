@@ -1,8 +1,10 @@
 package com.gorong.backend.global.security;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,7 +18,11 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final FirebaseTokenFilter firebaseTokenFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -34,10 +40,30 @@ public class SecurityConfig {
                         .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup").permitAll()
                         // 주소popup
                         .requestMatchers("/api/v1/juso/**").permitAll()
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                        // app 엔드포인트
+                        .requestMatchers(
+                                "/api/v1/users/login",
+                                "/api/v1/users/signup",
+                                "/api/v1/juso/**",
+                                "/api/v1/app/venues/**"   // ← 추가 (행사 조회는 비로그인도 가능)
+                        ).permitAll()
+
+                        .requestMatchers("/api/chatbot/**").permitAll()
+                        // 💡 [추가] 모집 게시판 관련 API 허용 (조회는 비로그인도 가능하게)
+                        .requestMatchers("/api/groups/**").permitAll()
+                        
+                        // 💬 웹소켓(채팅) 엔드포인트 허용
+                        // minihome 
+                        .requestMatchers("/api/minihomes/**").permitAll()
+                        .requestMatchers("/api/ws-chat/**","/ws-chat/**" ).permitAll()
+                        .requestMatchers("/api/chat/**").permitAll()
+                                       
+                        // anyRequest는 항상 마지막
                         .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함
                 )
                 // 우리가 만든 Firebase 필터를 껴넣음
-                .addFilterBefore(new FirebaseTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

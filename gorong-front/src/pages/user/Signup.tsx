@@ -10,12 +10,12 @@ import { auth } from '../../firebase/firebaseConfig'
 
 // 관심사 목록 (interests 테이블 데이터 - DB 기준)
 const INTERESTS = [
-  { id: 2, code: 'A01', name: '자연', emoji: '🌿', desc: '산, 계곡, 해수욕장, 국립공원, 섬, 숲길' },
-  { id: 3, code: 'A02', name: '인문', emoji: '🏛️', desc: '박물관, 미술관, 유적지, 사찰, 예술 공연' },
-  { id: 4, code: 'A03', name: '레포츠', emoji: '🧗', desc: '등산, 낚시, 서핑, 골프, 스키, 번지점프' },
-  { id: 5, code: 'A04', name: '쇼핑', emoji: '🛍️', desc: '전통시장, 면세점, 백화점, 공예품' },
-  { id: 6, code: 'A05', name: '음식', emoji: '🍜', desc: '맛집, 카페거리, 전통주 체험, 사찰음식' },
-  { id: 7, code: 'C01', name: '추천코스', emoji: '🗺️', desc: '가족 코스, 나홀로 여행, 데이트 코스' },
+  { id: 2, code: 'NA', name: '자연관광', emoji: '🌿', desc: '산, 계곡, 해수욕장, 국립공원, 섬, 숲길' }, // A01 -> NA
+  { id: 3, code: 'VE', name: '문화/역사', emoji: '🏛️', desc: '박물관, 미술관, 유적지, 사찰, 예술 공연' }, // A02 -> VE
+  { id: 4, code: 'LS', name: '레포츠', emoji: '🧗', desc: '등산, 낚시, 서핑, 골프, 스키, 번지점프' },     // A03 -> LS
+  { id: 5, code: 'SH', name: '쇼핑', emoji: '🛍️', desc: '전통시장, 면세점, 백화점, 공예품' },         // A04 -> SH
+  { id: 6, code: 'FD', name: '음식', emoji: '🍜', desc: '맛집, 카페거리, 전통주 체험, 사찰음식' },       // A05 -> FD
+  { id: 7, code: 'C01', name: '추천코스', emoji: '🗺️', desc: '가족 코스, 나홀로 여행, 데이트 코스' },    // 변경 없음
 ];
 
 // 약관 목록
@@ -178,6 +178,14 @@ export default function Signup() {
     setLoading(true);
     setError('');
     try {
+      // ✅ 수정: auth.currentUser에서 최신 토큰을 명시적으로 가져옴
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setError('로그인 세션이 만료되었습니다. 다시 로그인해 주세요.');
+        return;
+      }
+      const idToken = await currentUser.getIdToken(true); // true = 강제 갱신
+
       await axiosInstance.post('/v1/users/signup', {
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email,
@@ -185,27 +193,31 @@ export default function Signup() {
         baseAddress: detailAddress
           ? `${selectedAddress} ${detailAddress}`
           : selectedAddress,
-        latitude: selectedCoords?.lat,
-        longitude: selectedCoords?.lng,
+        latitude: (selectedCoords?.lat && selectedCoords.lat !== 0) ? selectedCoords.lat : null,
+        longitude: (selectedCoords?.lng && selectedCoords.lng !== 0) ? selectedCoords.lng : null,
         isForeigner,
         barrierFreeType: 'NONE',
         interestIds: selectedInterests,
         gorongHz: null,
+      }, {
+        // ✅ 수정: 토큰을 명시적으로 헤더에 세팅 (interceptor 타이밍 이슈 방지)
+        headers: { Authorization: `Bearer ${idToken}` },
       });
 
-      setUser({ nickname, email: firebaseUser.email ?? '' });
+      setUser({ nickname, email: firebaseUser.email ?? '', roleType: 'USER' });
       toast(`${nickname}님, 고냥이에 오신 것을 환영합니다! 🐾`, 'success');
       navigate('/', { replace: true });
     } catch (err: any) {
-      // 백엔드 저장 실패 시 Firebase 계정도 롤백
-      try {
-        if (auth.currentUser) {
-          await auth.currentUser.delete()
-        }
-      } catch (deleteError) {
-        console.error('Firebase 계정 삭제 실패:', deleteError)
+      // ✅ 수정: 403은 서버 인증 문제이므로 Firebase 계정은 삭제하지 않음
+      //    (계정을 삭제하면 재시도 자체가 불가능해짐)
+      const status = err.response?.status;
+      if (status === 409) {
+        setError('이미 가입된 계정입니다.');
+      } else if (status === 403) {
+        setError('인증 오류가 발생했습니다. 페이지를 새로고침 후 다시 시도해 주세요.');
+      } else {
+        setError(err.response?.data?.message || '회원가입 중 오류가 발생했습니다.');
       }
-      setError(err.response?.data?.message || '회원가입 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -377,11 +389,18 @@ export default function Signup() {
             {showAddressModal && (
               <AddressSearchModal
                 onSelect={(result) => {
+                  // 1. 화면에 선택된 주소 표시
                   setSelectedAddress(result.roadAddr);
+                  
+                  // 2. 모달이 이미 변환해서 넘겨준 좌표를 State에 저장 (API 호출 제거됨!)
                   setSelectedCoords({
-                    lat: parseFloat(result.entY),
-                    lng: parseFloat(result.entX),
+                    lat: parseFloat(result.entY) || 0, // 위도 (NaN 방어)
+                    lng: parseFloat(result.entX) || 0, // 경도 (NaN 방어)
                   });
+
+                  console.log("Signup 최종 세팅된 좌표 - lat:", result.entY, "lng:", result.entX);
+                  
+                  // 3. 모달 닫기
                   setShowAddressModal(false);
                 }}
                 onClose={() => setShowAddressModal(false)}

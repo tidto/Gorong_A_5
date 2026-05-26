@@ -1,221 +1,416 @@
-import React, { useState } from 'react'
-import Button from '../../components/Button'
-import Input from '../../components/Input'
-import Card from '../../components/Card'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { User, Settings, Bell, Shield, LogOut, Mail, Phone } from 'lucide-react'
+import { useNotification } from '../../contexts/NotificationContext'
+import axiosInstance from '../../api/axiosInstance'
+import AddressSearchModal from '../../components/AddressSearchModal'
+import {
+  User, Settings, Heart, Globe, MapPin,
+  Thermometer, Radio, Accessibility, ChevronRight,
+  LogOut, Trash2, Check, Loader2
+} from 'lucide-react'
+
+type BarrierFreeType = 'NONE' | 'PHYSICAL' | 'VISUAL' | 'AUDITORY'
+
+const INTERESTS = [
+  { id: 2, code: 'NA', name: '자연관광', emoji: '🌿', desc: '산, 계곡, 해수욕장, 국립공원, 섬, 숲길' }, // A01 -> NA
+  { id: 3, code: 'VE', name: '문화/역사', emoji: '🏛️', desc: '박물관, 미술관, 유적지, 사찰, 예술 공연' }, // A02 -> VE
+  { id: 4, code: 'LS', name: '레포츠', emoji: '🧗', desc: '등산, 낚시, 서핑, 골프, 스키, 번지점프' },     // A03 -> LS
+  { id: 5, code: 'SH', name: '쇼핑', emoji: '🛍️', desc: '전통시장, 면세점, 백화점, 공예품' },         // A04 -> SH
+  { id: 6, code: 'FD', name: '음식', emoji: '🍜', desc: '맛집, 카페거리, 전통주 체험, 사찰음식' },       // A05 -> FD
+  { id: 7, code: 'C01', name: '추천코스', emoji: '🗺️', desc: '가족 코스, 나홀로 여행, 데이트 코스' },    // 변경 없음
+]
+
+const BARRIER_FREE_OPTIONS = [
+  { val: 'PHYSICAL', label: '이동 보조', desc: '휠체어 및 유아차 접근이 용이한 곳' },
+  { val: 'VISUAL', label: '시각 지원', desc: '음성 안내, 점자 블록 등이 제공되는 곳' },
+  { val: 'AUDITORY', label: '청각 지원', desc: '수어 통역, 자막 등 시각적 안내가 제공되는 곳' },
+]
 
 export default function MyPage() {
   const auth = useAuth()
-  const [activeTab, setActiveTab] = useState<'profile' | 'settings' | 'notifications'>('profile')
-  const [profileData, setProfileData] = useState({
-    nickname: auth.user?.nickname || '',
-    email: auth.user?.email || '',
-    phone: '',
-    bio: '',
-  })
-  const [notifications, setNotifications] = useState({
-    eventRecommendations: true,
-    reviewReplies: true,
-    groupInvites: true,
-    systemUpdates: false,
-    marketing: false,
+  const { toast, confirm } = useNotification()
+  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'settings'>('profile')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [showAddressModal, setShowAddressModal] = useState(false)
+
+  // 프로필 데이터
+  const [profile, setProfile] = useState({
+    nickname: '',
+    email: '',
+    baseAddress: '',
+    purrTemperature: 38.5,
+    gorongHz: '',
+    barrierFreeType: 'NONE' as BarrierFreeType,
+    isForeigner: false,
+    interestCodes: [] as string[],
   })
 
-  const handleSaveProfile = () => {
-    // 실제로는 API 호출
-    alert('프로필이 저장되었습니다!')
+  // 주소 좌표
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+
+  // 데이터 불러오기
+  useEffect(() => {
+    const fetchMyPage = async () => {
+      try {
+        const res = await axiosInstance.get('/v1/users/me')
+        setProfile(res.data)
+      } catch {
+        toast('내 정보를 불러오는 데 실패했습니다.', 'error')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchMyPage()
+  }, [])
+
+  // 저장
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      await axiosInstance.put('/v1/users/me/profile', {
+        nickname: profile.nickname,
+        baseAddress: profile.baseAddress,
+        barrierFreeType: profile.barrierFreeType,
+        isForeigner: profile.isForeigner,
+        interestCodes: profile.interestCodes,
+        latitude: coords?.lat ?? null,
+        longitude: coords?.lng ?? null,
+      })
+      auth.setUser({ nickname: profile.nickname, email: profile.email, roleType: auth.user?.roleType })
+      toast('저장됐습니다! 🐾', 'success')
+    } catch {
+      toast('저장 중 오류가 발생했습니다.', 'error')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleSaveNotifications = () => {
-    // 실제로는 API 호출
-    alert('알림 설정이 저장되었습니다!')
+  // 로그아웃
+  const handleLogout = async () => {
+    const ok = await confirm({ message: '로그아웃 하시겠습니까?' })
+    if (ok) auth.logout()
   }
+
+  // 탈퇴
+  const handleWithdraw = async () => {
+    const ok = await confirm({
+      message: '정말 탈퇴하시겠습니까?',
+      description: '탈퇴 시 모든 정보가 삭제되며 복구가 불가능합니다.',
+      confirmLabel: '탈퇴',
+      danger: true,
+    })
+    if (ok) {
+      // TODO: DELETE /api/v1/users/me
+      toast('탈퇴 처리가 완료됐습니다.', 'info')
+      auth.logout()
+    }
+  }
+
+  const toggleInterest = (code: string) => {
+    const current = profile.interestCodes
+    if (current.includes(code)) {
+      setProfile({ ...profile, interestCodes: current.filter(c => c !== code) })
+    } else if (current.length < 5) {
+      setProfile({ ...profile, interestCodes: [...current, code] })
+    } else {
+      toast('관심사는 최대 5개까지 선택할 수 있습니다.', 'warning')
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+      </div>
+    )
+  }
+
+  const tabs = [
+    { id: 'profile', label: '기본 정보', icon: User },
+    { id: 'preferences', label: '맞춤 설정', icon: Heart },
+    { id: 'settings', label: '계정 관리', icon: Settings },
+  ] as const
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-900">👤 마이페이지</h1>
-          <p className="text-gray-600 mt-2">계정 정보 및 설정을 관리하세요</p>
+    <div className="max-w-3xl mx-auto px-4 py-8">
+
+      {/* 상단 프로필 카드 */}
+      <div className="rounded-3xl bg-gradient-to-br from-primary-500 to-primary-700 p-6 mb-6 text-white">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl">
+            🐾
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{profile.nickname || '고롱이'}</h1>
+            <p className="text-primary-100 text-sm mt-0.5">{profile.email}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <div className="rounded-2xl bg-white/10 px-4 py-3 flex items-center gap-3">
+            <Thermometer size={18} className="text-orange-300" />
+            <div>
+              <p className="text-xs text-primary-200">퍼르 온도</p>
+              <p className="font-bold">{profile.purrTemperature}°C</p>
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white/10 px-4 py-3 flex items-center gap-3">
+            <Radio size={18} className="text-indigo-300" />
+            <div>
+              <p className="text-xs text-primary-200">고롱 주파수</p>
+              <p className="font-bold text-sm">{profile.gorongHz || '미설정'}</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* 탭 네비게이션 */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {[
-          { id: 'profile', label: '프로필 수정', icon: User },
-          { id: 'settings', label: '계정 설정', icon: Settings },
-          { id: 'notifications', label: '알림 설정', icon: Bell },
-        ].map(({ id, label, icon: Icon }) => (
+      {/* 탭 */}
+      <div className="flex gap-1 bg-gray-100 rounded-2xl p-1 mb-6">
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            onClick={() => setActiveTab(id as typeof activeTab)}
-            className={`flex items-center gap-2 px-4 py-3 font-medium border-b-2 transition-colors ${
+            onClick={() => setActiveTab(id)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === id
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            <Icon className="w-5 h-5" />
+            <Icon size={15} />
             {label}
           </button>
         ))}
       </div>
 
-      {/* 프로필 수정 탭 */}
+      {/* ─── 기본 정보 탭 ─── */}
       {activeTab === 'profile' && (
-        <div className="max-w-2xl space-y-6">
-          <Card title="기본 정보">
-            <div className="space-y-4">
-              <Input
-                label="닉네임"
-                value={profileData.nickname}
-                onChange={(e) => setProfileData({ ...profileData, nickname: e.target.value })}
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
+            <h2 className="font-bold text-gray-900">기본 정보 수정</h2>
+
+            {/* 닉네임 */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">닉네임</label>
+              <input
+                type="text"
+                value={profile.nickname}
+                onChange={e => setProfile({ ...profile, nickname: e.target.value })}
+                maxLength={12}
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-primary-400 focus:bg-white"
               />
-              <Input
-                label="이메일"
+            </div>
+
+            {/* 이메일 */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">이메일</label>
+              <input
                 type="email"
-                value={profileData.email}
-                onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                value={profile.email}
+                disabled
+                className="w-full rounded-2xl border border-gray-100 bg-gray-100 px-4 py-3 text-sm text-gray-400 cursor-not-allowed"
               />
-              <Input
-                label="전화번호"
-                type="tel"
-                value={profileData.phone}
-                onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                placeholder="010-0000-0000"
-              />
-              <Input
-                label="자기소개"
-                multiline
-                rows={4}
-                value={profileData.bio}
-                onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                placeholder="자신을 소개해주세요"
+              <p className="text-xs text-gray-400">소셜 로그인 계정은 이메일 변경이 불가합니다.</p>
+            </div>
+
+            {/* 거주 주소 */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">거주 주소</label>
+              <button
+                type="button"
+                onClick={() => setShowAddressModal(true)}
+                className={`w-full flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all ${
+                  profile.baseAddress
+                    ? 'border-primary-300 bg-primary-50'
+                    : 'border-dashed border-gray-300 bg-gray-50 hover:border-primary-300'
+                }`}
+              >
+                <MapPin size={16} className={profile.baseAddress ? 'text-primary-500' : 'text-gray-400'} />
+                <span className={`flex-1 text-sm ${profile.baseAddress ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
+                  {profile.baseAddress || '주소를 검색하세요'}
+                </span>
+                <span className="text-xs font-semibold text-primary-600 bg-primary-100 px-2.5 py-1 rounded-full">
+                  {profile.baseAddress ? '변경' : '검색'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className={`w-full rounded-2xl py-3.5 text-sm font-bold text-white transition-all ${
+              isSaving ? 'bg-gray-300' : 'bg-primary-600 hover:bg-primary-700'
+            }`}
+          >
+            {isSaving ? <Loader2 size={16} className="animate-spin mx-auto" /> : '저장하기'}
+          </button>
+        </div>
+      )}
+
+      {/* ─── 맞춤 설정 탭 ─── */}
+      {activeTab === 'preferences' && (
+        <div className="space-y-4">
+
+          {/* 배리어프리 */}
+          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <Accessibility size={18} className="text-primary-500" />
+              접근성 맞춤 추천
+            </h2>
+            <p className="text-xs text-gray-500">이동 보조, 시청각 지원이 필요한 행사를 우선 추천해 드립니다.</p>
+
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">접근성 지원 필요</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={profile.barrierFreeType !== 'NONE'}
+                  onChange={e => {
+                    if (!e.target.checked) setProfile({ ...profile, barrierFreeType: 'NONE' })
+                    else setProfile({ ...profile, barrierFreeType: 'PHYSICAL' })
+                  }}
+                />
+                <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-primary-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all" />
+              </label>
+            </div>
+
+            {profile.barrierFreeType !== 'NONE' && (
+              <div className="space-y-2 pt-2">
+                {BARRIER_FREE_OPTIONS.map(option => (
+                  <label
+                    key={option.val}
+                    className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                      profile.barrierFreeType === option.val
+                        ? 'border-primary-400 bg-primary-50'
+                        : 'border-gray-100 hover:border-gray-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="barrierFree"
+                      className="mt-0.5 accent-primary-500"
+                      checked={profile.barrierFreeType === option.val}
+                      onChange={() => setProfile({ ...profile, barrierFreeType: option.val as BarrierFreeType })}
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{option.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{option.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 외국인 여부 */}
+          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Globe size={18} className="text-primary-500" />
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">외국인 거주자</p>
+                  <p className="text-xs text-gray-500">외국어 지원 행사를 우선 추천해 드립니다.</p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                className="w-5 h-5 accent-primary-500 rounded"
+                checked={profile.isForeigner}
+                onChange={e => setProfile({ ...profile, isForeigner: e.target.checked })}
               />
             </div>
-          </Card>
+          </div>
 
-          <Card title="계정 상태">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-green-600" />
-                  <span className="font-medium text-gray-900">계정 인증 상태</span>
-                </div>
-                <span className="text-sm text-green-600 font-medium">인증 완료</span>
-              </div>
-
-              <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <User className="w-5 h-5 text-blue-600" />
-                  <span className="font-medium text-gray-900">미성년자 여부</span>
-                </div>
-                {/* <span className={`text-sm font-medium ${
-                  auth.user?.isMinor ? 'text-orange-600' : 'text-green-600'
-                }`}>
-                  {auth.user?.isMinor ? '미성년자 (부모 인증 필요)' : '성인'}
-                </span> */}
-              </div>
-
-              <div className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-purple-600" />
-                  <span className="font-medium text-gray-900">배리어프리 우선</span>
-                </div>
-                {/* <span className={`text-sm font-medium ${
-                  auth.user?.requiresBarrierFree ? 'text-purple-600' : 'text-gray-600'
-                }`}>
-                  {auth.user?.requiresBarrierFree ? '적용됨' : '미적용'}
-                </span> */}
-              </div>
+          {/* 관심사 */}
+          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-gray-900">관심 카테고리</h2>
+              <span className="text-xs text-gray-400">{profile.interestCodes.length}/5</span>
             </div>
-          </Card>
+            <div className="grid grid-cols-2 gap-2">
+              {INTERESTS.map(interest => {
+                const selected = profile.interestCodes.includes(interest.code)
+                return (
+                  <button
+                    key={interest.code}
+                    onClick={() => toggleInterest(interest.code)}
+                    className={`flex items-center gap-2 p-3 rounded-2xl border-2 text-left transition-all ${
+                      selected
+                        ? 'border-primary-400 bg-primary-50'
+                        : 'border-gray-100 hover:border-gray-200'
+                    }`}
+                  >
+                    <span className="text-xl">{interest.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">{interest.name}</p>
+                    </div>
+                    {selected && <Check size={14} className="text-primary-500 shrink-0" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
-          <div className="flex gap-3">
-            <Button onClick={handleSaveProfile}>변경사항 저장</Button>
-            <Button variant="secondary">취소</Button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className={`w-full rounded-2xl py-3.5 text-sm font-bold text-white transition-all ${
+              isSaving ? 'bg-gray-300' : 'bg-primary-600 hover:bg-primary-700'
+            }`}
+          >
+            {isSaving ? <Loader2 size={16} className="animate-spin mx-auto" /> : '설정 저장'}
+          </button>
+        </div>
+      )}
+
+      {/* ─── 계정 관리 탭 ─── */}
+      {activeTab === 'settings' && (
+        <div className="space-y-3">
+          <div className="rounded-3xl border border-gray-100 bg-white overflow-hidden shadow-sm">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <LogOut size={18} className="text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">로그아웃</span>
+              </div>
+              <ChevronRight size={16} className="text-gray-400" />
+            </button>
+          </div>
+
+          <div className="rounded-3xl border border-red-100 bg-white overflow-hidden shadow-sm">
+            <button
+              onClick={handleWithdraw}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-red-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Trash2 size={18} className="text-red-400" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-red-600">서비스 탈퇴</p>
+                  <p className="text-xs text-red-400 mt-0.5">탈퇴 시 모든 정보가 삭제됩니다.</p>
+                </div>
+              </div>
+              <ChevronRight size={16} className="text-red-300" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* 계정 설정 탭 */}
-      {activeTab === 'settings' && (
-        <div className="max-w-2xl space-y-6">
-          <Card title="비밀번호 변경">
-            <div className="space-y-4">
-              <Input
-                label="현재 비밀번호"
-                type="password"
-                placeholder="현재 비밀번호를 입력하세요"
-              />
-              <Input
-                label="새 비밀번호"
-                type="password"
-                placeholder="새 비밀번호를 입력하세요"
-              />
-              <Input
-                label="새 비밀번호 확인"
-                type="password"
-                placeholder="새 비밀번호를 다시 입력하세요"
-              />
-              <Button>비밀번호 변경</Button>
-            </div>
-          </Card>
-
-          <Card title="계정 관리">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border border-red-200 rounded-lg bg-red-50">
-                <div>
-                  <h4 className="font-semibold text-red-900">계정 탈퇴</h4>
-                  <p className="text-sm text-red-700">탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다.</p>
-                </div>
-                <Button variant="secondary" className="border-red-300 text-red-700 hover:bg-red-100">
-                  탈퇴하기
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* 알림 설정 탭 */}
-      {activeTab === 'notifications' && (
-        <div className="max-w-2xl space-y-6">
-          <Card title="알림 설정">
-            <div className="space-y-4">
-              {[
-                { key: 'eventRecommendations', label: '행사 추천 알림', description: '관심사 기반 행사 추천을 받아보세요' },
-                { key: 'reviewReplies', label: '리뷰 답글 알림', description: '내 리뷰에 답글이 달리면 알려드려요' },
-                { key: 'groupInvites', label: '모집 초대 알림', description: '동행 모집 초대장을 받아보세요' },
-                { key: 'systemUpdates', label: '시스템 업데이트', description: '앱 업데이트 및 중요 공지를 받아보세요' },
-                { key: 'marketing', label: '마케팅 정보', description: '프로모션 및 이벤트 정보를 받아보세요' },
-              ].map(({ key, label, description }) => (
-                <div key={key} className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{label}</h4>
-                    <p className="text-sm text-gray-600">{description}</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      checked={notifications[key as keyof typeof notifications]}
-                      onChange={(e) => setNotifications({
-                        ...notifications,
-                        [key]: e.target.checked
-                      })}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                  </label>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Button onClick={handleSaveNotifications}>설정 저장</Button>
-        </div>
+      {/* 주소 검색 모달 */}
+      {showAddressModal && (
+        <AddressSearchModal
+          onSelect={result => {
+            setProfile({ ...profile, baseAddress: result.roadAddr })
+            setCoords({
+              lat: parseFloat(result.entY),
+              lng: parseFloat(result.entX),
+            })
+            setShowAddressModal(false)
+          }}
+          onClose={() => setShowAddressModal(false)}
+        />
       )}
     </div>
   )

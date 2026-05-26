@@ -39,12 +39,17 @@ public class User {
     private Boolean isForeigner = false;
 
     @CreationTimestamp
-    @Column(name = "create_at", nullable = false, updatable = false)
-    private OffsetDateTime createAt;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "update_at")
-    private OffsetDateTime updateAt;
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
+    public void updateProfile(BarrierFreeType barrierFreeType, Boolean isForeigner) {
+        if (barrierFreeType != null) this.barrierFreeType = barrierFreeType;
+        if (isForeigner != null) this.isForeigner = isForeigner;
+    }
 
     // --- Enums ---
     public enum RoleType { USER, ADMIN }

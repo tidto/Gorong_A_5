@@ -11,7 +11,7 @@ import java.util.List;
 @NoArgsConstructor
 public class SignUpRequestDto {
 
-    @NotBlank(message = "Firebase UID는 필수입니다.")
+//    @NotBlank(message = "Firebase UID는 필수입니다.")
     private String firebaseUid;
 
     @NotBlank

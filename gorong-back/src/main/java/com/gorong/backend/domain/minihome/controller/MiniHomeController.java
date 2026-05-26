@@ -1,0 +1,160 @@
+package com.gorong.backend.domain.minihome.controller;
+
+import com.gorong.backend.domain.minihome.dto.ActivityCreateRequestDto;
+import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
+import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomeEquipRequestDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomeEquipmentsSaveRequestDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomeEquipmentDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomeItemDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomePageResponseDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomeResponseDto;
+import com.gorong.backend.domain.minihome.dto.MiniHomeUpdateRequestDto;
+import com.gorong.backend.domain.minihome.service.MiniHomeService;
+import com.gorong.backend.domain.minihome.service.MiniHomeUserResolver;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/minihomes")
+@RequiredArgsConstructor
+public class MiniHomeController {
+
+    private final MiniHomeService miniHomeService;
+    private final MiniHomeUserResolver miniHomeUserResolver;
+
+    @GetMapping("/me/page")
+    public MiniHomePageResponseDto getMyMiniHomePage(Authentication authentication) {
+        log.info("[MiniHomeController] ENTER GET /api/minihomes/me/page");
+        logSecurityContext("before-resolve");
+        Long userId = resolveUserId(authentication);
+        log.info("[MiniHomeController] resolved userId={}", userId);
+        return miniHomeService.getOrCreateMiniHomePage(userId);
+    }
+
+    @PostMapping("/me")
+    public MiniHomeResponseDto createMyMiniHome(Authentication authentication) {
+        log.info("[MiniHomeController] ENTER POST /api/minihomes/me");
+        Long userId = resolveUserId(authentication);
+        return miniHomeService.createMiniHome(userId);
+    }
+
+    @GetMapping("/me/items")
+    public List<MiniHomeItemDto> getMyItems(Authentication authentication) {
+        Long userId = resolveUserId(authentication);
+        return miniHomeService.getUserItems(userId);
+    }
+
+    @GetMapping("/me/equipments")
+    public List<MiniHomeEquipmentDto> getMyEquipments(Authentication authentication) {
+        Long userId = resolveUserId(authentication);
+        return miniHomeService.getEquipments(userId);
+    }
+
+    @PutMapping("/me/equipments")
+    public ResponseEntity<Void> saveMyEquipments(
+            Authentication authentication,
+            @Valid @RequestBody MiniHomeEquipmentsSaveRequestDto req
+    ) {
+        Long userId = resolveUserId(authentication);
+        miniHomeService.saveEquipments(userId, req.resolveSlotEquips());
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{userId}")
+    public MiniHomeResponseDto getMiniHome(@PathVariable Long userId) {
+        return miniHomeService.getMiniHome(userId);
+    }
+
+    @PostMapping("/{userId}")
+    public MiniHomeResponseDto createMiniHome(@PathVariable Long userId) {
+        return miniHomeService.createMiniHome(userId);
+    }
+
+    @PatchMapping("/{userId}")
+    public MiniHomeResponseDto updateMiniHome(@PathVariable Long userId, @RequestBody MiniHomeUpdateRequestDto req) {
+        return miniHomeService.updateMiniHome(userId, req);
+    }
+
+    @GetMapping("/{userId}/page")
+    public MiniHomePageResponseDto getMiniHomePage(@PathVariable Long userId) {
+        return miniHomeService.getMiniHomePage(userId);
+    }
+
+    @PostMapping("/{userId}/activities")
+    public MiniHomePageResponseDto.ActivityDto createActivity(@PathVariable Long userId, @Valid @RequestBody ActivityCreateRequestDto req) {
+        return miniHomeService.createActivity(userId, req);
+    }
+
+    @PostMapping("/{userId}/galleries")
+    public MiniHomePageResponseDto.GalleryDto createGallery(@PathVariable Long userId, @Valid @RequestBody GalleryCreateRequestDto req) {
+        return miniHomeService.createGallery(userId, req);
+    }
+
+    @PostMapping("/galleries/{galleryId}/images")
+    public MiniHomePageResponseDto.GalleryImageDto addGalleryImage(@PathVariable Long galleryId, @Valid @RequestBody GalleryImageCreateRequestDto req) {
+        return miniHomeService.addGalleryImage(galleryId, req);
+    }
+
+    @GetMapping("/{userId}/items")
+    public List<MiniHomeItemDto> getUserItems(@PathVariable Long userId) {
+        return miniHomeService.getUserItems(userId);
+    }
+
+    @GetMapping("/{userId}/equipments")
+    public List<MiniHomeEquipmentDto> getEquipments(@PathVariable Long userId) {
+        return miniHomeService.getEquipments(userId);
+    }
+
+    @PutMapping("/{userId}/equipments")
+    public ResponseEntity<Void> saveEquipments(
+            @PathVariable Long userId,
+            @Valid @RequestBody MiniHomeEquipmentsSaveRequestDto req
+    ) {
+        miniHomeService.saveEquipments(userId, req.resolveSlotEquips());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{userId}/equip")
+    public MiniHomeEquipmentDto equip(@PathVariable Long userId, @Valid @RequestBody MiniHomeEquipRequestDto req) {
+        return miniHomeService.equip(userId, req);
+    }
+
+    @DeleteMapping("/{userId}/equip/{slotType}")
+    public ResponseEntity<Void> unequip(@PathVariable Long userId, @PathVariable String slotType) {
+        miniHomeService.unequip(userId, slotType);
+        return ResponseEntity.noContent().build();
+    }
+
+    private Long resolveUserId(Authentication authentication) {
+        return miniHomeUserResolver.resolveUserId(authentication);
+    }
+
+    private void logSecurityContext(String phase) {
+        Authentication ctx = SecurityContextHolder.getContext().getAuthentication();
+        log.info(
+                "[MiniHomeController] SecurityContext({}) authenticated={} principalType={}",
+                phase,
+                ctx != null && ctx.isAuthenticated(),
+                ctx != null && ctx.getPrincipal() != null
+                        ? ctx.getPrincipal().getClass().getSimpleName()
+                        : "null"
+        );
+    }
+}

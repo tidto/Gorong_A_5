@@ -35,8 +35,6 @@ export default function Login() {
       if (result.isRegistered && result.user) {
         authContext.setUser(result.user ?? null)
         toast(`${result.user.nickname}님, 환영합니다!`, 'success')
-        // 이전 경로가 있으면 그곳으로, 없으면 홈('/')으로
-        const from = (location.state as any)?.from?.pathname ?? '/'
 
         // 로그인 성공 시 navigate 부분만 모두 이걸로 교체
         navigate(from, { replace: true })
@@ -69,20 +67,19 @@ export default function Login() {
     setIsLoading(true)
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      const idToken = await userCredential.user.getIdToken()
-      const result = await checkUserStatus(idToken)
-
+    
       if (!userCredential.user.emailVerified) {
         await sendEmailVerification(userCredential.user)
         toast('이메일 인증이 필요합니다. 받은 편지함을 확인하고 링크를 클릭한 뒤 다시 로그인해 주세요.', 'success')
         setIsLoading(false)
         return
       }
+      const idToken = await userCredential.user.getIdToken()
+      const result = await checkUserStatus(idToken)
 
       if (result.isRegistered && result.user) {
         authContext.setUser(result.user ?? null)
         toast(`${result.user.nickname}님, 환영합니다!`, 'success')
-        const from  = (location.state as any)?.from?.pathname ?? '/'
         navigate(from, { replace: true })
       } else {
         navigate('/signup', {

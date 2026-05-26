@@ -1,13 +1,32 @@
 import { useState } from 'react'
-import { X, MapPin, Search, ChevronRight } from 'lucide-react'
+import { X, MapPin, Search, ChevronRight, Loader2 } from 'lucide-react'
 import axiosInstance from '../api/axiosInstance'
+import axios from 'axios'
+
+// juso API는 인증 불필요(permitAll) — 토큰을 붙이지 않는 별도 인스턴스
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+const publicAxios = axios.create({ baseURL: API_BASE })
 
 export interface AddressResult {
   roadAddr: string
   jibunAddr: string
   zipNo: string
+  entX: string  // 최종적으로 WGS84 경도(lng)
+  entY: string  // 최종적으로 WGS84 위도(lat)
+}
+
+interface RawJusoItem {
+  roadAddr: string
+  jibunAddr: string
+  zipNo: string
   entX: string
   entY: string
+  admCd: string     
+  rnMgtSn: string   
+  udrtYn: string     
+  buldMnnm: string  
+  buldSlno: string   
+  [key: string]: string
 }
 
 interface Props {
@@ -17,9 +36,10 @@ interface Props {
 
 export default function AddressSearchModal({ onSelect, onClose }: Props) {
   const [keyword, setKeyword] = useState('')
-  const [results, setResults] = useState<AddressResult[]>([])
+  const [results, setResults] = useState<RawJusoItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [converting, setConverting] = useState<number | null>(null)
 
   const search = async () => {
     if (!keyword.trim()) return
@@ -34,6 +54,43 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
       setResults([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSelect = async (addr: RawJusoItem, index: number) => {
+    setConverting(index)
+    try {
+      const coordRes = await publicAxios.get('/v1/juso/coord', {
+        params: { 
+                admCd: addr.admCd,
+                rnMgtSn: addr.rnMgtSn,
+                udrtYn: addr.udrtYn,
+                buldMnnm: addr.buldMnnm,
+                buldSlno: addr.buldSlno,
+              }
+      })
+      const { lat, lng } = coordRes.data
+      console.log('좌표 변환 성공 - lat:', lat, 'lng:', lng)
+
+      onSelect({
+        roadAddr: addr.roadAddr,
+        jibunAddr: addr.jibunAddr,
+        zipNo: addr.zipNo,
+        entX: String(lng ?? 0),  // 경도
+        entY: String(lat ?? 0),  // 위도
+      })
+    } catch (error) {
+      console.error('좌표 변환 실패:', error)
+      // 좌표 실패해도 주소는 저장 (좌표는 null로)
+      onSelect({
+        roadAddr: addr.roadAddr,
+        jibunAddr: addr.jibunAddr,
+        zipNo: addr.zipNo,
+        entX: '0',
+        entY: '0',
+      })
+    } finally {
+      setConverting(null)
     }
   }
 
@@ -102,29 +159,19 @@ export default function AddressSearchModal({ onSelect, onClose }: Props) {
             <button
               key={i}
               type="button"
-              onClick={async () => {
-                try {
-                  const coordRes = await axiosInstance.get('/v1/juso/coord', {
-                    params: { roadAddr: addr.roadAddr }
-                  })
-                  const coordData = coordRes.data?.results?.juso?.[0]
-                  onSelect({
-                    ...addr,
-                    entX: coordData?.entX ?? '0',
-                    entY: coordData?.entY ?? '0',
-                  })
-                } catch {
-                  onSelect({ ...addr, entX: '0', entY: '0' })
-                }
-              }}
-              className="flex w-full items-center gap-3 border-b border-gray-50 px-5 py-3.5 text-left hover:bg-primary-50 transition last:border-b-0"
+              disabled={converting !== null}
+              onClick={() => handleSelect(addr, i)}
+              className="flex w-full items-center gap-3 border-b border-gray-50 px-5 py-3.5 text-left hover:bg-primary-50 transition last:border-b-0 disabled:opacity-50"
             >
               <MapPin size={15} className="shrink-0 text-primary-400" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{addr.roadAddr}</p>
                 <p className="text-xs text-gray-400 truncate">{addr.jibunAddr}</p>
               </div>
-              <ChevronRight size={15} className="shrink-0 text-gray-300" />
+              {converting === i
+                ? <Loader2 size={15} className="shrink-0 text-primary-400 animate-spin" />
+                : <ChevronRight size={15} className="shrink-0 text-gray-300" />
+              }
             </button>
           ))}
         </div>

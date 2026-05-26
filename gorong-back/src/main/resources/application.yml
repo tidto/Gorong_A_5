@@ -1,25 +1,31 @@
 spring:
   datasource:
-    url: jdbc:postgresql://gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com:5432/gorong_db?currentSchema=gorong_schema
+    url: jdbc:postgresql://gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com:5432/gorong_db?currentSchema=gorong_schema&option=-c%20search_path%3Dgorong_schema%2Cpublic
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update # 처음 테이블 생성 시에는 update 또는 create
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: gorong_schema
 
-tourapi:
-  key: ${TOUR_API_KEY}
+tour:
+  api:
+    service-key: ${TOUR_API_KEY}
+    base-url: https://apis.data.go.kr/B551011/KorService1
 
 juso:
   api:
     key: ${JUSO_API_KEY}
   coord:
     key: ${JUSO_COORD_API_KEY}
+
+gemini:
+  api:
+    key: ${GEMINI_API_KEY}
+    model: ${GEMINI_MODEL:gemini-1.5-flash}

@@ -1,27 +1,74 @@
-import firestore from '@react-native-firebase/firestore';
+import {
+  collection, addDoc, query, orderBy,
+  limitToLast, onSnapshot, doc, setDoc, deleteDoc
+} from 'firebase/firestore'
+import { db } from '../config/firebaseConfig'
+import { ChatMessage } from '../types'
 
-// 지오펜스 익명 채팅방 (venueId 기준)
-export function getAnonymousChatRef(venueId: string) {
-  return firestore().collection('anonymous_chats').doc(venueId).collection('messages');
+// ─── 익명 채팅 (지오펜스 기반)
+export const sendAnonymousMessage = (
+  venueId: string,
+  msg: Omit<ChatMessage, 'id'>
+) =>
+  addDoc(collection(db, 'anonymous_chats', venueId, 'messages'), msg)
+
+export const subscribeAnonymousChat = (
+  venueId: string,
+  callback: (msgs: ChatMessage[]) => void
+) => {
+  const q = query(
+    collection(db, 'anonymous_chats', venueId, 'messages'),
+    orderBy('createdAt', 'asc'),
+    limitToLast(50)
+  )
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)))
+  })
 }
 
-// 모임 채팅방 (웹에서 생성된 모임 ID 기준)
-export function getGroupChatRef(groupId: string) {
-  return firestore().collection('group_chats').doc(groupId).collection('messages');
+// ─── 모임 채팅
+export const sendGroupMessage = (
+  groupId: string,
+  msg: Omit<ChatMessage, 'id'>
+) =>
+  addDoc(collection(db, 'group_chats', groupId, 'messages'), msg)
+
+export const subscribeGroupChat = (
+  groupId: string,
+  callback: (msgs: ChatMessage[]) => void
+) => {
+  const q = query(
+    collection(db, 'group_chats', groupId, 'messages'),
+    orderBy('createdAt', 'asc'),
+    limitToLast(50)
+  )
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)))
+  })
 }
 
-export async function sendMessage(chatRef: any, userId: string, text: string, isAnonymous = true) {
-  await chatRef.add({
-    text,
-    senderId: isAnonymous ? 'anonymous_' + userId.slice(0, 6) : userId,
-    createdAt: firestore.FieldValue.serverTimestamp(),
-  });
+// ─── 위치 공유 (버튼 누를 때만 5초간)
+export const shareLocation = async (
+  groupId: string,
+  userId: string,
+  lat: number,
+  lng: number
+) => {
+  const ref = doc(db, 'group_locations', groupId, 'members', userId)
+  await setDoc(ref, { lat, lng, sharedAt: Date.now(), expires: Date.now() + 5000 })
+  setTimeout(() => deleteDoc(ref), 5000)
 }
 
-// 위치 공유 (버튼 눌렀을 때만, 30초 유지)
-export async function shareLocation(groupId: string, userId: string, lat: number, lng: number) {
-  const expiresAt = new Date(Date.now() + 30000); // 30초 후 만료
-  await firestore().collection('group_locations').doc(groupId)
-    .collection('members').doc(userId)
-    .set({ lat, lng, expiresAt, updatedAt: firestore.FieldValue.serverTimestamp() });
-}
+export const subscribeGroupLocations = (
+  groupId: string,
+  callback: (locs: Record<string, { lat: number; lng: number }>) => void
+) =>
+  onSnapshot(collection(db, 'group_locations', groupId, 'members'), snap => {
+    const now = Date.now()
+    const locs: Record<string, { lat: number; lng: number }> = {}
+    snap.docs.forEach(d => {
+      const data = d.data()
+      if (data.expires > now) locs[d.id] = { lat: data.lat, lng: data.lng }
+    })
+    callback(locs)
+  })

@@ -38,6 +38,7 @@ interface LoginResponse {
   user?: {
     nickname: string;
     email: string;
+    roleType?: 'USER' | 'ADMIN';
   };
 }
 
