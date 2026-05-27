@@ -100,6 +100,17 @@ body.hide-header header {
   }
 }
 
+/* Go냥이 Rive — canvas 노란/회색 아트보드 배경 숨김 */
+.rive-cat-player,
+.rive-cat-player canvas,
+.riveLayer,
+.riveLayer canvas,
+.riveLayer__canvas,
+.riveLayer__canvas canvas {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 /* 반응형 개선 */
 @media (max-width: 640px) {
   .card {

@@ -1,42 +1,123 @@
 import axiosInstance from "../axiosInstance";
-import type { ActivityItem, GalleryImageItem, GalleryItem, MiniHome, MiniHomePage } from "../../types/minihome/minihome";
+import type {
+  ActivityItem,
+  GalleryImageItem,
+  GalleryItem,
+  GoCat,
+  MiniHome,
+  MiniHomePage,
+} from "../../types/minihome/minihome";
 import { getAuth } from "firebase/auth";
 
-async function getFirebaseIdTokenOrThrow(): Promise<string> {
-  const user = getAuth().currentUser;
-  if (!user || typeof (user as { getIdToken?: () => Promise<string> }).getIdToken !== "function") {
-    throw new Error("AUTH_REQUIRED");
-  }
-  return user.getIdToken();
-}
+async function requireAuthUser() {
+  const auth = getAuth();
+  if (auth.currentUser?.getIdToken) return auth.currentUser;
 
-function authHeaders(token: string) {
-  return { headers: { Authorization: `Bearer ${token}` } };
+  const user = await new Promise<typeof auth.currentUser>((resolve, reject) => {
+    const unsub = auth.onAuthStateChanged((u) => {
+      if (u) {
+        unsub();
+        resolve(u);
+      }
+    });
+    window.setTimeout(() => {
+      unsub();
+      if (auth.currentUser) resolve(auth.currentUser);
+      else reject(new Error("AUTH_REQUIRED"));
+    }, 3000);
+  });
+
+  if (!user?.getIdToken) throw new Error("AUTH_REQUIRED");
+  return user;
 }
 
 /** 로그인 사용자 — 없으면 자동 생성 후 페이지 반환 */
 export async function getMyMiniHomePage(): Promise<MiniHomePage> {
-  const token = await getFirebaseIdTokenOrThrow();
-  console.info('[MiniHome API] getMyMiniHomePage token length=', token.length);
-  const res = await axiosInstance.get(`/minihomes/me/page`, authHeaders(token));
+  await requireAuthUser();
+  const res = await axiosInstance.get(`/minihomes/me/page`);
   return res.data;
 }
 
 export async function getMiniHomePage(userId: number): Promise<MiniHomePage> {
-  const token = await getFirebaseIdTokenOrThrow();
-  const res = await axiosInstance.get(`/minihomes/${userId}/page`, authHeaders(token));
+  await requireAuthUser();
+  const res = await axiosInstance.get(`/minihomes/${userId}/page`);
   return res.data;
 }
 
-export async function createMyMiniHome(): Promise<MiniHome> {
-  const token = await getFirebaseIdTokenOrThrow();
-  const res = await axiosInstance.post(`/minihomes/me`, undefined, authHeaders(token));
+export type CatAppearancePayload = {
+  bodyType?: string;
+  pattern?: string;
+  color?: string;
+  catName?: string;
+  roomBackground?: string;
+  headItemCode?: string;
+  accessoryItemCode?: string;
+};
+
+/**
+ * Go냥이 외형 저장 — 단일 엔드포인트
+ * PATCH /api/minihomes/me/cat/appearance
+ */
+export async function updateMyCatAppearance(payload: CatAppearancePayload): Promise<GoCat> {
+  const user = await requireAuthUser();
+  await user.getIdToken(true);
+
+  const path = `/minihomes/me/cat/appearance`;
+
+  const attempt = async (method: "patch" | "put" | "post") => {
+    if (method === "patch") return axiosInstance.patch(path, payload);
+    if (method === "put") return axiosInstance.put(path, payload);
+    return axiosInstance.post(path, payload);
+  };
+
+  const methods: Array<"patch" | "put" | "post"> = ["patch", "put", "post"];
+  let lastError: unknown;
+
+  for (const method of methods) {
+    try {
+      const res = await attempt(method);
+      return res.data as GoCat;
+    } catch (e: unknown) {
+      lastError = e;
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 405 || status === 404) continue;
+      throw e;
+    }
+  }
+
+  try {
+    const res = await axiosInstance.post(`/minihomes/me`, payload);
+    const mini = res.data as MiniHome;
+    if (mini?.cat) return mini.cat;
+  } catch {
+    /* fall through */
+  }
+
+  throw lastError;
+}
+
+export type GoCatSetupPayload = {
+  bodyType: string;
+  pattern: string;
+  color: string;
+  catName?: string;
+};
+
+/** 미니홈·Go냥이 최초 생성 (고냥이 없을 때만) */
+export async function createMyMiniHome(payload?: GoCatSetupPayload): Promise<MiniHome> {
+  await requireAuthUser();
+  const res = await axiosInstance.post(`/minihomes/me`, payload ?? undefined);
   return res.data;
+}
+
+/** 최초 외형 설정 완료 — PATCH /me/cat/appearance */
+export async function completeMyCatSetup(payload: GoCatSetupPayload): Promise<GoCat> {
+  return updateMyCatAppearance(payload);
 }
 
 export async function createMiniHome(userId: number): Promise<MiniHome> {
-  const token = await getFirebaseIdTokenOrThrow();
-  const res = await axiosInstance.post(`/minihomes/${userId}`, undefined, authHeaders(token));
+  await requireAuthUser();
+  const res = await axiosInstance.post(`/minihomes/${userId}`, undefined);
   return res.data;
 }
 
@@ -50,8 +131,8 @@ export async function createActivity(
     description?: string;
   }
 ): Promise<ActivityItem> {
-  const token = await getFirebaseIdTokenOrThrow();
-  const res = await axiosInstance.post(`/minihomes/${userId}/activities`, payload, authHeaders(token));
+  await requireAuthUser();
+  const res = await axiosInstance.post(`/minihomes/${userId}/activities`, payload);
   return res.data;
 }
 
@@ -64,8 +145,8 @@ export async function createGallery(
   userId: number,
   payload: { title: string; description?: string }
 ): Promise<GalleryItem> {
-  const token = await getFirebaseIdTokenOrThrow();
-  const res = await axiosInstance.post(`/minihomes/${userId}/galleries`, payload, authHeaders(token));
+  await requireAuthUser();
+  const res = await axiosInstance.post(`/minihomes/${userId}/galleries`, payload);
   return res.data;
 }
 
@@ -89,12 +170,8 @@ export async function addGalleryImage(
   galleryId: number,
   payload: { imageUrl: string; locationName?: string; takenAt?: string }
 ): Promise<GalleryImageItem> {
-  const token = await getFirebaseIdTokenOrThrow();
-  const res = await axiosInstance.post(
-    `/minihomes/galleries/${galleryId}/images`,
-    payload,
-    authHeaders(token)
-  );
+  await requireAuthUser();
+  const res = await axiosInstance.post(`/minihomes/galleries/${galleryId}/images`, payload);
   return res.data;
 }
 

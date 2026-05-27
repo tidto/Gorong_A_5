@@ -3,7 +3,7 @@ import type { Equipment } from "../../types/minihome/item";
 import type { GrowthState } from "../../utils/minihome/growth";
 import GoCatVisual from "./GoCatVisual";
 import GrowthProgress from "./GrowthProgress";
-import { equipPreviewFromEquipBySlot } from "../../utils/minihome/items";
+import { equipPreviewFromEquipBySlot, resolveEquipSlotLabel } from "../../utils/minihome/items";
 
 type SlotType = "HEAD" | "BODY" | "ACCESSORY";
 
@@ -13,8 +13,9 @@ export default function GoCatCard(props: {
   isPublic: boolean;
   equipBySlot: Record<SlotType, Equipment | null>;
   onOpenDecoration: () => void;
+  canDecorate?: boolean;
 }) {
-  const { catName, growth, isPublic, equipBySlot, onOpenDecoration } = props;
+  const { catName, growth, isPublic, equipBySlot, onOpenDecoration, canDecorate = true } = props;
 
   return (
     <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -32,25 +33,28 @@ export default function GoCatCard(props: {
         <GrowthProgress growth={growth} tone="card" compact />
 
         <div className="grid grid-cols-1 gap-1 text-xs text-slate-600">
-          <div>머리: {equipBySlot.HEAD?.itemName ?? "-"}</div>
-          <div>몸: {equipBySlot.BODY?.itemName ?? "-"}</div>
-          <div>액세서리: {equipBySlot.ACCESSORY?.itemName ?? "-"}</div>
+          <div>머리: {resolveEquipSlotLabel("HEAD", equipBySlot)}</div>
+          <div>액세서리: {resolveEquipSlotLabel("ACCESSORY", equipBySlot)}</div>
         </div>
 
-        <button
-          type="button"
-          onClick={onOpenDecoration}
-          className="inline-flex items-center gap-2 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-extrabold text-orange-800 hover:bg-orange-100"
-        >
-          <Shirt className="h-4 w-4" />
-          꾸미기
-        </button>
+        {canDecorate ? (
+          <button
+            type="button"
+            onClick={onOpenDecoration}
+            className="inline-flex items-center gap-2 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-extrabold text-orange-800 hover:bg-orange-100"
+          >
+            <Shirt className="h-4 w-4" />
+            꾸미기
+          </button>
+        ) : null}
       </div>
 
       <div className="flex shrink-0 justify-center sm:justify-end">
         <GoCatVisual
           stage={growth.stage}
           equipped={equipPreviewFromEquipBySlot(equipBySlot)}
+          activityCount={growth.activityCount}
+          interactive
         />
       </div>
     </div>

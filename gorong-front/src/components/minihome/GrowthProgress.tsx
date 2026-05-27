@@ -2,8 +2,8 @@ import type { GrowthState } from "../../utils/minihome/growth";
 
 type GrowthProgressProps = {
   growth: GrowthState;
-  /** hero: 미니홈 상단 그라데이션 / card: 흰·오렌지 카드 */
-  tone?: "hero" | "card";
+  /** hero: 미니홈 상단 / card: 기본 / minimal: CatTower 등 슬림 */
+  tone?: "hero" | "card" | "minimal";
   compact?: boolean;
 };
 
@@ -13,6 +13,31 @@ export default function GrowthProgress({
   compact = false,
 }: GrowthProgressProps) {
   const isHero = tone === "hero";
+  const isMinimal = tone === "minimal";
+
+  if (isMinimal) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-extrabold text-slate-900">
+          {growth.stage} · {growth.stageLabel}
+        </p>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-orange-100">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-orange-400 to-amber-400 transition-all duration-500"
+            style={{ width: `${growth.progressPercent}%` }}
+          />
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+          <span>참여 활동 {growth.activityCount}회</span>
+          {growth.isMax ? (
+            <span className="font-semibold text-orange-700">최고 단계 달성</span>
+          ) : (
+            <span className="font-semibold text-slate-700">다음 단계까지 {growth.xpToNext}회</span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
@@ -62,12 +87,12 @@ export default function GrowthProgress({
           isHero ? "text-white/85" : "text-slate-600"
         }`}
       >
-        <span>활동 {growth.activityCount}회</span>
-        <span>경험치 {growth.experience}</span>
+        <span>참여 활동 {growth.activityCount}회</span>
+        {growth.experience > 0 ? <span>누적 온도 {growth.experience}</span> : null}
         {growth.isMax ? (
-          <span className="font-semibold">100%</span>
+          <span className="font-semibold">최고 단계 · 100%</span>
         ) : (
-          <span className="font-semibold">다음 단계까지 활동 {growth.xpToNext}회</span>
+          <span className="font-semibold">다음 단계까지 {growth.xpToNext}회</span>
         )}
       </div>
     </div>

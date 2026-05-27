@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import type { ActivityItem } from "../../types/minihome/minihome";
 import {
   formatActivityDate,
@@ -11,6 +12,8 @@ export type ActivityHistoryProps = {
   limit?: number;
   variant?: "preview" | "full";
   emptyMessage?: string;
+  getActivityLink?: (activity: ActivityItem) => string | null;
+  activityLinkLabel?: string;
 };
 
 function ActivityEmpty({ message }: { message: string }) {
@@ -23,8 +26,19 @@ function ActivityEmpty({ message }: { message: string }) {
   );
 }
 
-function ActivityRow({ activity, compact }: { activity: ActivityItem; compact?: boolean }) {
+function ActivityRow({
+  activity,
+  compact,
+  getActivityLink,
+  activityLinkLabel = "글 보기",
+}: {
+  activity: ActivityItem;
+  compact?: boolean;
+  getActivityLink?: (activity: ActivityItem) => string | null;
+  activityLinkLabel?: string;
+}) {
   const label = activity.title?.trim() || formatActivityType(activity.activityType);
+  const activityLink = getActivityLink?.(activity) ?? null;
 
   return (
     <div
@@ -45,6 +59,14 @@ function ActivityRow({ activity, compact }: { activity: ActivityItem; compact?: 
         {!compact && activity.referenceId != null ? (
           <div className="text-xs text-slate-500">참조 ID: {activity.referenceId}</div>
         ) : null}
+        {!compact && activityLink ? (
+          <Link
+            to={activityLink}
+            className="mt-2 inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-bold text-orange-700 transition hover:bg-orange-100"
+          >
+            {activityLinkLabel}
+          </Link>
+        ) : null}
       </div>
       <div className="shrink-0 text-xs text-slate-500">{formatActivityDate(activity.createAt)}</div>
     </div>
@@ -56,6 +78,8 @@ export default function ActivityHistory({
   limit,
   variant = "preview",
   emptyMessage = "활동 기록이 없습니다.",
+  getActivityLink,
+  activityLinkLabel,
 }: ActivityHistoryProps) {
   const visible = useMemo(
     () => getRecentActivities(activities ?? [], limit),
@@ -70,7 +94,12 @@ export default function ActivityHistory({
     return (
       <div className="divide-y divide-orange-100 overflow-hidden rounded-2xl border border-orange-100">
         {visible.map((a) => (
-          <ActivityRow key={a.activityId} activity={a} />
+          <ActivityRow
+            key={a.activityId}
+            activity={a}
+            getActivityLink={getActivityLink}
+            activityLinkLabel={activityLinkLabel}
+          />
         ))}
       </div>
     );
