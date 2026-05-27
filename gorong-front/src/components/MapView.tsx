@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+declare global {
+    interface Window {
+        kakao: any;
+    }
+}
 
 interface MapEvent {
     title: string;
@@ -14,9 +20,10 @@ interface MapViewProps {
     data: MapEvent[];
     onDetailClick: (id: string) => void;
     userLocation?: { lat: number; lng: number } | null;
+    mapCenter?: { lat: number; lng: number } | null;
 }
 
-export default function MapView({ data, onDetailClick, userLocation }: MapViewProps) {
+export default function MapView({ data, onDetailClick, userLocation, mapCenter }: MapViewProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
     const markersRef = useRef<any[]>([]);
@@ -28,6 +35,15 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
     const YJU_LNG = 128.6224266;
 
     const DEFAULT_IMAGE = '/images/default-event.png';
+
+    const removeOverflowHidden = () => {
+        if (!mapContainer.current) return;
+        mapContainer.current.querySelectorAll<HTMLElement>('div').forEach(div => {
+            if (div.style.overflow === 'hidden') {
+                div.style.overflow = 'visible';
+            }
+        });
+    };
 
     const renderMarkers = (map: any) => {
         markersRef.current.forEach(m => m.setMap(null));
@@ -107,11 +123,16 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
                 if (activeOverlay.current) activeOverlay.current.setMap(null);
                 overlay.setMap(map);
                 activeOverlay.current = overlay;
-                map.panTo(position);
 
-                const btn = content.querySelector(`#btn-detail-${id}`);
+                const proj = map.getProjection();
+                const point = proj.pointFromCoords(position);
+                point.y -= 140;
+                map.panTo(proj.coordsFromPoint(point));
+                setTimeout(removeOverflowHidden, 350);
+
+                const btn = content.querySelector<HTMLButtonElement>(`#btn-detail-${id}`);
                 if (btn) {
-                    btn.onclick = (e) => {
+                    btn.onclick = (e: MouseEvent) => {
                         e.stopPropagation();
                         onDetailClick(id);
                     };
@@ -127,6 +148,7 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
         });
 
         setMarkerCount(count);
+        removeOverflowHidden();
     };
 
     const renderUserMarker = (map: any, lat: number, lng: number) => {
@@ -139,12 +161,12 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
         userMarkerRef.current = overlay;
     };
 
-    const initMap = (lat: number, lng: number) => {
+    const initMap = (centerLat: number, centerLng: number, userLat?: number, userLng?: number) => {
         window.kakao.maps.load(() => {
             if (!mapContainer.current) return;
-            const isDefault = (lat === YJU_LAT && lng === YJU_LNG);
+            const isDefault = (centerLat === YJU_LAT && centerLng === YJU_LNG);
             const initialLevel = isDefault ? 9 : 4;
-            const centerPosition = new window.kakao.maps.LatLng(lat, lng);
+            const centerPosition = new window.kakao.maps.LatLng(centerLat, centerLng);
 
             if (!mapRef.current) {
                 mapRef.current = new window.kakao.maps.Map(mapContainer.current, {
@@ -157,16 +179,27 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
             }
 
             renderMarkers(mapRef.current);
-            renderUserMarker(mapRef.current, lat, lng);
+            if (userLat !== undefined && userLng !== undefined) {
+                renderUserMarker(mapRef.current, userLat, userLng);
+            } else if (userMarkerRef.current) {
+                userMarkerRef.current.setMap(null);
+                userMarkerRef.current = null;
+            }
+            removeOverflowHidden();
         });
     };
 
     useEffect(() => {
-        const isUserLocationValid = userLocation && userLocation.lat !== 0 && userLocation.lng !== 0;
-        const centerLat = isUserLocationValid ? userLocation!.lat : YJU_LAT;
-        const centerLng = isUserLocationValid ? userLocation!.lng : YJU_LNG;
+        const center = mapCenter ?? userLocation;
+        const isCenterValid = center && center.lat !== 0 && center.lng !== 0;
+        const centerLat = isCenterValid ? center!.lat : YJU_LAT;
+        const centerLng = isCenterValid ? center!.lng : YJU_LNG;
 
-        const runInit = () => initMap(centerLat, centerLng);
+        const isUserLocationValid = userLocation && userLocation.lat !== 0 && userLocation.lng !== 0;
+        const userLat = isUserLocationValid ? userLocation!.lat : undefined;
+        const userLng = isUserLocationValid ? userLocation!.lng : undefined;
+
+        const runInit = () => initMap(centerLat, centerLng, userLat, userLng);
 
         if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
             runInit();
@@ -182,7 +215,7 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
             }
             script.onload = () => window.kakao.maps.load(runInit);
         }
-    }, [data, userLocation]);
+    }, [data, userLocation, mapCenter]);
 
     // ★ [정밀 수정] 크기 변경 감지 루프 내 이중 렌더링 스케줄러(Timeout + rAF) 도입
     useEffect(() => {
@@ -200,12 +233,14 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
                     if (mapRef.current) {
                         mapRef.current.relayout();
 
-                        const isUserLocationValid = userLocation && userLocation.lat !== 0 && userLocation.lng !== 0;
-                        const centerLat = isUserLocationValid ? userLocation!.lat : YJU_LAT;
-                        const centerLng = isUserLocationValid ? userLocation!.lng : YJU_LNG;
+                        const center = mapCenter ?? userLocation;
+                        const isCenterValid = center && center.lat !== 0 && center.lng !== 0;
+                        const centerLat = isCenterValid ? center!.lat : YJU_LAT;
+                        const centerLng = isCenterValid ? center!.lng : YJU_LNG;
 
                         const centerPosition = new window.kakao.maps.LatLng(centerLat, centerLng);
                         mapRef.current.setCenter(centerPosition);
+                        removeOverflowHidden();
                     }
                 });
             }, 200); // 200ms 여유를 주어 레이아웃이 최종 확정된 후 중앙 정렬 처리
@@ -217,11 +252,11 @@ export default function MapView({ data, onDetailClick, userLocation }: MapViewPr
             resizeObserver.disconnect();
             if (timeoutId) clearTimeout(timeoutId);
         };
-    }, [userLocation]);
+    }, [userLocation, mapCenter]);
 
     return (
-        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-            <div ref={mapContainer} style={{ width: '100%', height: '100%', minHeight: '500px' }} />
+        <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'visible' }}>
+            <div ref={mapContainer} style={{ width: '100%', height: '100%', minHeight: '100%', overflow: 'visible' }} />
             {markerCount > 0 && (
                 <div style={{
                     position: 'absolute', bottom: 12, left: 12, zIndex: 10,
