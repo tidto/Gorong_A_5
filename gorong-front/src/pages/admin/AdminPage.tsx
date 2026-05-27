@@ -180,7 +180,7 @@ export default function AdminPage() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-lg font-bold tracking-tight text-white">?쒖옱 愿由?/h1>
+                <h1 className="text-lg font-bold tracking-tight text-white">제재 관리</h1>
                 <p className="text-xs text-zinc-500">Admin Moderation Console</p>
               </div>
             </div>
@@ -310,13 +310,13 @@ export default function AdminPage() {
                   {selectedReport ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-zinc-500">?좉퀬 #{selectedReport.reportId}</span>
-                      <span className="text-xs text-zinc-400">??/span>
+                      <span className="text-xs text-zinc-400">→</span>
                       <span className="text-sm font-medium text-white">
                         {selectedReport.reportedUserNickname || selectedReport.reportedUserEmail}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-xs text-zinc-600">???쒖뿉???좉퀬 ??ぉ???좏깮?섏꽭??/span>
+                    <span className="text-xs text-zinc-600">위 표에서 신고 항목을 선택하세요.</span>
                   )}
                 </div>
               </div>
@@ -419,7 +419,7 @@ export default function AdminPage() {
                         {b.banDays === 0 ? (
                           <span className="font-mono text-xs font-bold text-red-400">?곴뎄</span>
                         ) : (
-                          <span className="font-mono text-xs text-zinc-300">{b.banDays}??/span>
+                          <span className="font-mono text-xs text-zinc-300">{b.banDays}일</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs text-zinc-400 max-w-[180px] truncate">{b.banReason}</td>
