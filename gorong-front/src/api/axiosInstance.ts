@@ -2,9 +2,10 @@ import axios from 'axios';
 import { signOut } from 'firebase/auth'
 import { auth } from '../firebase/firebaseConfig'; 
 import { navigateTo } from '../utils/navigationHelper'
+import { API_BASE_URL } from '../config/env';
 
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: API_BASE_URL,
 });
 
 // request 인터셉터 (토큰 추가) - 현재 유저 정보를 가져옵니다.
@@ -27,14 +28,21 @@ axiosInstance.interceptors.response.use(
     const status = error.response?.status
     const isBanBlocked = status === 403 && error.response?.data?.message === '계정 이용이 제한되었습니다.'
 
+    const url = String(error.config?.url ?? '')
+    const isMiniHomeApi = url.includes('/minihomes')
+
     if (status === 401) {
       await signOut(auth)
       localStorage.removeItem('gorong-db-user')
       localStorage.removeItem('gorong-firebase-uid')
       navigateTo('/login')
-    } else if (status === 403 && !isBanBlocked) navigateTo('/error/403')
-    else if (status === 404) navigateTo('/error/404')
-    else if (status === 500) navigateTo('/error/500')
+    } else if (status === 403 && !isBanBlocked && !isMiniHomeApi) {
+      navigateTo('/error/403')
+    } else if (status === 404 && !isMiniHomeApi) {
+      navigateTo('/error/404')
+    } else if (status === 500 && !isMiniHomeApi) {
+      navigateTo('/error/500')
+    }
 
     return Promise.reject(error)
   }

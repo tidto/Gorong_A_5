@@ -4,7 +4,10 @@ export type GoCat = {
   userId: number;
   catName: string;
   characterType: string;
-  appearanceState: Record<string, any> | null;
+  /** GO_CAT.APPEARANCE_STATE (bodyType, pattern, color, appearanceConfigured, …) */
+  appearanceState: Record<string, unknown> | null;
+  /** 최초 외형 설정 완료 여부 — API에서 명시적으로 내려줌 */
+  appearanceConfigured?: boolean;
   temperatureTotal: number;
   level: number;
 };

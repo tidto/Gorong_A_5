@@ -40,14 +40,16 @@ public class MiniHomeResponseDto {
         private String catName;
         private String characterType;
         private Map<String, Object> appearanceState;
+        private Boolean appearanceConfigured;
         private Integer temperatureTotal;
         private Integer level;
 
         public static GoCatDto from(GoCat c) {
             if (c == null) return null;
 
+            Map<String, Object> state = c.getAppearanceState();
             int temp = 0;
-            Object t = c.getAppearanceState() != null ? c.getAppearanceState().get("temperatureTotal") : null;
+            Object t = state != null ? state.get("temperatureTotal") : null;
             if (t instanceof Number) temp = ((Number) t).intValue();
 
             String growthStage = growthStageFromExp(temp);
@@ -58,10 +60,21 @@ public class MiniHomeResponseDto {
                     .userId(c.getUserId())
                     .catName(c.getCatName())
                     .characterType(growthStage)
-                    .appearanceState(c.getAppearanceState())
+                    .appearanceState(state)
+                    .appearanceConfigured(readAppearanceConfigured(state))
                     .temperatureTotal(temp)
                     .level(calcLevel(temp))
                     .build();
+        }
+
+        static Boolean readAppearanceConfigured(Map<String, Object> state) {
+            if (state == null) return false;
+            Object v = state.get("appearanceConfigured");
+            if (Boolean.TRUE.equals(v)) return true;
+            if ("true".equalsIgnoreCase(String.valueOf(v))) return true;
+            if (Boolean.FALSE.equals(v)) return false;
+            if ("false".equalsIgnoreCase(String.valueOf(v))) return false;
+            return false;
         }
 
         private static int calcLevel(int temperatureTotal) {

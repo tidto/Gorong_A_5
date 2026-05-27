@@ -321,6 +321,15 @@ const GroupListPage = () => {
     navigate(`/groups/edit/${group.id}`);
   };
 
+  const handleGoToHostCatTower = useCallback(
+    (group: Group) => {
+      const id = group.author?.id;
+      if (id == null || !Number.isFinite(id) || id <= 0) return;
+      navigate(`/cattower/${id}`);
+    },
+    [navigate]
+  );
+
   // ────────────────────────────────────────────────────────────
   // 검색 필터
   // ────────────────────────────────────────────────────────────
@@ -433,7 +442,31 @@ const GroupListPage = () => {
                       <div>
                         <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', fontWeight: '700' }}>{group.title}</h3>
                         <div style={{ fontSize: '14px', color: '#64748b' }}>
-                          📍 {group.location} | 호스트: {group.authorName || '익명'}
+                          📍 {group.location} | 호스트:{" "}
+                          {group.author?.id ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGoToHostCatTower(group);
+                              }}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                padding: 0,
+                                margin: 0,
+                                color: '#ff8a3d',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                textUnderlineOffset: '2px',
+                              }}
+                            >
+                              {group.authorName || '익명'}
+                            </button>
+                          ) : (
+                            <span>{group.authorName || '익명'}</span>
+                          )}
                           {/* ✅ 내가 작성한 글임을 표시 */}
                           {canEdit && (
                               <span style={{
