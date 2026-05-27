@@ -47,7 +47,6 @@ function Header() {
           </Link>
           <div className={`flex items-center gap-3 text-sm ${isAdminPage ? 'text-rose-200/80' : 'text-gray-500'}`}>
             <ShieldCheck className={`w-5 h-5 ${isAdminPage ? 'text-rose-300' : 'text-primary-500'}`} />
-            <span>함께하는 행사, 재미있게!</span>
           </div>
         </div>
 
@@ -209,11 +208,13 @@ function BottomNavigation() {
 
 export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isAdminPage = location.pathname.startsWith('/admin')
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <main className="pt-16 pb-16 md:pb-0">
+      <main className={`${isAdminPage ? '' : 'pt-16'} pb-16 md:pb-0`}>
         {children}
       </main>
       <BottomNavigation />
