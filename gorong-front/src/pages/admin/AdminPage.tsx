@@ -183,7 +183,11 @@ export default function AdminPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600 text-white">🛡</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-white">
+                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+              </svg>
+            </div>
             <div>
               <h1 className="text-lg font-bold tracking-tight text-white">제재 관리</h1>
               <p className="text-xs text-zinc-500">Admin Moderation Console</p>
