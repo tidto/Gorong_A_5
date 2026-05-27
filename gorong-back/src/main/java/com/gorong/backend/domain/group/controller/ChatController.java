@@ -4,6 +4,7 @@ package com.gorong.backend.domain.group.controller;
 import com.gorong.backend.domain.group.dto.ChatMessage;
 import com.gorong.backend.domain.group.entity.ChatMessageEntity;
 import com.gorong.backend.domain.group.repository.ChatMessageRepository;
+import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
 import com.gorong.backend.domain.user.repository.UserRepository;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import java.time.ZoneId;
@@ -42,6 +44,11 @@ public class ChatController {
                 .orElse(null);
     }
 
+    private Optional<User> getUserByEmail(String email) {
+        if (email == null || email.isBlank()) return Optional.empty();
+        return userRepository.findByEmail(email);
+    }
+
     // ── 메시지 전송 (WebSocket) ─────────────────────────────────────
     @MessageMapping("/chat.sendMessage/{roomId}")
     public void sendMessage(
@@ -50,6 +57,7 @@ public class ChatController {
     ) {
         Long groupId = Long.parseLong(roomId);
         String senderEmail = chatMessage.getSenderEmail();
+        Optional<User> sender = getUserByEmail(senderEmail);
 
         String nickname = getNicknameByEmail(senderEmail);
         String displayName = (nickname != null) ? nickname : (senderEmail != null ? senderEmail : "익명");
@@ -67,6 +75,7 @@ public class ChatController {
 
         chatMessage.setRoomId(roomId);
         chatMessage.setSenderEmail(senderEmail);
+        chatMessage.setSenderUserId(sender.map(User::getId).orElse(null));
         chatMessage.setUser(displayName);
         chatMessage.setSentAt(koreaTime);  // ← 여기
         chatMessage.setType(ChatMessage.MessageType.CHAT);
@@ -85,6 +94,7 @@ public class ChatController {
                     ChatMessage msg = new ChatMessage();
                     msg.setRoomId(String.valueOf(entity.getGroupId()));
                     msg.setSenderEmail(entity.getSenderEmail());
+                    msg.setSenderUserId(getUserByEmail(entity.getSenderEmail()).map(User::getId).orElse(null));
                     String displayName = (entity.getSenderNickname() != null && !entity.getSenderNickname().isBlank())
                             ? entity.getSenderNickname()
                             : entity.getSenderEmail();

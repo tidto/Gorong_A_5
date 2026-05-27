@@ -1,21 +1,8 @@
-// ============================================================
-// 경로: src/pages/Chat.tsx
-//
-// 변경 사항:
-//  - useChatRoom 훅에서 isMyGroup, currentUserEmail 추가 구조분해
-//  - 불필요한 myEmail 이중 선언 제거 → currentUserEmail 로 통합
-//  - handleSelectRoom useCallback 의존성 배열 정리
-// ============================================================
-
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Send, Image, Users, MessageSquare, ChevronRight, Wifi, WifiOff, Loader2 } from 'lucide-react'
+import { Send, Image, Users, MessageSquare, ChevronRight, Wifi, WifiOff, Loader2, Home } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useChatRoom, fetchJoinedGroups, JoinedGroup } from '../hooks/useChatRoom'
-
-// ────────────────────────────────────────────────────────────
-// Chat.tsx — 실제 WebSocket 연동 + 참여중인 채팅방 사이드바
-// ────────────────────────────────────────────────────────────
 
 export default function Chat() {
   const { id } = useParams<{ id: string }>()
@@ -23,16 +10,19 @@ export default function Chat() {
   const { user } = useAuth()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // 참여중인 그룹 목록
   const [joinedGroups, setJoinedGroups] = useState<JoinedGroup[]>([])
   const [activeGroup, setActiveGroup] = useState<JoinedGroup | null>(null)
   const [loadingGroups, setLoadingGroups] = useState(true)
 
-  // 입력 상태
   const [inputText, setInputText] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [selectedProfile, setSelectedProfile] = useState<{
+    name: string
+    email?: string
+    userId?: number | null
+    isMe?: boolean
+  } | null>(null)
 
-  // ✅ isMyGroup, currentUserEmail 추가 구조분해
   const {
     messages,
     isConnecting,
@@ -43,7 +33,6 @@ export default function Chat() {
     isMyGroup,
   } = useChatRoom()
 
-  // 닉네임 — AuthContext 에서 가져오거나 '나' 폴백
   const myNickname = user?.nickname || '나'
 
   // 참여중인 그룹 로드
@@ -53,7 +42,6 @@ export default function Chat() {
       setJoinedGroups(groups)
       setLoadingGroups(false)
 
-      // URL의 id가 있으면 해당 그룹을 우선 활성화
       if (id && groups.length > 0) {
         const target = groups.find(g => String(g.id) === id)
         if (target) {
@@ -101,33 +89,51 @@ export default function Chat() {
     if (file) setSelectedImage(file)
   }
 
-  // 참여자 목록 (메시지 보낸 유저들 + 나)
-  const participantSet = new Set(
-      messages.filter(m => m.user !== '시스템').map(m => m.user)
-  )
-  if (currentUserEmail) participantSet.add(currentUserEmail)
-  const participants = Array.from(participantSet)
+  const participantMap = new Map<string, { name: string; email?: string; userId?: number | null }>()
+  messages
+      .filter(m => m.user !== '시스템' && !m.text.includes('채팅방'))
+      .forEach(m => {
+        const key = m.senderEmail || m.user
+        if (!participantMap.has(key)) {
+          participantMap.set(key, {
+            name: m.user,
+            email: m.senderEmail,
+            userId: m.senderUserId,
+          })
+        }
+      })
+  if (currentUserEmail) {
+    participantMap.set(currentUserEmail, {
+      name: myNickname,
+      email: currentUserEmail,
+    })
+  }
+  const participants = Array.from(participantMap.values())
 
-  // ✅ currentUserEmail 로 통합 (기존 myEmail 이중 선언 제거)
-  const getDisplayName = (email: string) =>
-      email === currentUserEmail ? myNickname : email.split('@')[0]
-  const getAvatar = (email: string) =>
-      getDisplayName(email).charAt(0).toUpperCase()
+  const getDisplayName = (name: string, email?: string) =>
+      email && email === currentUserEmail ? myNickname : name
+  const getAvatar = (name: string, email?: string) =>
+      getDisplayName(name, email).charAt(0).toUpperCase()
+  const openProfileCard = (profile: { name: string; email?: string; userId?: number | null }) => {
+    setSelectedProfile({
+      ...profile,
+      isMe: Boolean(profile.email && profile.email === currentUserEmail),
+    })
+  }
 
   return (
       <div style={{
         display: 'flex',
-        height: 'calc(100vh - 90px)',
+        height: 'calc(100vh - 116px)',
         backgroundColor: '#f8fafc',
         fontFamily: 'Pretendard, -apple-system, sans-serif',
         maxWidth: '1200px',
-        margin: '24px auto',
+        margin: '12px auto',
         borderRadius: '20px',
         overflow: 'hidden',
         boxShadow: '0 4px 32px rgba(0,0,0,0.08)',
       }}>
 
-        {/* ── 좌측 사이드바: 참여중인 채팅방 목록 ── */}
         <div style={{
           width: '280px',
           flexShrink: 0,
@@ -142,7 +148,7 @@ export default function Chat() {
               <span style={{ fontWeight: '700', fontSize: '16px', color: '#1e293b' }}>참여중인 채팅방</span>
             </div>
             <div style={{ marginTop: '4px', fontSize: '12px', color: '#94a3b8' }}>
-              {loadingGroups ? '불러오는 중...' : `${joinedGroups.length}개 모임`}
+              {loadingGroups ? '로딩중..' : `${joinedGroups.length}개 참여중`}
             </div>
           </div>
 
@@ -155,7 +161,7 @@ export default function Chat() {
                 <div style={{ textAlign: 'center', padding: '48px 16px', color: '#94a3b8' }}>
                   <Users size={32} style={{ marginBottom: '12px', opacity: 0.4 }} />
                   <p style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                    참여중인 모임이 없어요.<br />
+                    참여 중인 방이 없습니다.<br />
                     <span
                         onClick={() => navigate('/group')}
                         style={{ color: '#ff8a3d', cursor: 'pointer', fontWeight: '600' }}
@@ -201,7 +207,7 @@ export default function Chat() {
                               {group.title}
                             </div>
                             <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
-                              📍 {group.location}
+                              위치: {group.location}
                             </div>
                           </div>
                           {isActive && <ChevronRight size={14} color="#ff8a3d" style={{ flexShrink: 0 }} />}
@@ -218,7 +224,7 @@ export default function Chat() {
                       {isFull ? '모집완료' : '모집중'}
                     </span>
                           <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
-                      👥 {group.currentCapacity}/{group.maxCapacity}명
+                      인원: {group.currentCapacity}/{group.maxCapacity}명
                     </span>
                         </div>
                       </div>
@@ -248,7 +254,7 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* ── 우측 채팅 영역 ── */}
+        {/* 우측 채팅 영역 */}
         {activeGroup ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -265,7 +271,7 @@ export default function Chat() {
                       <h1 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>{activeGroup.title}</h1>
                       {isConnecting ? (
                           <span style={{ fontSize: '11px', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> 연결 중...
+                      <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> 연결 중..
                     </span>
                       ) : isConnected ? (
                           <Wifi size={14} style={{ opacity: 0.9 }} />
@@ -274,12 +280,12 @@ export default function Chat() {
                       )}
                     </div>
                     <p style={{ fontSize: '13px', margin: '3px 0 0', opacity: 0.85 }}>
-                      📍 {activeGroup.location} {activeGroup.event ? `• 🎟️ ${activeGroup.event}` : ''}
+                      위치 : {activeGroup.location} {activeGroup.event ? `| 참여 행사 : ${activeGroup.event}` : ''}
                     </p>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {/* ✅ 작성자 본인에게만 수정/삭제 버튼 표시 */}
+                    {/* 작성자 본인에게만 수정/삭제 버튼 표시 */}
                     {isMyGroup(activeGroup) && (
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
@@ -295,7 +301,7 @@ export default function Chat() {
                                 cursor: 'pointer',
                               }}
                           >
-                            ✏️ 수정
+                            모임 수정
                           </button>
                         </div>
                     )}
@@ -308,17 +314,18 @@ export default function Chat() {
 
                 {/* 참여자 아바타 바 */}
                 <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '16px' }}>
-                  {participants.map((email, i) => {
-                    const name = getDisplayName(email)
-                    const isMe = email === currentUserEmail
+                  {participants.map((participant, i) => {
+                    const name = getDisplayName(participant.name, participant.email)
+                    const isMe = participant.email === currentUserEmail
                     return (
-                        <div key={email} style={{
+                        <div key={participant.email || participant.name} onClick={() => openProfileCard(participant)} style={{
                           flexShrink: 0,
                           padding: '10px 14px',
                           borderRadius: '14px',
                           border: '1.5px solid rgba(255,255,255,0.35)',
                           backgroundColor: 'rgba(255,255,255,0.12)',
                           minWidth: '100px',
+                          cursor: 'pointer',
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{
@@ -328,7 +335,7 @@ export default function Chat() {
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               fontWeight: '700', fontSize: '13px', flexShrink: 0,
                             }}>
-                              {getAvatar(email)}
+                              {getAvatar(participant.name, participant.email)}
                             </div>
                             <div>
                               <div style={{ fontSize: '13px', fontWeight: '600', color: 'white' }}>{name}</div>
@@ -351,8 +358,8 @@ export default function Chat() {
                     </div>
                 )}
                 {messages.map((msg, idx) => {
-                  const isSystem = msg.user === '시스템'
-                  // ✅ msg.isMe 우선, 없으면 이메일로 보조 판정
+                  const isSystem = msg.user === '시스템' || msg.text.includes('채팅방')
+                  // msg.isMe 우선, 없으면 이메일로 보조 판정
                   const isMe = msg.isMe ?? (msg.user === currentUserEmail)
 
                   if (isSystem) {
@@ -373,6 +380,12 @@ export default function Chat() {
                     )
                   }
 
+                  const messageProfile = {
+                    name: msg.user,
+                    email: msg.senderEmail,
+                    userId: msg.senderUserId,
+                  }
+
                   return (
                       <div key={idx} style={{
                         display: 'flex',
@@ -382,20 +395,24 @@ export default function Chat() {
                         alignItems: 'flex-end',
                       }}>
                         {!isMe && (
-                            <div style={{
+                            <div onClick={() => openProfileCard(messageProfile)} style={{
                               width: '32px', height: '32px', borderRadius: '50%',
                               backgroundColor: '#ffe8d6',
                               color: '#ff8a3d',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               fontWeight: '700', fontSize: '13px', flexShrink: 0,
+                              cursor: 'pointer',
                             }}>
-                              {getAvatar(msg.user)}
+                              {getAvatar(msg.user, msg.senderEmail)}
                             </div>
                         )}
                         <div style={{ maxWidth: '60%' }}>
                           {!isMe && (
-                              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px', paddingLeft: '2px' }}>
-                                {getDisplayName(msg.user)}
+                              <div
+                                  onClick={() => openProfileCard(messageProfile)}
+                                  style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px', paddingLeft: '2px', cursor: 'pointer', fontWeight: '700' }}
+                              >
+                                {getDisplayName(msg.user, msg.senderEmail)}
                               </div>
                           )}
                           <div style={{
@@ -460,7 +477,7 @@ export default function Chat() {
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input
                       type="text"
-                      placeholder={isConnecting ? '연결 중...' : '메시지를 입력하세요...'}
+                      placeholder={isConnecting ? '연결 중..' : '메시지를 입력하세요...'}
                       value={inputText}
                       onChange={e => setInputText(e.target.value)}
                       onKeyDown={handleKeyDown}
@@ -525,12 +542,12 @@ export default function Chat() {
               {loadingGroups ? (
                   <>
                     <Loader2 size={32} color="#ff8a3d" style={{ animation: 'spin 1s linear infinite' }} />
-                    <p style={{ fontSize: '14px' }}>채팅방 불러오는 중...</p>
+                    <p style={{ fontSize: '14px' }}>채팅방 불러오는 중..</p>
                   </>
               ) : (
                   <>
                     <MessageSquare size={48} style={{ opacity: 0.3 }} />
-                    <p style={{ fontSize: '15px' }}>좌측에서 채팅방을 선택하세요</p>
+                    <p style={{ fontSize: '15px' }}>왼쪽에서 채팅방을 선택하세요</p>
                     <button
                         onClick={() => navigate('/group')}
                         style={{
@@ -548,6 +565,68 @@ export default function Chat() {
                     </button>
                   </>
               )}
+            </div>
+        )}
+
+        {selectedProfile && (
+            <div
+                onClick={() => setSelectedProfile(null)}
+                style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300, padding: '20px' }}
+            >
+              <div
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: '320px', backgroundColor: 'white', borderRadius: '18px', boxShadow: '0 18px 45px rgba(15,23,42,0.22)', overflow: 'hidden' }}
+              >
+                <div style={{ padding: '24px 22px', background: 'linear-gradient(135deg, #ff8a3d 0%, #ff6b1a 100%)', color: 'white', textAlign: 'center' }}>
+                  <div style={{ width: '58px', height: '58px', borderRadius: '50%', backgroundColor: 'white', color: '#ff8a3d', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: '900', marginBottom: '10px' }}>
+                    {getAvatar(selectedProfile.name, selectedProfile.email)}
+                  </div>
+                  <div style={{ fontSize: '18px', fontWeight: '900' }}>{getDisplayName(selectedProfile.name, selectedProfile.email)}</div>
+                  {selectedProfile.email && (
+                      <div style={{ fontSize: '12px', opacity: 0.82, marginTop: '3px' }}>{selectedProfile.email}</div>
+                  )}
+                </div>
+                <div style={{ padding: '18px', display: 'grid', gap: '10px' }}>
+                  <button
+                      type="button"
+                      onClick={() => {
+                        if (!selectedProfile.userId) return
+                        navigate(`/minihome/${selectedProfile.userId}`)
+                      }}
+                      disabled={!selectedProfile.userId}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '12px 14px',
+                        backgroundColor: selectedProfile.userId ? '#fff4ed' : '#f1f5f9',
+                        color: selectedProfile.userId ? '#ff8a3d' : '#94a3b8',
+                        fontWeight: '900',
+                        cursor: selectedProfile.userId ? 'pointer' : 'default',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                      }}
+                  >
+                    <Home size={17} />
+                    미니홈피로 이동
+                  </button>
+                  <button
+                      type="button"
+                      onClick={() => setSelectedProfile(null)}
+                      style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '11px 14px', backgroundColor: 'white', color: '#64748b', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  >
+                    <Users size={17} />
+                    닫기
+                  </button>
+                  {!selectedProfile.userId && (
+                      <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', lineHeight: 1.5 }}>
+                        사용자 정보를 불러온 뒤 이동할 수 있습니다.
+                      </div>
+                  )}
+                </div>
+              </div>
             </div>
         )}
 
