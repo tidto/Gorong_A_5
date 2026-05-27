@@ -214,7 +214,7 @@ export default function AdminPage() {
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-zinc-800">
-                    {['', 'ID', '?좉퀬??, '?쇱떊怨좎옄', '?ъ쑀', '?곹깭', '?좉퀬??].map((h) => (
+                    {['', 'ID', '신고자', '피신고자', '사유', '상태', '신고일'].map((h) => (
                       <th key={h} className="px-4 py-3 text-left font-mono text-[11px] font-medium uppercase tracking-widest text-zinc-600">
                         {h}
                       </th>
@@ -399,7 +399,7 @@ export default function AdminPage() {
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-zinc-800">
-                    {['Ban ID', '?대찓??, '?뺤? 湲곌컙', '?ъ쑀', '諛??곹깭', '諛섎줎 ?곹깭', '?≪뀡'].map((h) => (
+                    {['Ban ID', '이메일', '정지 기간', '사유', '밴 상태', '소명 상태', '액션'].map((h) => (
                       <th key={h} className="px-4 py-3 text-left font-mono text-[11px] font-medium uppercase tracking-widest text-zinc-600">
                         {h}
                       </th>
