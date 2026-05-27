@@ -47,9 +47,9 @@ export default function Header() {
         .g-nav-link.light::after { background: #f97316; }
 
         .g-nav-link.dark        { color: #94a3b8; }
-        .g-nav-link.dark:hover  { color: #f1f5f9; background: rgba(255,255,255,.07); }
+        .g-nav-link.dark:hover  { color: #ffe4e6; background: rgba(244,63,94,.14); }
         .g-nav-link.dark.on     { color: #f1f5f9; font-weight: 700; }
-        .g-nav-link.dark::after { background: #fb923c; }
+        .g-nav-link.dark::after { background: #fb7185; }
 
         .g-logo-icon { transition: transform .25s ease; }
         .g-logo:hover .g-logo-icon { transform: scale(1.1) rotate(-5deg); }
@@ -63,8 +63,8 @@ export default function Header() {
           transition: background .2s, transform .15s, box-shadow .2s;
         }
         .g-join:hover { background: #ea580c; transform: translateY(-1px); box-shadow: 0 5px 16px rgba(249,115,22,.36); }
-        .g-join.dark  { background: #fb923c; }
-        .g-join.dark:hover { background: #f97316; }
+        .g-join.dark  { background: #e11d48; box-shadow: 0 2px 12px rgba(225,29,72,.35); }
+        .g-join.dark:hover { background: #be123c; }
 
         .g-mebtn {
           display: inline-flex; align-items: center; gap: 6px;
@@ -75,8 +75,8 @@ export default function Header() {
         }
         .g-mebtn.light { background: rgba(249,115,22,.08); color: #c2410c; }
         .g-mebtn.light:hover { background: rgba(249,115,22,.15); }
-        .g-mebtn.dark  { background: rgba(255,255,255,.1); color: #e2e8f0; }
-        .g-mebtn.dark:hover { background: rgba(255,255,255,.17); }
+        .g-mebtn.dark  { background: rgba(225,29,72,.18); color: #ffe4e6; }
+        .g-mebtn.dark:hover { background: rgba(225,29,72,.26); }
 
         .g-logout {
           background: transparent; border: none;
@@ -86,8 +86,8 @@ export default function Header() {
         }
         .g-logout.light { color: #999; }
         .g-logout.light:hover { background: #f5f5f5; color: #444; }
-        .g-logout.dark  { color: #64748b; }
-        .g-logout.dark:hover { background: rgba(255,255,255,.08); color: #cbd5e1; }
+        .g-logout.dark  { color: #fda4af; }
+        .g-logout.dark:hover { background: rgba(225,29,72,.16); color: #ffe4e6; }
       `}</style>
 
       <header
@@ -95,12 +95,12 @@ export default function Header() {
         style={{
           position: 'sticky', top: 0, zIndex: 50,
           background: isAdmin
-            ? 'rgba(15,23,42,.97)'
+            ? 'linear-gradient(90deg, rgba(17,24,39,.96) 0%, rgba(76,5,25,.96) 100%)'
             : 'rgba(255,255,255,.95)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           boxShadow: isAdmin
-            ? '0 1px 0 rgba(255,255,255,.05)'
+            ? '0 1px 0 rgba(244,63,94,.28)'
             : '0 1px 0 rgba(0,0,0,.06)',
           height: 62,
           display: 'flex', alignItems: 'center',
@@ -139,7 +139,7 @@ export default function Header() {
               <span style={{
                 fontSize: 9, fontWeight: 800, letterSpacing: '1px',
                 color: '#fb923c',
-                background: 'rgba(251,146,60,.12)',
+                background: 'rgba(251,113,133,.18)',
                 borderRadius: 5, padding: '2px 8px',
                 marginLeft: 2,
               }}>

@@ -31,6 +31,13 @@ const APPEAL_STATUS_STYLE: Record<string, string> = {
   RESOLVED:   'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
 }
 
+function formatEmailCompact(email: string) {
+  const [rawName = '', rawDomain = ''] = (email || '').split('@')
+  const shortName = rawName.length > 14 ? `${rawName.slice(0, 14)}…` : rawName
+  const shortDomain = rawDomain.length > 18 ? `${rawDomain.slice(0, 18)}…` : rawDomain
+  return { shortName, shortDomain }
+}
+
 function Badge({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {
   const cls = styleMap[label] ?? 'bg-zinc-700/30 text-zinc-400 border border-zinc-600/20'
   return (
@@ -236,8 +243,28 @@ export default function AdminPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{r.reportId}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-300">{r.reporterEmail}</td>
-                      <td className="px-4 py-3 text-xs font-medium text-zinc-100">{r.reportedUserEmail}</td>
+                      <td className="px-4 py-3 text-xs text-zinc-300">
+                        {(() => {
+                          const e = formatEmailCompact(r.reporterEmail)
+                          return (
+                            <div className="leading-tight">
+                              <div className="font-medium text-zinc-200">{e.shortName}</div>
+                              <div className="font-mono text-[10px] text-zinc-500">@{e.shortDomain}</div>
+                            </div>
+                          )
+                        })()}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-medium text-zinc-100">
+                        {(() => {
+                          const e = formatEmailCompact(r.reportedUserEmail)
+                          return (
+                            <div className="leading-tight">
+                              <div className="font-semibold text-zinc-100">{e.shortName}</div>
+                              <div className="font-mono text-[10px] text-zinc-500">@{e.shortDomain}</div>
+                            </div>
+                          )
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-xs text-zinc-400 max-w-[200px] truncate">{r.reason}</td>
                       <td className="px-4 py-3">
                         <Badge label={r.status} styleMap={REPORT_STATUS_STYLE} />
