@@ -48,3 +48,16 @@ export interface Group {
   chatRoomId: string
   isGathered: boolean       // 모였다 인증 여부
 }
+
+// 앱 그룹 목록 응답 타입 (백엔드 /api/v1/app/groups 기준)
+export interface AppGroup {
+  id: number
+  title: string
+  event: string
+  location: string
+  maxMembers: number
+  currentMembers: number
+  joined: boolean
+  gathered: boolean
+  status: string
+}

@@ -1,7 +1,7 @@
 // src/services/api.ts
 import axios from 'axios'
 import { auth } from '../config/firebaseConfig'
-import { Venue } from '../types'
+import { AppGroup, Venue } from '../types'
 
 const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1',
@@ -42,6 +42,18 @@ export const joinGroup = (groupId: string) =>
 // 모임 모였다 인증
 export const confirmGathered = (groupId: string) =>
   api.post(`/app/groups/${groupId}/gather`)
+
+// 앱 그룹 목록 조회 (웹에서 생성된 그룹 포함)
+export const fetchAppGroups = () =>
+  api.get<AppGroup[]>('/app/groups')
+
+// 앱 그룹 참가
+export const joinAppGroup = (groupId: number) =>
+  api.post<AppGroup>(`/app/groups/${groupId}/join`)
+
+// 앱 그룹 모였다 인증
+export const gatherAppGroup = (groupId: number) =>
+  api.post<AppGroup>(`/app/groups/${groupId}/gather`)
 
 // GPS 동선 저장
 export const saveTrail = (
