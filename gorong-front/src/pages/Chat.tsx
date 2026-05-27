@@ -591,7 +591,7 @@ export default function Chat() {
                       type="button"
                       onClick={() => {
                         if (!selectedProfile.userId) return
-                        navigate(`/minihome/${selectedProfile.userId}`)
+                        navigate(`/cattower/${selectedProfile.userId}`)
                       }}
                       disabled={!selectedProfile.userId}
                       style={{
@@ -610,7 +610,7 @@ export default function Chat() {
                       }}
                   >
                     <Home size={17} />
-                    미니홈피로 이동
+                    CatTower로 이동
                   </button>
                   <button
                       type="button"

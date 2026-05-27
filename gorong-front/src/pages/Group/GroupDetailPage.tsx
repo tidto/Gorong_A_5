@@ -153,7 +153,28 @@ const GroupDetailPage = () => {
                 </div>
 
                 <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '20px' }}>
-                    호스트: {post.authorName || '익명'}
+                    호스트:{" "}
+                    {post.author?.id ? (
+                        <button
+                            type="button"
+                            onClick={() => navigate(`/cattower/${post.author?.id}`)}
+                            style={{
+                                border: 'none',
+                                background: 'transparent',
+                                padding: 0,
+                                margin: 0,
+                                color: '#ff8a3d',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                textUnderlineOffset: '2px',
+                            }}
+                        >
+                            {post.authorName || '익명'}
+                        </button>
+                    ) : (
+                        <span>{post.authorName || '익명'}</span>
+                    )}
                     {/* ✅ 내가 작성한 글임을 표시 */}
                     {canEdit && (
                         <span style={{
