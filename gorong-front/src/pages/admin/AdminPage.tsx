@@ -201,7 +201,7 @@ export default function AdminPage() {
                 value={reportStatus}
                 onChange={(v) => { setReportPage(0); setReportStatus(v as ReportStatus | '') }}
                 options={[
-                  { value: '', label: '?꾩껜 ?곹깭' },
+                  { value: '', label: '전체 상태' },
                   { value: 'PENDING', label: 'PENDING' },
                   { value: 'REVIEWING', label: 'REVIEWING' },
                   { value: 'ACTIONED', label: 'ACTIONED' },
@@ -375,7 +375,7 @@ export default function AdminPage() {
                   value={banStatus}
                   onChange={(v) => { setBanPage(0); setBanStatus(v as BanStatus | '') }}
                   options={[
-                    { value: '', label: '?꾩껜 諛댁긽?? },
+                    { value: '', label: '전체 밴 상태' },
                     { value: 'ACTIVE', label: 'ACTIVE' },
                     { value: 'RELEASED', label: 'RELEASED' },
                     { value: 'EXPIRED', label: 'EXPIRED' },
@@ -385,7 +385,7 @@ export default function AdminPage() {
                   value={appealStatus}
                   onChange={(v) => { setBanPage(0); setAppealStatus(v as AppealStatus | '') }}
                   options={[
-                    { value: '', label: '?꾩껜 諛섎줎?곹깭' },
+                    { value: '', label: '전체 소명 상태' },
                     { value: 'NONE', label: 'NONE' },
                     { value: 'SUBMITTED', label: 'SUBMITTED' },
                     { value: 'REVIEWING', label: 'REVIEWING' },
