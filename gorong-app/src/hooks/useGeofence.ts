@@ -1,7 +1,7 @@
 import * as Location from 'expo-location'
 import { useEffect, useRef, useState } from 'react'
-import { Venue } from '../types'
 import { verifyArrival } from '../services/api'
+import { Venue } from '../types'
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000
@@ -16,11 +16,16 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): nu
 export function useGeofence(venues: Venue[]) {
   const [insideVenueId, setInsideVenueId] = useState<string | null>(null)
   const [isVerified, setIsVerified] = useState(false)
-  const prevInside = useRef<string | null>(null)
+
   const verifiedVenues = useRef<Set<string>>(new Set())
+  const currentInsideRef = useRef<string | null>(null)
+  const enteredAt = useRef<number | null>(null)
+
+  // GPS 경계값 흔들림을 줄이기 위한 규칙값
+  const ENTER_DWELL_MS = 8000
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription
+    let subscription: Location.LocationSubscription | undefined
 
     ;(async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
@@ -30,30 +35,44 @@ export function useGeofence(venues: Venue[]) {
         { accuracy: Location.Accuracy.High, distanceInterval: 10 },
         async (location) => {
           const { latitude, longitude } = location.coords
+          const now = Date.now()
 
           let enteredId: string | null = null
+          let enteredVenue: Venue | null = null
           for (const venue of venues) {
             const dist = getDistance(latitude, longitude, venue.lat, venue.lng)
-            if (dist <= venue.radius) { enteredId = venue.id; break }
+            if (dist <= venue.radius) {
+              enteredId = venue.id
+              enteredVenue = venue
+              break
+            }
           }
 
-          if (enteredId !== prevInside.current) {
-            if (enteredId) {
-              // UI용 거리 계산은 클라이언트, 실제 인증은 백엔드 PostGIS 검증
-              if (!verifiedVenues.current.has(enteredId)) {
-                try {
-                  await verifyArrival(enteredId, latitude, longitude)  // lat/lng 포함
-                  verifiedVenues.current.add(enteredId)
-                  setIsVerified(true)
-                } catch (err) {
-                  console.error('도착 인증 실패:', err)
-                }
-              }
-            } else {
-              setIsVerified(false)
-            }
-            prevInside.current = enteredId
+          const prevInside = currentInsideRef.current
+          if (enteredId !== prevInside) {
+            currentInsideRef.current = enteredId
             setInsideVenueId(enteredId)
+            if (enteredId) {
+              enteredAt.current = now
+            }
+          }
+
+          // 반경 내부에서 N초 이상 유지되면 자동 도착 인증
+          if (enteredId && enteredVenue) {
+            if (!enteredAt.current) enteredAt.current = now
+
+            const dwellMs = now - enteredAt.current
+            if (dwellMs >= ENTER_DWELL_MS && !verifiedVenues.current.has(enteredId)) {
+              try {
+                // 최종 인증은 백엔드(PostGIS) 거리 검증으로 확정한다.
+                await verifyArrival(enteredId, latitude, longitude)
+                verifiedVenues.current.add(enteredId)
+                setIsVerified(true)
+              } catch (err) {
+                console.error('도착 인증 실패:', err)
+              }
+            }
+            return
           }
         }
       )

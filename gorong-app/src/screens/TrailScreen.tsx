@@ -25,7 +25,7 @@ export default function TrailScreen() {
 
       <TouchableOpacity
         style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
-        onPress={isRecording ? stopRecording : startRecording}
+        onPress={isRecording ? () => stopRecording('manual') : startRecording}
       >
         <Text style={styles.recordBtnText}>
           {isRecording ? '⏹ 동선 기록 종료' : '▶ 동선 기록 시작'}
