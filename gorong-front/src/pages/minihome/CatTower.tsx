@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import DecorationModal from "../../components/minihome/DecorationModal";
+import DecorationModal from "../../components/minihome/mini-home/DecorationModal";
 import DecorationCustomizePanel from "../../components/minihome/decoration/DecorationCustomizePanel";
 import CatTowerDashboard from "../../components/minihome/cat-tower/CatTowerDashboard";
 import DecorateCatPreview from "../../components/minihome/rive/DecorateCatPreview";
@@ -11,24 +11,24 @@ import {
   applyEquipDraftToPage,
   equipPreviewFromDraft,
   normalizeEquipPreview,
-} from "../../utils/minihome/items";
+} from "../../utils/minihome/gocat/items";
 import {
   loadEquippedDecorDraft,
   ownerEquipPreviewFromPage,
-} from "../../utils/minihome/gocatEquippedStorage";
-import { emptyDraft } from "../../utils/minihome/items";
-import type { DecorItem, SlotType } from "../../components/minihome/DecorationModal";
+} from "../../utils/minihome/gocat/gocatEquippedStorage";
+import { emptyDraft } from "../../utils/minihome/gocat/items";
+import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
 import {
   completeMyCatSetup,
   createMyMiniHome,
 } from "../../api/minihome/miniHomeApi";
-import { computeGrowthState } from "../../utils/minihome/growth";
+import { computeGrowthState } from "../../utils/minihome/growth/growth";
 import {
   isCatAppearanceConfigured,
   parseCatAppearance,
   toAppearanceApiPayload,
-} from "../../utils/minihome/catAppearance";
-import { mapMiniHomeApiError } from "../../utils/minihome/minihomeApiError";
+} from "../../utils/minihome/gocat/catAppearance";
+import { mapMiniHomeApiError } from "../../utils/minihome/core/minihomeApiError";
 import GoCatOnboarding, { type GoCatOnboardingSubmit } from "../../components/minihome/onboarding/GoCatOnboarding";
 
 export default function CatTower() {

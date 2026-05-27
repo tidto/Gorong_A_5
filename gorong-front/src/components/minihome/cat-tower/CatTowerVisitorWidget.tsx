@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
 import { Users } from "lucide-react";
-import { MOCK_TODAY_VISITORS, MOCK_VISITOR_COUNT } from "../../../data/catTowerDashboardMock";
+import { MOCK_TODAY_VISITORS, MOCK_VISITOR_COUNT } from "../../../data/minihome/catTowerDashboardMock";
 
 function AnimatedCount({ value }: { value: number }) {
   const spring = useSpring(0, { stiffness: 60, damping: 18 });

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import ActivityHistory from "../ActivityHistory";
-import GallerySection from "../GallerySection";
+import ActivityHistory from "../mini-home/ActivityHistory";
+import GallerySection from "../mini-home/GallerySection";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
-import type { GrowthState } from "../../../utils/minihome/growth";
+import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import {
   MOCK_GUESTBOOK,
   MOCK_REVIEWS,
   buildMockGrowthLogs,
-} from "../../../data/catTowerDashboardMock";
+} from "../../../data/minihome/catTowerDashboardMock";
 import type { CatTowerPanelId } from "./CatTowerSideMenu";
 
 type HistoryTab = "events" | "reviews" | "growth" | "guestbook";

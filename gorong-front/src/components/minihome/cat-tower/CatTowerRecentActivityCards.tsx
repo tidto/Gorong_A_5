@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import type { ActivityItem } from "../../../types/minihome/minihome";
-import { getActivityDisplay } from "../../../utils/minihome/catTowerActivityDisplay";
+import { getActivityDisplay } from "../../../utils/minihome/cat-tower/catTowerActivityDisplay";
 
 type CatTowerRecentActivityCardsProps = {
   activities: ActivityItem[];

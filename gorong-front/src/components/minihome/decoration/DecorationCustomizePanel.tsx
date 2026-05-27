@@ -1,12 +1,12 @@
 import type { Dispatch, SetStateAction } from "react";
 import { motion } from "framer-motion";
-import type { DecorItem, SlotType } from "../DecorationModal";
-import { GOCAT_ENABLED_CATEGORIES, GOCAT_ITEMS } from "../../../data/gocatItems";
-import { goCatItemToDecorItem } from "../../../utils/minihome/decorItemCatalog";
-import { getItemDisplayEmoji } from "../../../utils/minihome/items";
+import type { DecorItem, SlotType } from "../mini-home/DecorationModal";
+import { GOCAT_ENABLED_CATEGORIES, GOCAT_ITEMS } from "../../../data/minihome/gocatItems";
+import { goCatItemToDecorItem } from "../../../utils/minihome/gocat/decorItemCatalog";
+import { getItemDisplayEmoji } from "../../../utils/minihome/gocat/items";
 import LockedItemsShowcase from "./LockedItemsShowcase";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
-import type { GrowthStage } from "../../../utils/minihome/growth";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 
 const SLOT_SECTIONS: { id: SlotType; label: string; emoji: string }[] = [
   { id: "HEAD", label: "머리", emoji: "🎩" },

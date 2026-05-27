@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { pickDailyQuote } from "../../../utils/minihome/catTowerPresentation";
+import { pickDailyQuote } from "../../../utils/minihome/cat-tower/catTowerPresentation";
 
 type CatTowerDailyQuoteProps = {
   catName: string;

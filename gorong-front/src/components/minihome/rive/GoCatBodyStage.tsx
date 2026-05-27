@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { EquipPreview } from "../../../utils/minihome/items";
-import type { GrowthStage } from "../../../utils/minihome/growth";
+import type { EquipPreview } from "../../../utils/minihome/gocat/items";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import CatEquipOverlays from "./CatEquipOverlays";
 import GoCatAnimatedBody from "./GoCatAnimatedBody";
 import RiveCatPlayer from "./RiveCatPlayer";

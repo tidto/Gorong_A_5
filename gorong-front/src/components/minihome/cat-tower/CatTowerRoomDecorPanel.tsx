@@ -1,7 +1,7 @@
 import {
   ROOM_DECOR_CATALOG,
   type RoomDecorType,
-} from "../../../utils/minihome/catTowerRoomDecor";
+} from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 
 type CatTowerRoomDecorPanelProps = {
   placedTypes: Set<RoomDecorType>;

@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import DecorateCatPreview from "../rive/DecorateCatPreview";
-import type { GrowthStage } from "../../../utils/minihome/growth";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import {
   DEFAULT_CAT_APPEARANCE,
   type CatAppearance,
-} from "../../../utils/minihome/catAppearance";
+} from "../../../utils/minihome/gocat/catAppearance";
 
 export type GoCatOnboardingSubmit = {
   appearance: CatAppearance;

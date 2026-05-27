@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { DecorItem, SlotType } from "../../../components/minihome/DecorationModal";
+import type { DecorItem, SlotType } from "../../../components/minihome/mini-home/DecorationModal";
 import type { UserItem } from "../../../types/minihome/item";
 import type { EquipItem } from "../../../types/minihome/minihome";
 import { useNotification } from "../../../contexts/NotificationContext";
 import { updateMyCatAppearance } from "../../../api/minihome/miniHomeApi";
-import { equipPreviewFromDraft } from "../../../utils/minihome/items";
-import { listDecorItemsForSlot } from "../../../utils/minihome/decorItemCatalog";
+import { equipPreviewFromDraft } from "../../../utils/minihome/gocat/items";
+import { listDecorItemsForSlot } from "../../../utils/minihome/gocat/decorItemCatalog";
 import {
   loadEquippedDecorDraft,
   saveStoredEquipped,
   sanitizeEquipDraft,
-} from "../../../utils/minihome/gocatEquippedStorage";
-import { toPresentationAppearancePayload } from "../../../utils/minihome/catTowerPresentation";
-import type { GrowthStage } from "../../../utils/minihome/growth";
+} from "../../../utils/minihome/gocat/gocatEquippedStorage";
+import { toPresentationAppearancePayload } from "../../../utils/minihome/cat-tower/catTowerPresentation";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 
 type UseGoCatDecorationOptions = {
   pageEquips?: EquipItem[] | null;

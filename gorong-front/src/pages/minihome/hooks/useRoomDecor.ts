@@ -6,7 +6,7 @@ import {
   removeRoomDecorById,
   removeRoomDecorByType,
   upsertRoomDecorItem,
-} from "../../../utils/minihome/catTowerRoomDecor";
+} from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 
 export const GOCAT_ROOM_DECOR_STORAGE_KEY = "gocat_room_decor_items";
 

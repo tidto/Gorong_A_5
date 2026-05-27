@@ -6,7 +6,7 @@ import {
   normalizeRoomBackground,
   parseRoomBackgroundFromAppearance,
   saveRoomBackgroundToStorage,
-} from "../../../utils/minihome/catTowerRoomBackground";
+} from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 
 type Options = {
   appearanceState?: Record<string, unknown> | null;

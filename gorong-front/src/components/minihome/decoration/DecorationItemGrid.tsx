@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import type { DecorItem, SlotType } from "../DecorationModal";
-import { getItemDisplayEmoji } from "../../../utils/minihome/items";
-import { getRarityStyle, rarityForDecorItem } from "../../../utils/minihome/itemRarity";
+import type { DecorItem, SlotType } from "../mini-home/DecorationModal";
+import { getItemDisplayEmoji } from "../../../utils/minihome/gocat/items";
+import { getRarityStyle, rarityForDecorItem } from "../../../utils/minihome/gocat/itemRarity";
 
 export default function DecorationItemGrid(props: {
   slot: SlotType;

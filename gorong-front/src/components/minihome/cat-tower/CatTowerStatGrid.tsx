@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { BarChart3, ImageIcon, Sprout } from "lucide-react";
-import type { GrowthState } from "../../../utils/minihome/growth";
+import type { GrowthState } from "../../../utils/minihome/growth/growth";
 
 type CatTowerStatGridProps = {
   activityCount: number;

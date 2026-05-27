@@ -4,9 +4,9 @@ import {
   GOCAT_MVP_ITEMS,
   getGoCatItemsByCategory,
   type GoCatItemCategory,
-} from "../../../data/gocatItems";
-import type { EquipPreview } from "../../../utils/minihome/items";
-import { normalizeEquipPreview } from "../../../utils/minihome/items";
+} from "../../../data/minihome/gocatItems";
+import type { EquipPreview } from "../../../utils/minihome/gocat/items";
+import { normalizeEquipPreview } from "../../../utils/minihome/gocat/items";
 
 type CatTowerItemsPanelProps = {
   equipped: EquipPreview;

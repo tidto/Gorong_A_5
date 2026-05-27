@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import type { GrowthState } from "../../../utils/minihome/growth";
+import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import CatTowerDailyQuote from "./CatTowerDailyQuote";
 

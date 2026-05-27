@@ -22,7 +22,7 @@ import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
 import ErrorPage from '../pages/ErrorPage'
 import GroupEditPage from "../pages/Group/GroupEditPage.tsx";
 import AdminPage from '../pages/admin/AdminPage'
-import RiveCustomizerDevPage from '../pages/dev/RiveCustomizerDevPage'
+import RiveCustomizerDevPage from '../pages/minihome/dev/RiveCustomizerDevPage'
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const auth = useAuth()

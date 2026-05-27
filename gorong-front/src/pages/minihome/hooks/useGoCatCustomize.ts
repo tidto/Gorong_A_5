@@ -1,9 +1,9 @@
 import { useCallback, useMemo } from "react";
-import type { DecorItem, SlotType } from "../../../components/minihome/DecorationModal";
+import type { DecorItem, SlotType } from "../../../components/minihome/mini-home/DecorationModal";
 import { useGoCatDecoration } from "./useGoCatDecoration";
-import type { GrowthStage } from "../../../utils/minihome/growth";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import type { EquipItem } from "../../../types/minihome/minihome";
-import { equipPreviewFromDraft } from "../../../utils/minihome/items";
+import { equipPreviewFromDraft } from "../../../utils/minihome/gocat/items";
 
 type Options = {
   pageEquips?: EquipItem[] | null;

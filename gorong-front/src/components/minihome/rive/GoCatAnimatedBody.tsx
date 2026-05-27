@@ -7,7 +7,7 @@ import {
   gocatBodyHoverLift,
   gocatBodyHoverScale,
   gocatBodyHoverTransition,
-} from "../../../utils/minihome/gocatBodyMotion";
+} from "../../../utils/minihome/gocat/gocatBodyMotion";
 
 type GoCatAnimatedBodyProps = {
   children: ReactNode;

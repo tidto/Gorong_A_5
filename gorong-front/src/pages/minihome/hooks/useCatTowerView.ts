@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getMiniHomePage, getMyMiniHomePage } from "../../../api/minihome/miniHomeApi";
 import type { MiniHomePage } from "../../../types/minihome/minihome";
-import { enrichEquipItems } from "../../../utils/minihome/items";
-import { mapMiniHomeApiError } from "../../../utils/minihome/minihomeApiError";
-import { parseViewedUserId } from "../../../utils/minihome/catTowerRoute";
+import { enrichEquipItems } from "../../../utils/minihome/gocat/items";
+import { mapMiniHomeApiError } from "../../../utils/minihome/core/minihomeApiError";
+import { parseViewedUserId } from "../../../utils/minihome/cat-tower/catTowerRoute";
 
 type Options = {
   routeUserId?: string;

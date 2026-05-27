@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { normalizeEquipPreview, type EquipPreview } from "../../../utils/minihome/items";
-import type { GrowthStage } from "../../../utils/minihome/growth";
-import { growthStageScaleClass } from "../../../utils/minihome/growthStageVisual";
-import { CUSTOMIZE_CAT_BOX_PX } from "../../../utils/minihome/catPreviewBox";
+import { normalizeEquipPreview, type EquipPreview } from "../../../utils/minihome/gocat/items";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import { growthStageScaleClass } from "../../../utils/minihome/growth/growthStageVisual";
+import { CUSTOMIZE_CAT_BOX_PX } from "../../../utils/minihome/gocat/catPreviewBox";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import GrowthStageEffects from "../growth/GrowthStageEffects";
 import GoCatBodyStage from "./GoCatBodyStage";

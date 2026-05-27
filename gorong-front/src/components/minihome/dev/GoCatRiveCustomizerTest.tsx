@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRive, useStateMachineInput, Layout, Fit, Alignment } from "@rive-app/react-canvas";
-import type { RiveRuntime } from "../../../utils/minihome/riveInteract";
+import type { RiveRuntime } from "../../../utils/minihome/rive/riveInteract";
 import {
   RIVE_CAT_CUSTOMIZER_HEAD_WEAR_INPUTS,
   RIVE_CAT_CUSTOMIZER_PREVIEW_SIZE,
@@ -9,7 +9,7 @@ import {
   applyHeadWearSelection,
   resolveCatCustomizerStateMachine,
   type RiveCustomizerHeadWearIndex,
-} from "../../../utils/minihome/riveCatCustomizer";
+} from "../../../utils/minihome/rive/riveCatCustomizer";
 
 type GoCatRiveCustomizerTestProps = {
   className?: string;

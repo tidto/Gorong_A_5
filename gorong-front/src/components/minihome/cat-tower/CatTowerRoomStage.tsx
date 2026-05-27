@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { EquipPreview } from "../../../utils/minihome/items";
-import { normalizeEquipPreview, resolveEquipImageUrl } from "../../../utils/minihome/items";
-import type { GrowthStage } from "../../../utils/minihome/growth";
+import type { EquipPreview } from "../../../utils/minihome/gocat/items";
+import { normalizeEquipPreview, resolveEquipImageUrl } from "../../../utils/minihome/gocat/items";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import {
   ROOM_BACKGROUND_BY_ID,
   type RoomBackgroundId,
-} from "../../../utils/minihome/catTowerRoomBackground";
+} from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import {
   nextSpeechBubble,
   pickSpeechBubble,
   speechBubbleTilt,
-} from "../../../utils/minihome/catTowerPresentation";
+} from "../../../utils/minihome/cat-tower/catTowerPresentation";
 import CatTowerRoomAmbience from "./CatTowerRoomAmbience";
 import CatTowerRoomStickers from "./CatTowerRoomStickers";
-import GoCatVisual from "../GoCatVisual";
+import GoCatVisual from "../mini-home/GoCatVisual";
 
 type CatTowerRoomStageProps = {
   growthStage: GrowthStage;

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
-import type { GrowthState } from "../../../utils/minihome/growth";
-import type { EquipPreview } from "../../../utils/minihome/items";
+import type { GrowthState } from "../../../utils/minihome/growth/growth";
+import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import { useRoomBackground } from "../../../pages/minihome/hooks/useRoomBackground";
 import { useNotification } from "../../../contexts/NotificationContext";
 import CatTowerProfilePanel from "./CatTowerProfilePanel";

@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import type { SlotType } from "../DecorationModal";
-import { lockedItemsForSlot } from "../../../utils/minihome/lockedItemCatalog";
-import { getRarityStyle } from "../../../utils/minihome/itemRarity";
+import type { SlotType } from "../mini-home/DecorationModal";
+import { lockedItemsForSlot } from "../../../utils/minihome/gocat/lockedItemCatalog";
+import { getRarityStyle } from "../../../utils/minihome/gocat/itemRarity";
 
 export default function LockedItemsShowcase({ slot, compact }: { slot: SlotType; compact?: boolean }) {
   const items = lockedItemsForSlot(slot).slice(compact ? 2 : 4);

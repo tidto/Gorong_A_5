@@ -1,4 +1,4 @@
-import type { GrowthStage } from "../../utils/minihome/growth";
+import type { GrowthStage } from "../../utils/minihome/growth/growth";
 
 export type UserItem = {
   userItemId: number;

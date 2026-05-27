@@ -1,6 +1,6 @@
-import type { GrowthStage } from "../../../utils/minihome/growth";
-import { formatGrowthStageLabel } from "../../../utils/minihome/growth";
-import { GROWTH_STAGE_BADGE } from "../../../utils/minihome/growthStageVisual";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import { formatGrowthStageLabel } from "../../../utils/minihome/growth/growth";
+import { GROWTH_STAGE_BADGE } from "../../../utils/minihome/growth/growthStageVisual";
 
 type GrowthStageBadgeProps = {
   stage: GrowthStage;

@@ -1,7 +1,7 @@
 import { RefreshCw, Search, Shirt, Sparkles } from "lucide-react";
-import type { GrowthState } from "../../../utils/minihome/growth";
-import { normalizeEquipPreview, type EquipPreview } from "../../../utils/minihome/items";
-import GoCatVisual from "../GoCatVisual";
+import type { GrowthState } from "../../../utils/minihome/growth/growth";
+import { normalizeEquipPreview, type EquipPreview } from "../../../utils/minihome/gocat/items";
+import GoCatVisual from "../mini-home/GoCatVisual";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 
 type CatTowerHeroProps = {

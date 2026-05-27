@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ROOM_BACKGROUND_OPTIONS,
   type RoomBackgroundId,
-} from "../../../utils/minihome/catTowerRoomBackground";
+} from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 
 type DecorateTab = "background" | "cat";
 

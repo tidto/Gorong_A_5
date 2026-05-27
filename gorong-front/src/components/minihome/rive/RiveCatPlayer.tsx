@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRive, useStateMachineInput, Layout, Fit, Alignment } from "@rive-app/react-canvas";
-import type { GrowthStage } from "../../../utils/minihome/growth";
-import { resolveCatStateMachine, RIVE_CAT_SRC } from "../../../utils/minihome/riveCatColor";
-import { fireRiveTap } from "../../../utils/minihome/riveCatState";
-import type { RiveRuntime } from "../../../utils/minihome/riveInteract";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import { resolveCatStateMachine, RIVE_CAT_SRC } from "../../../utils/minihome/rive/riveCatColor";
+import { fireRiveTap } from "../../../utils/minihome/rive/riveCatState";
+import type { RiveRuntime } from "../../../utils/minihome/rive/riveInteract";
 import {
   fireRiveInteraction,
   playRiveIdle,
   playRiveInteractionAnimation,
   pickRiveStateMachineName,
-} from "../../../utils/minihome/riveInteract";
+} from "../../../utils/minihome/rive/riveInteract";
 
 const BASE_CAT_IMAGE = "/assets/cat/gocat-base.png";
 

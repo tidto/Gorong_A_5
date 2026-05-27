@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
-import type { SlotType } from "../DecorationModal";
-import type { EquipPreview, EquipPreviewItem } from "../../../utils/minihome/items";
-import { getItemDisplayEmoji, normalizeEquipPreview, resolveEquipImageUrl } from "../../../utils/minihome/items";
+import type { SlotType } from "../mini-home/DecorationModal";
+import type { EquipPreview, EquipPreviewItem } from "../../../utils/minihome/gocat/items";
+import { getItemDisplayEmoji, normalizeEquipPreview, resolveEquipImageUrl } from "../../../utils/minihome/gocat/items";
 import {
   bodyDressOverlayToStyle,
   getPositionedOverlay,
@@ -11,8 +11,8 @@ import {
   isWhiteDress,
   neckBowOverlayToStyle,
   positionedOverlayToStyle,
-} from "../../../utils/minihome/gocatItemOverlayPositions";
-import { CUSTOMIZE_CAT_BOX_PX } from "../../../utils/minihome/catPreviewBox";
+} from "../../../utils/minihome/gocat/gocatItemOverlayPositions";
+import { CUSTOMIZE_CAT_BOX_PX } from "../../../utils/minihome/gocat/catPreviewBox";
 
 export type EquipSlot = SlotType;
 export type OverlayLayer = "behind" | "body" | "front";

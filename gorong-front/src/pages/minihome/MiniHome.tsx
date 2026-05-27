@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import GoCatVisual from "../../components/minihome/GoCatVisual";
-import GoCatCard from "../../components/minihome/GoCatCard";
-import DecorationModal from "../../components/minihome/DecorationModal";
+import GoCatVisual from "../../components/minihome/mini-home/GoCatVisual";
+import GoCatCard from "../../components/minihome/mini-home/GoCatCard";
+import DecorationModal from "../../components/minihome/mini-home/DecorationModal";
 import DecorationCustomizePanel from "../../components/minihome/decoration/DecorationCustomizePanel";
 import {
   addGalleryImage,
@@ -12,10 +12,10 @@ import {
   createMyMiniHome,
   getMyMiniHomePage,
 } from "../../api/minihome/miniHomeApi";
-import ActivityHistory from "../../components/minihome/ActivityHistory";
-import GallerySection from "../../components/minihome/GallerySection";
-import GrowthProgress from "../../components/minihome/GrowthProgress";
-import { computeGrowthState } from "../../utils/minihome/growth";
+import ActivityHistory from "../../components/minihome/mini-home/ActivityHistory";
+import GallerySection from "../../components/minihome/mini-home/GallerySection";
+import GrowthProgress from "../../components/minihome/mini-home/GrowthProgress";
+import { computeGrowthState } from "../../utils/minihome/growth/growth";
 import type { ActivityItem, MiniHomePage } from "../../types/minihome/minihome";
 import { useAuth } from "../../contexts/AuthContext";
 import { useMiniHomeUserId } from "./hooks/useMiniHomeUserId";
@@ -26,16 +26,16 @@ import {
   enrichEquipItems,
   equipPreviewFromDraft,
   normalizeEquipPreview,
-} from "../../utils/minihome/items";
-import { loadEquippedDecorDraft } from "../../utils/minihome/gocatEquippedStorage";
-import type { DecorItem, SlotType } from "../../components/minihome/DecorationModal";
+} from "../../utils/minihome/gocat/items";
+import { loadEquippedDecorDraft } from "../../utils/minihome/gocat/gocatEquippedStorage";
+import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
 import DecorateCatPreview from "../../components/minihome/rive/DecorateCatPreview";
 import {
   isCatAppearanceConfigured,
   parseCatAppearance,
   toAppearanceApiPayload,
-} from "../../utils/minihome/catAppearance";
-import { mapMiniHomeApiError } from "../../utils/minihome/minihomeApiError";
+} from "../../utils/minihome/gocat/catAppearance";
+import { mapMiniHomeApiError } from "../../utils/minihome/core/minihomeApiError";
 import GoCatOnboarding, { type GoCatOnboardingSubmit } from "../../components/minihome/onboarding/GoCatOnboarding";
 
 function 에러메시지(e: unknown) {

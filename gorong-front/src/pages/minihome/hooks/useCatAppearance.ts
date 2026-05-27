@@ -6,9 +6,9 @@ import {
   parseCatAppearance,
   toAppearanceApiPayload,
   type CatAppearance,
-} from "../../../utils/minihome/catAppearance";
+} from "../../../utils/minihome/gocat/catAppearance";
 import { useNotification } from "../../../contexts/NotificationContext";
-import { mapMiniHomeApiError } from "../../../utils/minihome/minihomeApiError";
+import { mapMiniHomeApiError } from "../../../utils/minihome/core/minihomeApiError";
 
 /** 꾸미기 모달 — 색상 draft + API 저장 */
 export function useCatAppearance(cat: GoCat | null, modalOpen: boolean, canEdit = true) {

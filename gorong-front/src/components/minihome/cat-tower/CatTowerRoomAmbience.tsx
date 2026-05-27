@@ -1,4 +1,4 @@
-import type { RoomBackgroundTheme } from "../../../utils/minihome/catTowerRoomBackground";
+import type { RoomBackgroundTheme } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 
 type CatTowerRoomAmbienceProps = {
   theme: RoomBackgroundTheme;

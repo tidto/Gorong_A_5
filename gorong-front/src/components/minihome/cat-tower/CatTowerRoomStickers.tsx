@@ -1,4 +1,4 @@
-import { MOCK_ROOM_DECOR } from "../../../data/catTowerDashboardMock";
+import { MOCK_ROOM_DECOR } from "../../../data/minihome/catTowerDashboardMock";
 
 const POSITION_CLASS: Record<string, string> = {
   "top-left": "left-3 top-[5.5rem]",

@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import type { DecorItem, SlotType } from "../DecorationModal";
+import type { DecorItem, SlotType } from "../mini-home/DecorationModal";
 
-import { GOCAT_ENABLED_CATEGORIES } from "../../../data/gocatItems";
+import { GOCAT_ENABLED_CATEGORIES } from "../../../data/minihome/gocatItems";
 
 const SLOTS = GOCAT_ENABLED_CATEGORIES as SlotType[];
 
