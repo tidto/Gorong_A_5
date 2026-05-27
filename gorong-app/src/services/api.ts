@@ -55,6 +55,28 @@ export const joinAppGroup = (groupId: number) =>
 export const gatherAppGroup = (groupId: number) =>
   api.post<AppGroup>(`/app/groups/${groupId}/gather`)
 
+export type UploadSourceType = 'APP_PHOTO' | 'TRAIL_ART' | 'POST_PHOTO'
+
+// 앱 사진/러닝아트 업로드 공용 API
+export const uploadFileToS3 = async (
+  uri: string,
+  fileName: string,
+  sourceType: UploadSourceType = 'APP_PHOTO',
+  autoSaveToGallery = true,
+) => {
+  const formData = new FormData()
+  formData.append('file', {
+    uri,
+    name: fileName,
+    type: 'image/jpeg',
+  } as any)
+
+  return api.post('/files/upload', formData, {
+    params: { sourceType, autoSaveToGallery },
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 // GPS 동선 저장
 export const saveTrail = (
   venueId: string,
