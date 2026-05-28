@@ -38,6 +38,19 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 const DEFAULT_LOCATION = { lat: 35.8956, lng: 128.6224 }; // 영진전문대 좌표
 
+const isValidLocation = (location?: { lat?: number; lng?: number } | null) => {
+  if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') return false;
+  return location.lat !== 0 && location.lng !== 0;
+};
+
+const toKakaoLinkName = (name?: string) => {
+  const safeName = (name || '행사 위치')
+      .replace(/[/?#&=,]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  return safeName || '행사 위치';
+};
+
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -57,8 +70,9 @@ export default function EventDetail() {
         setLoading(true);
 
         const headers: Record<string, string> = {};
-        if (auth.user && typeof auth.user.getIdToken === 'function') {
-          const token = await auth.user.getIdToken();
+        const firebaseUser = auth.user as { getIdToken?: () => Promise<string> } | null;
+        if (firebaseUser && typeof firebaseUser.getIdToken === 'function') {
+          const token = await firebaseUser.getIdToken();
           headers['Authorization'] = `Bearer ${token}`;
         }
 
@@ -75,28 +89,21 @@ export default function EventDetail() {
 
   // 2. 길찾기 및 거리 산정을 위한 유저 현재 위치 감지 (메인페이지 검증 로직 반영)
   useEffect(() => {
+    const applyFallbackLocation = () => {
+      setUserLocation(DEFAULT_LOCATION);
+    };
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
           (pos) => {
-            setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            const location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setUserLocation(isValidLocation(location) ? location : DEFAULT_LOCATION);
           },
-          async () => {
-            try {
-              const res = await fetch('https://ipapi.co/json/');
-              const data = await res.json();
-              if (data.region === 'Seoul' || !data.latitude || !data.longitude) {
-                setUserLocation(DEFAULT_LOCATION);
-              } else {
-                setUserLocation({ lat: data.latitude, lng: data.longitude });
-              }
-            } catch {
-              setUserLocation(DEFAULT_LOCATION);
-            }
-          },
-          { timeout: 5000 }
+          applyFallbackLocation,
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      setUserLocation(DEFAULT_LOCATION);
+      applyFallbackLocation();
     }
   }, []);
 
@@ -113,9 +120,24 @@ export default function EventDetail() {
   // 3. 카카오 맵 외부 길찾기 링크 열기 함수
   const handleOpenKakaoMapRoute = () => {
     if (!event) return;
-    // 카카오맵 길찾기 URL Scheme 형식: https://map.kakao.com/link/to/목적지이름,위도,경도
-    const url = `https://map.kakao.com/link/to/${encodeURIComponent(event.title)},${event.mapy},${event.mapx}`;
-    window.open(url, '_blank');
+
+    const eventLat = Number(event.mapy);
+    const eventLng = Number(event.mapx);
+    if (!isValidLocation({ lat: eventLat, lng: eventLng })) {
+      alert('행사 위치 정보가 없어 카카오맵을 열 수 없습니다.');
+      return;
+    }
+
+    const destinationName = toKakaoLinkName(event.title);
+
+    // 출발지(내 위치)가 있으면 from/to 형식, 없으면 목적지만
+    if (isValidLocation(userLocation)) {
+      const url = `https://map.kakao.com/link/from/내위치,${userLocation!.lat},${userLocation!.lng}/to/${destinationName},${eventLat},${eventLng}`;
+      window.open(url, '_blank');
+    } else {
+      const url = `https://map.kakao.com/link/to/${destinationName},${eventLat},${eventLng}`;
+      window.open(url, '_blank');
+    }
   };
 
   if (loading) return <div className="p-20 text-center font-bold text-orange-600">데이터 로딩 중...</div>;
@@ -144,8 +166,14 @@ export default function EventDetail() {
     addr1: event.addr1,
     mapx: event.mapx,
     mapy: event.mapy,
-    contentid: event.contentid
+    contentid: event.contentid,
+    firstimage: event.firstimage
   }];
+
+  const eventLocation = {
+    lat: parseFloat(event.mapy),
+    lng: parseFloat(event.mapx)
+  };
 
   // 현재 유저 위치와 행사 위치 간의 거리 계산 실행
   const distanceText = (() => {
@@ -208,10 +236,8 @@ export default function EventDetail() {
                   <MapView
                       data={mapData}
                       onDetailClick={() => {}}
-                      userLocation={{
-                        lat: parseFloat(event.mapy),
-                        lng: parseFloat(event.mapx)
-                      }}
+                      userLocation={userLocation}
+                      mapCenter={eventLocation}
                   />
                 </div>
                 {/* 기획서 명세 요구사항: 카카오 맵 연동 길찾기 버튼 제공 */}
