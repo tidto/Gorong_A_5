@@ -21,6 +21,7 @@ function Header() {
     { path: '/chatbot', label: 'AI Chat', icon: Bot },
   ]
   const isAdmin = auth.user?.roleType === 'ADMIN'
+  const isAdminPage = location.pathname.startsWith('/admin')
 
   const isActive = (path: string) => location.pathname === path
 
@@ -33,16 +34,19 @@ function Header() {
   }
 
   return (
-    <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+    <header className={`sticky top-0 z-50 border-b shadow-sm ${
+      isAdminPage
+        ? 'border-rose-900/70 bg-gradient-to-r from-zinc-950 via-zinc-900 to-rose-950 text-rose-50'
+        : 'border-gray-200 bg-white'
+    }`}>
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
-          <Link to="/" className="text-2xl font-bold text-primary-600 flex items-center gap-2">
+          <Link to="/" className={`flex items-center gap-2 text-2xl font-bold ${isAdminPage ? 'text-rose-200' : 'text-primary-600'}`}>
             <span className="text-3xl">😺</span>
             <span>고롱</span>
           </Link>
-          <div className="flex items-center gap-3 text-sm text-gray-500">
-            <ShieldCheck className="w-5 h-5 text-primary-500" />
-            <span>함께하는 행사, 재미있게!</span>
+          <div className={`flex items-center gap-3 text-sm ${isAdminPage ? 'text-rose-200/80' : 'text-gray-500'}`}>
+            <ShieldCheck className={`w-5 h-5 ${isAdminPage ? 'text-rose-300' : 'text-primary-500'}`} />
           </div>
         </div>
 
@@ -53,9 +57,13 @@ function Header() {
                 key={path}
                 to={path}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                  isActive(path)
-                    ? 'bg-primary-100 text-primary-700'
-                    : 'text-gray-600 hover:bg-gray-100'
+                  isAdminPage
+                    ? (isActive(path)
+                      ? 'bg-rose-500/20 text-rose-100'
+                      : 'text-rose-100/75 hover:bg-rose-400/15')
+                    : (isActive(path)
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'text-gray-600 hover:bg-gray-100')
                 }`}
               >
                 <Icon className="w-5 h-5" />
@@ -66,9 +74,13 @@ function Header() {
             <button
               onClick={handleChatClick}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                location.pathname.startsWith('/chat')
-                  ? 'bg-primary-100 text-primary-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                isAdminPage
+                  ? (location.pathname.startsWith('/chat')
+                    ? 'bg-rose-500/20 text-rose-100'
+                    : 'text-rose-100/75 hover:bg-rose-400/15')
+                  : (location.pathname.startsWith('/chat')
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'text-gray-600 hover:bg-gray-100')
               }`}
             >
               <MessageSquare className="w-5 h-5" />
@@ -89,14 +101,16 @@ function Header() {
                 )}
                 <Link
                   to="/mypage"
-                  className="text-gray-600 hover:text-gray-900 font-medium"
+                  className={isAdminPage ? 'font-medium text-rose-100 hover:text-white' : 'text-gray-600 hover:text-gray-900 font-medium'}
                 >
                   마이페이지
                 </Link>
                 <button
                   type="button"
                   onClick={auth.logout}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                  className={isAdminPage
+                    ? 'rounded-lg border border-rose-700/60 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-500/15'
+                    : 'rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100'}
                 >
                   로그아웃
                 </button>
@@ -105,7 +119,9 @@ function Header() {
               <div className="flex gap-2">
                 <Link
                   to="/login"
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                  className={isAdminPage
+                    ? 'rounded-lg border border-rose-700/60 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-500/15'
+                    : 'rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100'}
                 >
                   join us
                 </Link>
@@ -192,11 +208,13 @@ function BottomNavigation() {
 
 export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isAdminPage = location.pathname.startsWith('/admin')
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <main className="pt-16 pb-16 md:pb-0">
+      <main className={`${isAdminPage ? '' : 'pt-16'} pb-16 md:pb-0`}>
         {children}
       </main>
       <BottomNavigation />

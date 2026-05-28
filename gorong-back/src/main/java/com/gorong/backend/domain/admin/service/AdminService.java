@@ -7,6 +7,8 @@ import com.gorong.backend.domain.admin.entity.UserBan;
 import com.gorong.backend.domain.admin.repository.ReportRepository;
 import com.gorong.backend.domain.admin.repository.UserBanRepository;
 import com.gorong.backend.domain.user.entity.User;
+import com.gorong.backend.domain.user.entity.UserProfile;
+import com.gorong.backend.domain.user.repository.UserProfileRepository;
 import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ import java.time.OffsetDateTime;
 public class AdminService {
 
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
     private final UserBanRepository userBanRepository;
     private final ReportRepository reportRepository;
 
@@ -194,11 +197,15 @@ public class AdminService {
     }
 
     private ReportSummaryDto toReportSummary(Report report) {
+        String reporterNickname = resolveNickname(report.getReporter().getId(), report.getReporter().getEmail());
+        String reportedNickname = resolveNickname(report.getReportedUser().getId(), report.getReportedUser().getEmail());
         return ReportSummaryDto.builder()
                 .reportId(report.getReportId())
                 .reporterId(report.getReporter().getId())
+                .reporterNickname(reporterNickname)
                 .reporterEmail(report.getReporter().getEmail())
                 .reportedUserId(report.getReportedUser().getId())
+                .reportedUserNickname(reportedNickname)
                 .reportedUserEmail(report.getReportedUser().getEmail())
                 .reason(report.getReason())
                 .status(report.getStatus())
@@ -207,5 +214,15 @@ public class AdminService {
                 .createdAt(report.getCreatedAt())
                 .processedAt(report.getProcessedAt())
                 .build();
+    }
+
+    private String resolveNickname(Long userId, String fallbackEmail) {
+        return userProfileRepository.findByUserId(userId)
+                .map(UserProfile::getNickname)
+                .filter(nickname -> nickname != null && !nickname.isBlank())
+                .orElseGet(() -> {
+                    if (fallbackEmail == null || fallbackEmail.isBlank()) return "unknown";
+                    return fallbackEmail.split("@")[0];
+                });
     }
 }

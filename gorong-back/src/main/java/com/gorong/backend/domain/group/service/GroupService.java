@@ -4,6 +4,8 @@ import com.gorong.backend.domain.group.entity.GroupParticipant;
 import com.gorong.backend.domain.group.entity.GroupPost;
 import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
+import com.gorong.backend.domain.minihome.repository.ActivityLogRepository;
+import com.gorong.backend.domain.minihome.service.MiniHomeService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,9 +22,16 @@ public class GroupService {
     private final GroupRepository groupPostRepository;
     private final GroupParticipantRepository participantRepository;
     private final UserRepository userRepository;
+    private final MiniHomeService miniHomeService;
+    private final ActivityLogRepository activityLogRepository;
 
     @Transactional
     public void joinGroup(Long groupId, Long userId) {
+        joinGroup(groupId, userId, true);
+    }
+
+    @Transactional
+    public void joinGroup(Long groupId, Long userId, boolean recordActivity) {
         GroupPost post = groupPostRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("글을 찾을 수 없습니다."));
         User user = userRepository.findById(userId)
@@ -43,6 +52,20 @@ public class GroupService {
 
         // 정원 증가
         post.setCurrentCapacity(post.getCurrentCapacity() + 1);
+
+        if (recordActivity) {
+            boolean alreadyLogged = activityLogRepository.existsByUserIdAndActivityTypeAndReferenceId(
+                    userId,
+                    "EVENT_PARTICIPATION",
+                    groupId
+            );
+            if (!alreadyLogged) {
+                String eventTitle = post.getEvent() != null && !post.getEvent().isBlank()
+                        ? post.getEvent().trim()
+                        : post.getTitle();
+                miniHomeService.recordEventParticipationActivity(userId, groupId, eventTitle);
+            }
+        }
     }
 
     // 📌 컨트롤러에서 빨간 줄 뜨던 메서드 (참여 목록 가져오기)
@@ -56,7 +79,7 @@ public class GroupService {
     @Transactional
     public void deleteGroupSafely(Long groupId) {
         // 1. 자식 데이터(참여자) 먼저 싹 지우기
-        participantRepository.deleteAllByGroupPostId(groupId);
+        participantRepository.deleteByGroupPostId(groupId);
 
         // 2. 부모 데이터(모임글) 지우기
         groupPostRepository.deleteById(groupId);

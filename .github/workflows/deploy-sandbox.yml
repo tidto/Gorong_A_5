@@ -94,7 +94,9 @@ jobs:
             echo "JUSO_COORD_API_KEY=${{ secrets.JUSO_COORD_API_KEY }}" >> .env
             echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
             echo "GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}" >> .env
-            
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
+
             docker compose pull
             docker compose up -d
 

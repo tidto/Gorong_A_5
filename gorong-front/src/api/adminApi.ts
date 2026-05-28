@@ -7,8 +7,10 @@ export type AppealStatus = 'NONE' | 'SUBMITTED' | 'REVIEWING' | 'RESOLVED'
 export interface ReportSummary {
   reportId: number
   reporterId: number
+  reporterNickname?: string
   reporterEmail: string
   reportedUserId: number
+  reportedUserNickname?: string
   reportedUserEmail: string
   reason: string
   status: ReportStatus

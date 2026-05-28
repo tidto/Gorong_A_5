@@ -4,6 +4,7 @@ package com.gorong.backend.domain.group.controller;
 import com.gorong.backend.domain.group.dto.ChatMessage;
 import com.gorong.backend.domain.group.entity.ChatMessageEntity;
 import com.gorong.backend.domain.group.repository.ChatMessageRepository;
+import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
 import com.gorong.backend.domain.user.repository.UserRepository;
@@ -19,7 +20,11 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
+
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Controller
 @RequiredArgsConstructor
@@ -39,6 +44,11 @@ public class ChatController {
                 .orElse(null);
     }
 
+    private Optional<User> getUserByEmail(String email) {
+        if (email == null || email.isBlank()) return Optional.empty();
+        return userRepository.findByEmail(email);
+    }
+
     // ── 메시지 전송 (WebSocket) ─────────────────────────────────────
     @MessageMapping("/chat.sendMessage/{roomId}")
     public void sendMessage(
@@ -46,26 +56,28 @@ public class ChatController {
             @Payload ChatMessage chatMessage
     ) {
         Long groupId = Long.parseLong(roomId);
-
         String senderEmail = chatMessage.getSenderEmail();
+        Optional<User> sender = getUserByEmail(senderEmail);
 
-        // ✅ 이메일로 닉네임 조회, 없으면 이메일로 fallback
         String nickname = getNicknameByEmail(senderEmail);
         String displayName = (nickname != null) ? nickname : (senderEmail != null ? senderEmail : "익명");
 
-        // DB 저장 (senderEmail에 이메일, senderNickname에 닉네임)
         chatMessageRepository.save(ChatMessageEntity.builder()
                 .groupId(groupId)
                 .senderEmail(senderEmail)
-                .senderNickname(displayName) // ✅ 닉네임 저장
+                .senderNickname(displayName)
                 .content(chatMessage.getText())
                 .build());
 
-        // ✅ 브로드캐스트 시 user 필드를 닉네임으로 세팅
+        // ✅ UTC+9 한국 시간으로 변환
+        String koreaTime = ZonedDateTime.now(ZoneId.of("Asia/Seoul"))
+                .format(DateTimeFormatter.ofPattern("HH:mm"));
+
         chatMessage.setRoomId(roomId);
         chatMessage.setSenderEmail(senderEmail);
-        chatMessage.setUser(displayName);   // ← 닉네임으로
-        chatMessage.setSentAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
+        chatMessage.setSenderUserId(sender.map(User::getId).orElse(null));
+        chatMessage.setUser(displayName);
+        chatMessage.setSentAt(koreaTime);  // ← 여기
         chatMessage.setType(ChatMessage.MessageType.CHAT);
 
         messagingTemplate.convertAndSend("/topic/group/" + roomId, chatMessage);
@@ -82,13 +94,20 @@ public class ChatController {
                     ChatMessage msg = new ChatMessage();
                     msg.setRoomId(String.valueOf(entity.getGroupId()));
                     msg.setSenderEmail(entity.getSenderEmail());
-                    // ✅ senderNickname이 있으면 닉네임, 없으면 이메일
+                    msg.setSenderUserId(getUserByEmail(entity.getSenderEmail()).map(User::getId).orElse(null));
                     String displayName = (entity.getSenderNickname() != null && !entity.getSenderNickname().isBlank())
                             ? entity.getSenderNickname()
                             : entity.getSenderEmail();
                     msg.setUser(displayName);
                     msg.setText(entity.getContent());
-                    msg.setSentAt(entity.getSentAt().format(DateTimeFormatter.ofPattern("HH:mm")));
+
+                    // ✅ DB에 저장된 UTC 시간을 한국 시간(UTC+9)으로 변환해서 반환
+                    String koreaTime = entity.getSentAt()
+                            .atZone(ZoneId.of("UTC"))
+                            .withZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                            .format(DateTimeFormatter.ofPattern("HH:mm"));
+                    msg.setSentAt(koreaTime);  // ← 여기
+
                     msg.setType(ChatMessage.MessageType.CHAT);
                     return msg;
                 })

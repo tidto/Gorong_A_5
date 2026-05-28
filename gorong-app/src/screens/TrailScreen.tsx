@@ -46,23 +46,14 @@ export default function TrailScreen() {
         </View>
       </View>
 
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
-          onPress={isRecording ? stopRecording : startRecording}
-        >
-          <Text style={styles.recordBtnText}>
-            {isRecording ? '⏹ 동선 기록 종료' : '▶ 동선 기록 시작'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.archiveBtn, trail.length < 2 && styles.archiveBtnDisabled]}
-          disabled={trail.length < 2}
-          onPress={handleArchive}
-        >
-          <Text style={styles.archiveBtnText}>보관</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
+        onPress={isRecording ? () => stopRecording('manual') : startRecording}
+      >
+        <Text style={styles.recordBtnText}>
+          {isRecording ? '⏹ 동선 기록 종료' : '▶ 동선 기록 시작'}
+        </Text>
+      </TouchableOpacity>
 
       <FlatList
         data={trail.slice().reverse()}

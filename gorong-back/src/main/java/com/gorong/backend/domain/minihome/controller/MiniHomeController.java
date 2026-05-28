@@ -1,6 +1,8 @@
 package com.gorong.backend.domain.minihome.controller;
 
 import com.gorong.backend.domain.minihome.dto.ActivityCreateRequestDto;
+import com.gorong.backend.domain.minihome.dto.GoCatAppearanceUpdateRequestDto;
+import com.gorong.backend.domain.minihome.dto.GoCatCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipRequestDto;
@@ -49,10 +51,13 @@ public class MiniHomeController {
     }
 
     @PostMapping("/me")
-    public MiniHomeResponseDto createMyMiniHome(Authentication authentication) {
+    public MiniHomeResponseDto createMyMiniHome(
+            Authentication authentication,
+            @RequestBody(required = false) @Valid GoCatCreateRequestDto req
+    ) {
         log.info("[MiniHomeController] ENTER POST /api/minihomes/me");
         Long userId = resolveUserId(authentication);
-        return miniHomeService.createMiniHome(userId);
+        return miniHomeService.createMiniHome(userId, req);
     }
 
     @GetMapping("/me/items")
@@ -77,14 +82,51 @@ public class MiniHomeController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Go냥이 체형·패턴·색상 — GO_CAT.appearance_state */
+    @PatchMapping("/me/cat/appearance")
+    public MiniHomeResponseDto.GoCatDto patchMyCatAppearance(
+            Authentication authentication,
+            @Valid @RequestBody GoCatAppearanceUpdateRequestDto req
+    ) {
+        return updateMyCatAppearance(authentication, req);
+    }
+
+    /** PATCH 미지원 프록시/구버전 배포 호환 */
+    @PutMapping("/me/cat/appearance")
+    public MiniHomeResponseDto.GoCatDto putMyCatAppearance(
+            Authentication authentication,
+            @Valid @RequestBody GoCatAppearanceUpdateRequestDto req
+    ) {
+        return updateMyCatAppearance(authentication, req);
+    }
+
+    @PostMapping("/me/cat/appearance")
+    public MiniHomeResponseDto.GoCatDto postMyCatAppearance(
+            Authentication authentication,
+            @Valid @RequestBody GoCatAppearanceUpdateRequestDto req
+    ) {
+        return updateMyCatAppearance(authentication, req);
+    }
+
+    private MiniHomeResponseDto.GoCatDto updateMyCatAppearance(
+            Authentication authentication,
+            GoCatAppearanceUpdateRequestDto req
+    ) {
+        Long userId = resolveUserId(authentication);
+        return miniHomeService.updateGoCatAppearance(userId, req);
+    }
+
     @GetMapping("/{userId}")
     public MiniHomeResponseDto getMiniHome(@PathVariable Long userId) {
         return miniHomeService.getMiniHome(userId);
     }
 
     @PostMapping("/{userId}")
-    public MiniHomeResponseDto createMiniHome(@PathVariable Long userId) {
-        return miniHomeService.createMiniHome(userId);
+    public MiniHomeResponseDto createMiniHome(
+            @PathVariable Long userId,
+            @RequestBody(required = false) @Valid GoCatCreateRequestDto req
+    ) {
+        return miniHomeService.createMiniHome(userId, req);
     }
 
     @PatchMapping("/{userId}")

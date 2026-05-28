@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import Home from '../pages/Home'
 import EventList from '../pages/EventList'
 import EventDetail from '../pages/EventDetail'
@@ -11,7 +11,6 @@ import MyPage from '../pages/user/MyPage'
 import Chatbot from '../pages/chatbot/Chatbot'
 import Signup from '../pages/user/Signup'
 import Login from '../pages/user/Login'
-import MiniHome from '../pages/minihome/MiniHome'
 import Profile from '../pages/user/Profile'
 import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
@@ -23,6 +22,7 @@ import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
 import ErrorPage from '../pages/ErrorPage'
 import GroupEditPage from "../pages/Group/GroupEditPage.tsx";
 import AdminPage from '../pages/admin/AdminPage'
+import RiveCustomizerDevPage from '../pages/minihome/dev/RiveCustomizerDevPage'
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const auth = useAuth()
@@ -72,6 +72,11 @@ function NavigationInitializer() {
     setNavigate(navigate)
   }, [navigate])
   return null
+}
+
+function RedirectMiniHomeUserToCatTower() {
+  const { userId } = useParams<{ userId: string }>()
+  return <Navigate to={userId ? `/cattower/${userId}` : "/cattower"} replace />
 }
 
 export default function AppRouter() {
@@ -137,6 +142,22 @@ export default function AppRouter() {
             }
           />
           <Route
+            path="/cattower/user/:userId"
+            element={
+              <ProtectedRoute>
+                <CatTower />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cattower/:userId"
+            element={
+              <ProtectedRoute>
+                <CatTower />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/cattower"
             element={
               <ProtectedRoute>
@@ -144,6 +165,16 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           />
+          {import.meta.env.DEV ? (
+            <Route
+              path="/dev/rive-customizer"
+              element={
+                <ProtectedRoute>
+                  <RiveCustomizerDevPage />
+                </ProtectedRoute>
+              }
+            />
+          ) : null}
           <Route
             path="/history"
             element={
@@ -171,9 +202,19 @@ export default function AppRouter() {
           <Route
             path="/minihome"
             element={
-              <ProtectedRoute>
-                <MiniHome />
-              </ProtectedRoute>
+              <Navigate to="/cattower" replace />
+            }
+          />
+          <Route
+            path="/minihome/:userId"
+            element={
+              <RedirectMiniHomeUserToCatTower />
+            }
+          />
+          <Route
+            path="/users/:userId/minihome"
+            element={
+              <RedirectMiniHomeUserToCatTower />
             }
           />
           <Route

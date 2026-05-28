@@ -5,30 +5,41 @@ import {
   getReports,
   markAppealReviewing,
   unbanUser,
-  type BanStatus,
   type AppealStatus,
+  type BanStatus,
   type ReportStatus,
 } from '../../api/adminApi'
 
 const BAN_DAY_OPTIONS = [1, 7, 15, 30, 0]
 
-// ── Status badge configs ──────────────────────────────────────────
 const REPORT_STATUS_STYLE: Record<string, string> = {
-  PENDING:    'bg-amber-500/15 text-amber-400 border border-amber-500/30',
-  REVIEWING:  'bg-blue-500/15 text-blue-400 border border-blue-500/30',
-  ACTIONED:   'bg-red-500/15 text-red-400 border border-red-500/30',
-  DISMISSED:  'bg-zinc-500/15 text-zinc-400 border border-zinc-500/30',
+  PENDING: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+  REVIEWING: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+  ACTIONED: 'bg-red-500/15 text-red-400 border border-red-500/30',
+  DISMISSED: 'bg-zinc-500/15 text-zinc-400 border border-zinc-500/30',
 }
+
 const BAN_STATUS_STYLE: Record<string, string> = {
-  ACTIVE:   'bg-red-500/15 text-red-400 border border-red-500/30',
+  ACTIVE: 'bg-red-500/15 text-red-400 border border-red-500/30',
   RELEASED: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
-  EXPIRED:  'bg-zinc-500/15 text-zinc-400 border border-zinc-500/30',
+  EXPIRED: 'bg-zinc-500/15 text-zinc-400 border border-zinc-500/30',
 }
+
 const APPEAL_STATUS_STYLE: Record<string, string> = {
-  NONE:       'bg-zinc-500/15 text-zinc-500 border border-zinc-600/20',
-  SUBMITTED:  'bg-amber-500/15 text-amber-400 border border-amber-500/30',
-  REVIEWING:  'bg-blue-500/15 text-blue-400 border border-blue-500/30',
-  RESOLVED:   'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+  NONE: 'bg-zinc-500/15 text-zinc-500 border border-zinc-600/20',
+  SUBMITTED: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+  REVIEWING: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+  RESOLVED: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+}
+
+function formatIdentity(nickname?: string, email?: string) {
+  const [rawName = 'unknown'] = (email || '').split('@')
+  const primary = (nickname && nickname.trim()) || rawName
+  const secondary = email || '-'
+  return {
+    primary: primary.length > 18 ? `${primary.slice(0, 18)}...` : primary,
+    secondary: secondary.length > 34 ? `${secondary.slice(0, 34)}...` : secondary,
+  }
 }
 
 function Badge({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {
@@ -65,7 +76,10 @@ function FilterSelect({
 function Pagination({
   page, totalPages, onPrev, onNext,
 }: {
-  page: number; totalPages: number; onPrev: () => void; onNext: () => void
+  page: number
+  totalPages: number
+  onPrev: () => void
+  onNext: () => void
 }) {
   return (
     <div className="mt-4 flex items-center gap-3">
@@ -90,7 +104,6 @@ function Pagination({
   )
 }
 
-// ── Main Component ────────────────────────────────────────────────
 export default function AdminPage() {
   const [reports, setReports] = useState<any[]>([])
   const [bans, setBans] = useState<any[]>([])
@@ -108,17 +121,28 @@ export default function AdminPage() {
 
   const selectedReport = useMemo(
     () => reports.find((r) => r.reportId === selectedReportId) ?? null,
-    [reports, selectedReportId]
+    [reports, selectedReportId],
   )
 
   const loadReports = async () => {
-    const res = await getReports({ page: reportPage, size: 10, status: reportStatus || undefined, sort: 'createdAt,desc' })
+    const res = await getReports({
+      page: reportPage,
+      size: 10,
+      status: reportStatus || undefined,
+      sort: 'createdAt,desc',
+    })
     setReports(res.content)
     setReportTotalPages(Math.max(1, res.totalPages))
   }
 
   const loadBans = async () => {
-    const res = await getBans({ page: banPage, size: 10, banStatus: banStatus || undefined, appealStatus: appealStatus || undefined, sort: 'bannedAt,desc' })
+    const res = await getBans({
+      page: banPage,
+      size: 10,
+      banStatus: banStatus || undefined,
+      appealStatus: appealStatus || undefined,
+      sort: 'bannedAt,desc',
+    })
     setBans(res.content)
     setBanTotalPages(Math.max(1, res.totalPages))
   }
@@ -130,7 +154,11 @@ export default function AdminPage() {
     if (!selectedReport || !banReason.trim()) return
     setIsLoading(true)
     try {
-      await banUser(selectedReport.reportedUserId, { reportId: selectedReport.reportId, banReason: banReason.trim(), banDays })
+      await banUser(selectedReport.reportedUserId, {
+        reportId: selectedReport.reportId,
+        banReason: banReason.trim(),
+        banDays,
+      })
       setBanReason('')
       setSelectedReportId(null)
       await Promise.all([loadReports(), loadBans()])
@@ -140,7 +168,7 @@ export default function AdminPage() {
   }
 
   const handleUnban = async (banId: number) => {
-    const note = window.prompt('해제 사유를 입력하세요.', '반론 검토 후 해제') ?? undefined
+    const note = window.prompt('해제 사유를 입력하세요.', '소명 검토 후 해제') ?? undefined
     await unbanUser(banId, note)
     await loadBans()
   }
@@ -151,289 +179,264 @@ export default function AdminPage() {
   }
 
   return (
-    <>
-      {/* Google Font injection */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Pretendard:wght@400;500;600;700&display=swap');`}</style>
-
-      <div
-        className="min-h-screen bg-zinc-950 px-6 py-8"
-        style={{ fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}
-      >
-        <div className="mx-auto max-w-7xl space-y-6">
-
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-white">
-                  <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-tight text-white">제재 관리</h1>
-                <p className="text-xs text-zinc-500">Admin Moderation Console</p>
-              </div>
+    <div className="min-h-screen bg-zinc-950 px-6 py-8" style={{ fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-white">
+                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+              </svg>
             </div>
-            <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-400">
-              ADMIN
-            </span>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-white">제재 관리</h1>
+              <p className="text-xs text-zinc-500">Admin Moderation Console</p>
+            </div>
+          </div>
+          <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-400">ADMIN</span>
+        </div>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <h2 className="text-sm font-semibold text-white">신고 이력</h2>
+              <span className="font-mono text-xs text-zinc-600">REPORTS</span>
+            </div>
+            <FilterSelect
+              value={reportStatus}
+              onChange={(v) => { setReportPage(0); setReportStatus(v as ReportStatus | '') }}
+              options={[
+                { value: '', label: '전체 상태' },
+                { value: 'PENDING', label: 'PENDING' },
+                { value: 'REVIEWING', label: 'REVIEWING' },
+                { value: 'ACTIONED', label: 'ACTIONED' },
+                { value: 'DISMISSED', label: 'DISMISSED' },
+              ]}
+            />
           </div>
 
-          {/* ── Reports Section ── */}
-          <section className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-5 py-4">
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
-                <h2 className="text-sm font-semibold text-white">신고 이력</h2>
-                <span className="font-mono text-xs text-zinc-600">REPORTS</span>
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  {['', 'ID', '신고자', '피신고자', '사유', '상태', '신고일'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-mono text-[11px] font-medium uppercase tracking-widest text-zinc-600">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {reports.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-xs text-zinc-600">데이터가 없습니다.</td>
+                  </tr>
+                ) : reports.map((r) => (
+                  <tr
+                    key={r.reportId}
+                    onClick={() => setSelectedReportId(r.reportId === selectedReportId ? null : r.reportId)}
+                    className={`cursor-pointer transition-colors ${
+                      selectedReportId === r.reportId ? 'bg-red-950/40 ring-1 ring-inset ring-red-800/40' : 'hover:bg-zinc-800/40'
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className={`flex h-4 w-4 items-center justify-center rounded-full border-2 ${
+                        selectedReportId === r.reportId ? 'border-red-500 bg-red-500' : 'border-zinc-600'
+                      }`}>
+                        {selectedReportId === r.reportId && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{r.reportId}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-300">
+                      {(() => {
+                        const e = formatIdentity(r.reporterNickname, r.reporterEmail)
+                        return (
+                          <div className="leading-tight">
+                            <div className="font-medium text-zinc-200">{e.primary}</div>
+                            <div className="font-mono text-[10px] text-zinc-500">{e.secondary}</div>
+                          </div>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-xs font-medium text-zinc-100">
+                      {(() => {
+                        const e = formatIdentity(r.reportedUserNickname, r.reportedUserEmail)
+                        return (
+                          <div className="leading-tight">
+                            <div className="font-semibold text-zinc-100">{e.primary}</div>
+                            <div className="font-mono text-[10px] text-zinc-500">{e.secondary}</div>
+                          </div>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-zinc-400 max-w-[200px] truncate">{r.reason}</td>
+                    <td className="px-4 py-3"><Badge label={r.status} styleMap={REPORT_STATUS_STYLE} /></td>
+                    <td className="px-4 py-3 font-mono text-xs text-zinc-500">
+                      {new Date(r.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border-t border-zinc-800 px-5 py-3">
+            <Pagination
+              page={reportPage}
+              totalPages={reportTotalPages}
+              onPrev={() => setReportPage((p) => p - 1)}
+              onNext={() => setReportPage((p) => p + 1)}
+            />
+          </div>
+        </section>
+
+        <section className={`rounded-xl border overflow-hidden ${selectedReport ? 'border-red-800/50 bg-red-950/20' : 'border-zinc-800 bg-zinc-900'}`}>
+          <div className="flex items-center gap-2 border-b border-zinc-800 px-5 py-4">
+            <span className={`h-1.5 w-1.5 rounded-full ${selectedReport ? 'bg-red-500' : 'bg-zinc-600'}`} />
+            <h2 className="text-sm font-semibold text-white">제재 처리</h2>
+            <span className="font-mono text-xs text-zinc-600">BAN ACTION</span>
+          </div>
+
+          <div className="px-5 py-5 space-y-4">
+            <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+              <div className={`h-2 w-2 rounded-full ${selectedReport ? 'bg-red-500' : 'bg-zinc-700'}`} />
+              <div className="min-w-0">
+                {selectedReport ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-zinc-500">신고 #{selectedReport.reportId}</span>
+                    <span className="text-xs text-zinc-400">→</span>
+                    <span className="text-sm font-medium text-white">{selectedReport.reportedUserNickname || selectedReport.reportedUserEmail}</span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-zinc-600">위 표에서 신고 항목을 선택하세요.</span>
+                )}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                value={banReason}
+                onChange={(e) => setBanReason(e.target.value)}
+                disabled={!selectedReport}
+                className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-zinc-500 focus:outline-none disabled:opacity-40"
+                placeholder="제재 사유 입력"
+              />
+              <select
+                value={banDays}
+                onChange={(e) => setBanDays(Number(e.target.value))}
+                disabled={!selectedReport}
+                className="appearance-none rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 font-mono text-sm text-zinc-200 focus:border-zinc-500 focus:outline-none disabled:opacity-40"
+              >
+                {BAN_DAY_OPTIONS.map((d) => (
+                  <option key={d} value={d} className="bg-zinc-900">
+                    {d === 0 ? '영구 정지' : `${d}일 정지`}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleBan}
+                disabled={!selectedReport || !banReason.trim() || isLoading}
+                className="rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-40"
+              >
+                {isLoading ? '처리 중...' : '제재 적용'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              <h2 className="text-sm font-semibold text-white">밴 이력</h2>
+              <span className="font-mono text-xs text-zinc-600">BAN HISTORY</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <FilterSelect
-                value={reportStatus}
-                onChange={(v) => { setReportPage(0); setReportStatus(v as ReportStatus | '') }}
+                value={banStatus}
+                onChange={(v) => { setBanPage(0); setBanStatus(v as BanStatus | '') }}
                 options={[
-                  { value: '', label: '전체 상태' },
-                  { value: 'PENDING', label: 'PENDING' },
+                  { value: '', label: '전체 밴 상태' },
+                  { value: 'ACTIVE', label: 'ACTIVE' },
+                  { value: 'RELEASED', label: 'RELEASED' },
+                  { value: 'EXPIRED', label: 'EXPIRED' },
+                ]}
+              />
+              <FilterSelect
+                value={appealStatus}
+                onChange={(v) => { setBanPage(0); setAppealStatus(v as AppealStatus | '') }}
+                options={[
+                  { value: '', label: '전체 소명 상태' },
+                  { value: 'NONE', label: 'NONE' },
+                  { value: 'SUBMITTED', label: 'SUBMITTED' },
                   { value: 'REVIEWING', label: 'REVIEWING' },
-                  { value: 'ACTIONED', label: 'ACTIONED' },
-                  { value: 'DISMISSED', label: 'DISMISSED' },
+                  { value: 'RESOLVED', label: 'RESOLVED' },
                 ]}
               />
             </div>
+          </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    {['', 'ID', '신고자', '피신고자', '사유', '상태', '신고일'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-mono text-[11px] font-medium uppercase tracking-widest text-zinc-600">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60">
-                  {reports.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-xs text-zinc-600">데이터가 없습니다</td>
-                    </tr>
-                  ) : reports.map((r) => (
-                    <tr
-                      key={r.reportId}
-                      onClick={() => setSelectedReportId(r.reportId === selectedReportId ? null : r.reportId)}
-                      className={`cursor-pointer transition-colors ${
-                        selectedReportId === r.reportId
-                          ? 'bg-red-950/40 ring-1 ring-inset ring-red-800/40'
-                          : 'hover:bg-zinc-800/40'
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${
-                          selectedReportId === r.reportId ? 'border-red-500 bg-red-500' : 'border-zinc-600'
-                        }`}>
-                          {selectedReportId === r.reportId && (
-                            <div className="h-1.5 w-1.5 rounded-full bg-white" />
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{r.reportId}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-300">{r.reporterEmail}</td>
-                      <td className="px-4 py-3 text-xs font-medium text-zinc-100">{r.reportedUserEmail}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-400 max-w-[200px] truncate">{r.reason}</td>
-                      <td className="px-4 py-3">
-                        <Badge label={r.status} styleMap={REPORT_STATUS_STYLE} />
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-500">
-                        {new Date(r.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                    </tr>
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  {['Ban ID', '이메일', '정지 기간', '사유', '밴 상태', '소명 상태', '액션'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-mono text-[11px] font-medium uppercase tracking-widest text-zinc-600">{h}</th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border-t border-zinc-800 px-5 py-3">
-              <Pagination
-                page={reportPage} totalPages={reportTotalPages}
-                onPrev={() => setReportPage((p) => p - 1)}
-                onNext={() => setReportPage((p) => p + 1)}
-              />
-            </div>
-          </section>
-
-          {/* ── Ban Action Section ── */}
-          <section className={`rounded-xl border overflow-hidden transition-all duration-300 ${
-            selectedReport
-              ? 'border-red-800/50 bg-red-950/20'
-              : 'border-zinc-800 bg-zinc-900'
-          }`}>
-            <div className="flex items-center gap-2 border-b border-zinc-800 px-5 py-4">
-              <span className={`h-1.5 w-1.5 rounded-full ${selectedReport ? 'bg-red-500 shadow-sm shadow-red-500' : 'bg-zinc-600'}`}></span>
-              <h2 className="text-sm font-semibold text-white">제재 처리</h2>
-              <span className="font-mono text-xs text-zinc-600">BAN ACTION</span>
-            </div>
-
-            <div className="px-5 py-5 space-y-4">
-              {/* Selected report info */}
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3">
-                <div className={`h-2 w-2 rounded-full flex-shrink-0 ${selectedReport ? 'bg-red-500' : 'bg-zinc-700'}`}></div>
-                <div className="min-w-0">
-                  {selectedReport ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-zinc-500">신고 #{selectedReport.reportId}</span>
-                      <span className="text-xs text-zinc-400">→</span>
-                      <span className="text-sm font-medium text-white">{selectedReport.reportedUserEmail}</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-zinc-600">위 표에서 신고 항목을 선택하세요</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <input
-                  value={banReason}
-                  onChange={(e) => setBanReason(e.target.value)}
-                  disabled={!selectedReport}
-                  className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-zinc-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
-                  placeholder="제재 사유 입력..."
-                />
-                <select
-                  value={banDays}
-                  onChange={(e) => setBanDays(Number(e.target.value))}
-                  disabled={!selectedReport}
-                  className="appearance-none rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 font-mono text-sm text-zinc-200 focus:border-zinc-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {BAN_DAY_OPTIONS.map((d) => (
-                    <option key={d} value={d} className="bg-zinc-900">
-                      {d === 0 ? '⛔ 영구정지' : `${d}일 정지`}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleBan}
-                  disabled={!selectedReport || !banReason.trim() || isLoading}
-                  className="flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-red-500 active:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {isLoading ? (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                    </svg>
-                  )}
-                  제재 적용
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Ban History Section ── */}
-          <section className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-5 py-4">
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-                <h2 className="text-sm font-semibold text-white">밴 이력</h2>
-                <span className="font-mono text-xs text-zinc-600">BAN HISTORY</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <FilterSelect
-                  value={banStatus}
-                  onChange={(v) => { setBanPage(0); setBanStatus(v as BanStatus | '') }}
-                  options={[
-                    { value: '', label: '전체 밴상태' },
-                    { value: 'ACTIVE', label: 'ACTIVE' },
-                    { value: 'RELEASED', label: 'RELEASED' },
-                    { value: 'EXPIRED', label: 'EXPIRED' },
-                  ]}
-                />
-                <FilterSelect
-                  value={appealStatus}
-                  onChange={(v) => { setBanPage(0); setAppealStatus(v as AppealStatus | '') }}
-                  options={[
-                    { value: '', label: '전체 반론상태' },
-                    { value: 'NONE', label: 'NONE' },
-                    { value: 'SUBMITTED', label: 'SUBMITTED' },
-                    { value: 'REVIEWING', label: 'REVIEWING' },
-                    { value: 'RESOLVED', label: 'RESOLVED' },
-                  ]}
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    {['Ban ID', '이메일', '정지 기간', '사유', '밴 상태', '반론 상태', '액션'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-mono text-[11px] font-medium uppercase tracking-widest text-zinc-600">
-                        {h}
-                      </th>
-                    ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {bans.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-xs text-zinc-600">데이터가 없습니다.</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60">
-                  {bans.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-xs text-zinc-600">데이터가 없습니다</td>
-                    </tr>
-                  ) : bans.map((b) => (
-                    <tr key={b.banId} className="hover:bg-zinc-800/40 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{b.banId}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-200">{b.email}</td>
-                      <td className="px-4 py-3">
-                        {b.banDays === 0 ? (
-                          <span className="font-mono text-xs font-bold text-red-400">영구</span>
-                        ) : (
-                          <span className="font-mono text-xs text-zinc-300">{b.banDays}일</span>
+                ) : bans.map((b) => (
+                  <tr key={b.banId} className="hover:bg-zinc-800/40 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{b.banId}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-200">{b.email}</td>
+                    <td className="px-4 py-3">
+                      {b.banDays === 0
+                        ? <span className="font-mono text-xs font-bold text-red-400">영구</span>
+                        : <span className="font-mono text-xs text-zinc-300">{b.banDays}일</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-zinc-400 max-w-[180px] truncate">{b.banReason}</td>
+                    <td className="px-4 py-3"><Badge label={b.banStatus} styleMap={BAN_STATUS_STYLE} /></td>
+                    <td className="px-4 py-3"><Badge label={b.appealStatus} styleMap={APPEAL_STATUS_STYLE} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {b.appealStatus === 'SUBMITTED' && (
+                          <button
+                            onClick={() => handleAppealReviewing(b.banId)}
+                            className="rounded border border-blue-700 bg-blue-900/30 px-2.5 py-1 text-xs text-blue-400 hover:bg-blue-800/40"
+                          >
+                            검토중
+                          </button>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-zinc-400 max-w-[180px] truncate">{b.banReason}</td>
-                      <td className="px-4 py-3">
-                        <Badge label={b.banStatus} styleMap={BAN_STATUS_STYLE} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge label={b.appealStatus} styleMap={APPEAL_STATUS_STYLE} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {b.appealStatus === 'SUBMITTED' && (
-                            <button
-                              onClick={() => handleAppealReviewing(b.banId)}
-                              className="rounded border border-blue-700 bg-blue-900/30 px-2.5 py-1 text-xs text-blue-400 transition hover:bg-blue-800/40"
-                            >
-                              검토중
-                            </button>
-                          )}
-                          {b.banStatus === 'ACTIVE' && (
-                            <button
-                              onClick={() => handleUnban(b.banId)}
-                              className="rounded border border-emerald-700 bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-400 transition hover:bg-emerald-800/40"
-                            >
-                              해제
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        {b.banStatus === 'ACTIVE' && (
+                          <button
+                            onClick={() => handleUnban(b.banId)}
+                            className="rounded border border-emerald-700 bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-800/40"
+                          >
+                            해제
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-            <div className="border-t border-zinc-800 px-5 py-3">
-              <Pagination
-                page={banPage} totalPages={banTotalPages}
-                onPrev={() => setBanPage((p) => p - 1)}
-                onNext={() => setBanPage((p) => p + 1)}
-              />
-            </div>
-          </section>
-
-        </div>
+          <div className="border-t border-zinc-800 px-5 py-3">
+            <Pagination
+              page={banPage}
+              totalPages={banTotalPages}
+              onPrev={() => setBanPage((p) => p - 1)}
+              onNext={() => setBanPage((p) => p + 1)}
+            />
+          </div>
+        </section>
       </div>
-    </>
+    </div>
   )
 }

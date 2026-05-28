@@ -9,5 +9,6 @@ import java.util.List;
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> {
     List<ActivityLog> findByUserIdOrderByCreateAtDesc(Long userId, Pageable pageable);
     long countByUserId(Long userId);
+    boolean existsByUserIdAndActivityTypeAndReferenceId(Long userId, String activityType, Long referenceId);
 }
 

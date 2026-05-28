@@ -1,34 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { DecorItem, SlotType } from "../../../components/minihome/DecorationModal";
-import { getMyUserItems, saveMyEquipments } from "../../../api/minihome/itemApi";
+import type { DecorItem, SlotType } from "../../../components/minihome/mini-home/DecorationModal";
 import type { UserItem } from "../../../types/minihome/item";
 import type { EquipItem } from "../../../types/minihome/minihome";
 import { useNotification } from "../../../contexts/NotificationContext";
+import { updateMyCatAppearance } from "../../../api/minihome/miniHomeApi";
+import { equipPreviewFromDraft } from "../../../utils/minihome/gocat/items";
+import { listDecorItemsForSlot } from "../../../utils/minihome/gocat/decorItemCatalog";
 import {
-  buildEquipBySlot,
-  draftFromEquips,
-  emptyDraft,
-  userItemToDecorItem,
-} from "../../../utils/minihome/items";
-import {
-  isItemSlotCompatible,
-  isItemUnlockedByStage,
-  type GrowthStage,
-} from "../../../utils/minihome/growth";
+  loadEquippedDecorDraft,
+  saveStoredEquipped,
+  sanitizeEquipDraft,
+} from "../../../utils/minihome/gocat/gocatEquippedStorage";
+import { toPresentationAppearancePayload } from "../../../utils/minihome/cat-tower/catTowerPresentation";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 
 type UseGoCatDecorationOptions = {
   pageEquips?: EquipItem[] | null;
+  appearanceState?: Record<string, unknown> | null;
   goCatId?: number | null;
   canEdit?: boolean;
+  /** localStorage 저장 후 CatTower 등 부모 UI 갱신 */
+  onEquippedSaved?: (draft: Record<SlotType, DecorItem | null>) => void;
 };
-
-function apiErrorMessage(e: unknown): string {
-  const anyErr = e as { response?: { data?: { message?: string } }; message?: string };
-  const msg = anyErr?.response?.data?.message;
-  if (typeof msg === "string" && msg.trim()) return msg;
-  if (typeof anyErr?.message === "string" && anyErr.message.trim()) return anyErr.message;
-  return "장착 저장 중 오류가 발생했습니다.";
-}
 
 export function useGoCatDecoration(
   _userId: number,
@@ -40,8 +33,19 @@ export function useGoCatDecoration(
   const canEdit = options.canEdit !== false;
 
   const [slot, setSlot] = useState<SlotType>("HEAD");
-  const [selectedEquipment, setSelectedEquipment] =
-    useState<Record<SlotType, DecorItem | null>>(emptyDraft);
+  const loadDraft = useCallback(
+    () =>
+      sanitizeEquipDraft(
+        loadEquippedDecorDraft(options.pageEquips, options.appearanceState, {
+          useLocalStorage: options.canEdit !== false,
+        })
+      ),
+    [options.pageEquips, options.appearanceState, options.canEdit]
+  );
+
+  const [selectedEquipment, setSelectedEquipment] = useState<Record<SlotType, DecorItem | null>>(
+    () => loadDraft()
+  );
   const [ownedItems, setOwnedItems] = useState<UserItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsLoadError, setItemsLoadError] = useState<string | null>(null);
@@ -49,58 +53,69 @@ export function useGoCatDecoration(
   const [saveInfo, setSaveInfo] = useState<string | null>(null);
   const [decorationErr, setDecorationErr] = useState<string | null>(null);
 
-  const equipBySlot = useMemo(
-    () => buildEquipBySlot(options.pageEquips),
-    [options.pageEquips]
-  );
+  const syncDraftFromSources = useCallback(() => {
+    setSelectedEquipment(loadDraft());
+  }, [loadDraft]);
+
+  useEffect(() => {
+    syncDraftFromSources();
+  }, [syncDraftFromSources]);
 
   useEffect(() => {
     if (!decorateOpen || !canEdit) return;
 
     setSaveInfo(null);
     setDecorationErr(null);
-    setSelectedEquipment(draftFromEquips(options.pageEquips));
+    setItemsLoadError(null);
+    setOwnedItems([]);
+    setItemsLoading(false);
+    syncDraftFromSources();
+  }, [decorateOpen, canEdit, syncDraftFromSources]);
 
-    let cancelled = false;
+  const filterItemsForSlot = useCallback(
+    (targetSlot: SlotType) => listDecorItemsForSlot(targetSlot, growthStage, ownedItems),
+    [ownedItems, growthStage]
+  );
 
-    (async () => {
-      setItemsLoading(true);
-      setItemsLoadError(null);
-      try {
-        const items = await getMyUserItems();
-        if (cancelled) return;
-        setOwnedItems(items);
-      } catch (e) {
-        if (cancelled) return;
-        console.error("[MiniHome] getMyUserItems failed", e);
-        setItemsLoadError("보유 아이템을 불러오지 못했습니다.");
-        setOwnedItems([]);
-      } finally {
-        if (!cancelled) setItemsLoading(false);
-      }
-    })();
+  const itemsForSlot = useMemo(() => filterItemsForSlot(slot), [filterItemsForSlot, slot]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [decorateOpen, canEdit, options.pageEquips]);
+  const itemsBySlot = useMemo(
+    () => ({
+      HEAD: filterItemsForSlot("HEAD"),
+      BODY: filterItemsForSlot("BODY"),
+      ACCESSORY: filterItemsForSlot("ACCESSORY"),
+    }),
+    [filterItemsForSlot]
+  );
 
-  const itemsForSlot = useMemo(() => {
-    return ownedItems
-      .map(userItemToDecorItem)
-      .filter((it) => {
-        const itemSlot = it.slotType;
-        if (!itemSlot || !isItemSlotCompatible(itemSlot, growthStage)) return false;
-        if (itemSlot !== slot) return false;
-        return isItemUnlockedByStage(it.requiredGrowthStage, growthStage);
-      });
-  }, [ownedItems, slot, growthStage]);
+  const itemsEmptyBySlot = useMemo(
+    () => ({
+      HEAD: !itemsLoading && !itemsLoadError && itemsBySlot.HEAD.length === 0,
+      BODY: !itemsLoading && !itemsLoadError && itemsBySlot.BODY.length === 0,
+      ACCESSORY: !itemsLoading && !itemsLoadError && itemsBySlot.ACCESSORY.length === 0,
+    }),
+    [itemsLoading, itemsLoadError, itemsBySlot]
+  );
 
   const itemsEmptyForSlot =
     !itemsLoading && !itemsLoadError && itemsForSlot.length === 0;
 
+  const equipPreview = useMemo(
+    () => equipPreviewFromDraft(selectedEquipment),
+    [selectedEquipment]
+  );
+
   const selectEquipment = useCallback((s: SlotType, item: DecorItem | null) => {
     setSelectedEquipment((prev) => ({ ...prev, [s]: item }));
+  }, []);
+
+  const toggleSlotItem = useCallback((s: SlotType, item: DecorItem) => {
+    setSelectedEquipment((prev) => {
+      if (prev[s]?.itemCode === item.itemCode || prev[s]?.itemId === item.itemId) {
+        return { ...prev, [s]: null };
+      }
+      return { ...prev, [s]: item };
+    });
   }, []);
 
   const saveDecoration = useCallback(async (): Promise<boolean> => {
@@ -115,27 +130,31 @@ export function useGoCatDecoration(
     setDecorationErr(null);
     setSaveInfo(null);
 
-    const payload = {
-      headItemId: selectedEquipment.HEAD?.itemId ?? null,
-      bodyItemId: selectedEquipment.BODY?.itemId ?? null,
-      accessoryItemId: selectedEquipment.ACCESSORY?.itemId ?? null,
-    };
-
-    try {
-      await saveMyEquipments(payload);
-      setSaveInfo("장착 정보가 저장되었습니다.");
-      toast("장착 정보가 저장되었습니다.", "success");
-      return true;
-    } catch (e: unknown) {
-      console.error("[MiniHome] saveDecoration failed", e);
-      const msg = apiErrorMessage(e);
+    const draft = sanitizeEquipDraft(selectedEquipment);
+    setSelectedEquipment(draft);
+    const localOk = saveStoredEquipped(draft);
+    if (!localOk) {
+      const msg = "장착 정보를 기기에 저장하지 못했습니다.";
       setDecorationErr(msg);
       toast(msg, "error");
-      return false;
-    } finally {
       setSaving(false);
+      return false;
     }
-  }, [selectedEquipment, canEdit, toast]);
+
+    options.onEquippedSaved?.(draft);
+
+    try {
+      await updateMyCatAppearance(toPresentationAppearancePayload(draft));
+    } catch (e) {
+      console.warn("[GoCat] equip API save failed — localStorage kept", e);
+    }
+
+    setSaveInfo("장착 정보가 저장되었습니다.");
+    toast("장착 정보가 저장되었습니다.", "success");
+    setSaving(false);
+
+    return true;
+  }, [selectedEquipment, canEdit, toast, options]);
 
   return {
     slot,
@@ -143,11 +162,14 @@ export function useGoCatDecoration(
     selectedEquipment,
     setSelectedEquipment,
     selectEquipment,
-    equipBySlot,
+    toggleSlotItem,
+    equipPreview,
     itemsLoading,
     itemsLoadError,
     itemsEmpty: itemsEmptyForSlot,
     itemsForSlot,
+    itemsBySlot,
+    itemsEmptyBySlot,
     saving,
     saveInfo,
     decorationErr,

@@ -2,6 +2,8 @@ package com.gorong.backend.domain.minihome.service;
 
 import com.gorong.backend.domain.minihome.dto.ActivityCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
+import com.gorong.backend.domain.minihome.dto.GoCatAppearanceUpdateRequestDto;
+import com.gorong.backend.domain.minihome.dto.GoCatCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipRequestDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipmentsSaveRequestDto;
@@ -28,6 +30,8 @@ import com.gorong.backend.domain.minihome.repository.ItemRepository;
 import com.gorong.backend.domain.minihome.repository.MiniHomeGalleryRepository;
 import com.gorong.backend.domain.minihome.repository.MiniHomeRepository;
 import com.gorong.backend.domain.minihome.repository.UserItemRepository;
+import com.gorong.backend.domain.group.entity.GroupPost;
+import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
@@ -40,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -59,6 +64,8 @@ public class MiniHomeService {
     private final UserItemRepository userItemRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final EventCategoryItemRewardService eventCategoryItemRewardService;
+    private final GroupRepository groupRepository;
 
     public MiniHomeResponseDto getMiniHome(Long userId) {
         requireUserId(userId);
@@ -70,6 +77,11 @@ public class MiniHomeService {
 
     @Transactional
     public MiniHomeResponseDto createMiniHome(Long userId) {
+        return createMiniHome(userId, null);
+    }
+
+    @Transactional
+    public MiniHomeResponseDto createMiniHome(Long userId, GoCatCreateRequestDto req) {
         requireUserId(userId);
 
         MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId).orElseGet(() ->
@@ -81,15 +93,37 @@ public class MiniHomeService {
                         .build())
         );
 
-        GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElseGet(() ->
-                goCatRepository.save(GoCat.builder()
-                        .userId(userId)
-                        .miniHomeId(miniHome.getMiniHomeId())
-                        .catName("고냥이")
-                        .characterType("BASIC")
-                        .appearanceState(defaultAppearance())
-                        .build())
-        );
+        Map<String, Object> appearance = defaultAppearance();
+        String catName = "고냥이";
+        if (req != null) {
+            if (req.getCatName() != null && !req.getCatName().isBlank()) {
+                catName = req.getCatName().trim();
+            }
+            if (req.hasAppearanceFields()) {
+                mergeAppearanceFields(appearance, req.getBodyType(), req.getPattern(), req.getColor(), true);
+            }
+        }
+
+        GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
+        if (cat == null) {
+            cat = goCatRepository.save(GoCat.builder()
+                    .userId(userId)
+                    .miniHomeId(miniHome.getMiniHomeId())
+                    .catName(catName)
+                    .characterType("BASIC")
+                    .appearanceState(appearance)
+                    .build());
+        } else if (req != null && req.hasAppearanceFields()) {
+            Map<String, Object> state = cat.getAppearanceState() != null
+                    ? new HashMap<>(cat.getAppearanceState())
+                    : defaultAppearance();
+            mergeAppearanceFields(state, req.getBodyType(), req.getPattern(), req.getColor(), true);
+            cat.setAppearanceState(state);
+            if (req.getCatName() != null && !req.getCatName().isBlank()) {
+                cat.setCatName(req.getCatName().trim());
+            }
+            goCatRepository.save(cat);
+        }
 
         seedStarterItems(userId);
 
@@ -138,7 +172,7 @@ public class MiniHomeService {
 
         int temperatureTotal = cat != null ? readTemperatureTotal(cat) : 0;
         int level = calcLevel(temperatureTotal);
-        String growthStage = growthStageFromExp(temperatureTotal);
+        String growthStage = growthStageFromActivityCount(activityCount);
 
         String ownerNickname = userProfileRepository.findByUserId(userId)
                 .map(UserProfile::getNickname)
@@ -173,7 +207,7 @@ public class MiniHomeService {
                         .growthStage(growthStage)
                         .galleryCount(galleries.size())
                         .build())
-                .activities(activities.stream().map(MiniHomePageResponseDto.ActivityDto::from).toList())
+                .activities(activities.stream().map(this::toActivityDto).toList())
                 .galleries(galleries.stream().map(g -> MiniHomePageResponseDto.GalleryDto.from(
                         g,
                         imagesByGalleryId.getOrDefault(g.getGalleryId(), List.of())
@@ -200,6 +234,25 @@ public class MiniHomeService {
         );
     }
 
+    @Transactional
+    public MiniHomePageResponseDto.ActivityDto recordEventParticipationActivity(Long userId, Long referenceId, String eventTitle) {
+        requireUserId(userId);
+        if (referenceId == null || referenceId <= 0) {
+            throw new IllegalArgumentException("referenceId는 필수입니다.");
+        }
+        String resolvedEventTitle = (eventTitle != null && !eventTitle.isBlank())
+                ? eventTitle.trim()
+                : "행사";
+        return recordActivity(
+                userId,
+                "EVENT_PARTICIPATION",
+                referenceId,
+                50,
+                "행사 참여",
+                resolvedEventTitle + " 참여 신청"
+        );
+    }
+
     private MiniHomePageResponseDto.ActivityDto recordActivity(
             Long userId,
             String activityType,
@@ -221,6 +274,13 @@ public class MiniHomeService {
                 .build());
 
         applyExpToCat(userId, delta);
+        eventCategoryItemRewardService.tryGrantForActivity(
+                userId,
+                normalizedType,
+                referenceId,
+                resolvedTitle,
+                resolvedDescription
+        );
 
         MiniHomePageResponseDto.ActivityDto dto = MiniHomePageResponseDto.ActivityDto.from(saved);
         if ((title != null && !title.isBlank()) || (description != null && !description.isBlank())) {
@@ -237,15 +297,60 @@ public class MiniHomeService {
         return dto;
     }
 
+    private MiniHomePageResponseDto.ActivityDto toActivityDto(ActivityLog activity) {
+        MiniHomePageResponseDto.ActivityDto base = MiniHomePageResponseDto.ActivityDto.from(activity);
+        String normalizedType = activity.getActivityType() == null ? "" : activity.getActivityType().trim().toUpperCase();
+        if (!"EVENT_PARTICIPATED".equals(normalizedType) && !"EVENT_PARTICIPATION".equals(normalizedType)) {
+            return base;
+        }
+        Long referenceId = activity.getReferenceId();
+        if (referenceId == null) return base;
+
+        String eventTitle = groupRepository.findById(referenceId)
+                .map(group -> {
+                    String event = group.getEvent();
+                    if (event != null && !event.isBlank()) return event;
+                    return group.getTitle();
+                })
+                .orElse(null);
+
+        if (eventTitle == null || eventTitle.isBlank()) {
+            return base;
+        }
+        return MiniHomePageResponseDto.ActivityDto.builder()
+                .activityId(base.getActivityId())
+                .activityType(base.getActivityType())
+                .referenceId(base.getReferenceId())
+                .temperatureChange(base.getTemperatureChange())
+                .title("행사 참여")
+                .description(eventTitle.trim() + " 참여 신청")
+                .createAt(base.getCreateAt())
+                .build();
+    }
+
+    /** 미니홈 페이지·GET /me/page 와 동일한 GO_CAT */
+    private Optional<GoCat> findGoCatForUser(Long userId) {
+        return miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
+                .flatMap(mh -> goCatRepository.findByMiniHomeId(mh.getMiniHomeId()));
+    }
+
+    private GoCat requireGoCatForUser(Long userId) {
+        return findGoCatForUser(userId)
+                .orElseThrow(() -> new IllegalArgumentException("고양이 정보를 찾을 수 없습니다. userId=" + userId));
+    }
+
     private void applyExpToCat(Long userId, int delta) {
-        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId).orElse(null);
+        GoCat cat = findGoCatForUser(userId)
+                .or(() -> goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId))
+                .orElse(null);
         if (cat == null) return;
 
         int total = readTemperatureTotal(cat) + delta;
-        String stage = growthStageFromExp(total);
         Map<String, Object> state = cat.getAppearanceState() != null ? new HashMap<>(cat.getAppearanceState()) : defaultAppearance();
         state.put("temperatureTotal", total);
         state.put("level", calcLevel(total));
+        long activityCount = activityLogRepository.countByUserId(userId);
+        String stage = growthStageFromActivityCount(activityCount);
         state.put("growthStage", stage);
         cat.setAppearanceState(state);
         cat.setCharacterType(stage);
@@ -325,8 +430,7 @@ public class MiniHomeService {
     public List<MiniHomeEquipmentDto> getEquipments(Long userId) {
         requireUserId(userId);
 
-        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId)
-                .orElseThrow(() -> new IllegalArgumentException("고양이 정보를 찾을 수 없습니다. userId=" + userId));
+        GoCat cat = requireGoCatForUser(userId);
 
         List<CatEquip> equips = catEquipRepository.findByGoCatIdAndIsActiveOrderByEquippedAtDesc(cat.getGoCatId(), true);
         if (equips.isEmpty()) return List.of();
@@ -360,8 +464,7 @@ public class MiniHomeService {
         Item item = itemRepository.findById(req.getItemId())
                 .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다. itemId=" + req.getItemId()));
 
-        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId)
-                .orElseThrow(() -> new IllegalArgumentException("고양이 정보를 찾을 수 없습니다. userId=" + userId));
+        GoCat cat = requireGoCatForUser(userId);
 
         // 기존 슬롯 착용 해제(소프트 비활성화)
         List<CatEquip> actives = catEquipRepository.findByGoCatIdAndIsActiveAndSlotTypeOrderByEquippedAtDesc(cat.getGoCatId(), true, slot);
@@ -411,8 +514,7 @@ public class MiniHomeService {
             throw new IllegalArgumentException("slotType은 HEAD, BODY, ACCESSORY 중 하나여야 합니다.");
         }
 
-        GoCat cat = goCatRepository.findFirstByUserIdOrderByGoCatIdAsc(userId)
-                .orElseThrow(() -> new IllegalArgumentException("고양이 정보를 찾을 수 없습니다. userId=" + userId));
+        GoCat cat = requireGoCatForUser(userId);
 
         catEquipRepository.findFirstByGoCatIdAndIsActiveAndSlotTypeOrderByEquippedAtDesc(cat.getGoCatId(), true, slot)
                 .ifPresent(e -> {
@@ -427,14 +529,28 @@ public class MiniHomeService {
         grantStarterItem(userId, "STARTER_ACC", "기본 리본", "ACCESSORY");
     }
 
+    private static final Map<String, String> STARTER_ITEM_IMAGE_URLS = Map.of(
+            "STARTER_HAT", "/assets/cat/items/starter-hat.svg",
+            "STARTER_BODY", "/assets/cat/items/starter-body.svg",
+            "STARTER_ACC", "/assets/cat/items/starter-acc.svg"
+    );
+
     private void grantStarterItem(Long userId, String itemCode, String itemName, String itemType) {
         Item item = itemRepository.findByItemCode(itemCode).orElseGet(() ->
                 itemRepository.save(Item.builder()
                         .itemCode(itemCode)
                         .itemName(itemName)
                         .itemType(itemType)
+                        .imageUrl(STARTER_ITEM_IMAGE_URLS.get(itemCode))
                         .build())
         );
+        if (item.getImageUrl() == null || item.getImageUrl().isBlank()) {
+            String url = STARTER_ITEM_IMAGE_URLS.get(itemCode);
+            if (url != null) {
+                item.setImageUrl(url);
+                itemRepository.save(item);
+            }
+        }
         if (!userItemRepository.existsByUserIdAndItemId(userId, item.getItemId())) {
             userItemRepository.save(UserItem.builder()
                     .userId(userId)
@@ -443,11 +559,87 @@ public class MiniHomeService {
         }
     }
 
+    @Transactional
+    public MiniHomeResponseDto.GoCatDto updateGoCatAppearance(Long userId, GoCatAppearanceUpdateRequestDto req) {
+        requireUserId(userId);
+        if (req == null) throw new IllegalArgumentException("요청 본문이 비어 있습니다.");
+
+        GoCat cat = requireGoCatForUser(userId);
+
+        Map<String, Object> state = cat.getAppearanceState() != null
+                ? new HashMap<>(cat.getAppearanceState())
+                : defaultAppearance();
+
+        mergeAppearanceFields(
+                state,
+                req.getBodyType(),
+                req.getPattern(),
+                req.getColor(),
+                true
+        );
+        mergePresentationFields(state, req);
+        if (req.getCatName() != null && !req.getCatName().isBlank()) {
+            cat.setCatName(req.getCatName().trim());
+        }
+
+        cat.setAppearanceState(state);
+        goCatRepository.save(cat);
+        return MiniHomeResponseDto.GoCatDto.from(cat);
+    }
+
+    private static void mergeAppearanceFields(
+            Map<String, Object> state,
+            String bodyType,
+            String pattern,
+            String color,
+            boolean markConfigured
+    ) {
+        if (bodyType != null && !bodyType.isBlank()) {
+            state.put("bodyType", bodyType.trim().toUpperCase());
+        }
+        if (pattern != null && !pattern.isBlank()) {
+            state.put("pattern", pattern.trim().toUpperCase());
+        }
+        if (color != null && !color.isBlank()) {
+            state.put("color", color.trim().toUpperCase());
+        }
+        if (markConfigured) {
+            state.put("appearanceConfigured", true);
+        }
+    }
+
+    private static void mergePresentationFields(
+            Map<String, Object> state,
+            GoCatAppearanceUpdateRequestDto req
+    ) {
+        if (req.getRoomBackground() != null && !req.getRoomBackground().isBlank()) {
+            state.put("roomBackground", req.getRoomBackground().trim().toUpperCase());
+        }
+        if (req.getHeadItemCode() != null) {
+            if (req.getHeadItemCode().isBlank()) {
+                state.remove("headItemCode");
+            } else {
+                state.put("headItemCode", req.getHeadItemCode().trim().toLowerCase());
+            }
+        }
+        if (req.getAccessoryItemCode() != null) {
+            if (req.getAccessoryItemCode().isBlank()) {
+                state.remove("accessoryItemCode");
+            } else {
+                state.put("accessoryItemCode", req.getAccessoryItemCode().trim().toLowerCase());
+            }
+        }
+    }
+
     private static Map<String, Object> defaultAppearance() {
         Map<String, Object> m = new HashMap<>();
         m.put("temperatureTotal", 0);
         m.put("level", 1);
         m.put("growthStage", "BASIC");
+        m.put("bodyType", "NORMAL");
+        m.put("pattern", "SOLID");
+        m.put("color", "CREAM");
+        m.put("appearanceConfigured", false);
         return m;
     }
 
@@ -456,6 +648,14 @@ public class MiniHomeService {
         Object v = cat.getAppearanceState().get("temperatureTotal");
         if (v instanceof Number) return ((Number) v).intValue();
         return 0;
+    }
+
+    /** 행사·리뷰 등 활동 로그 횟수 기준 성장 단계 */
+    static String growthStageFromActivityCount(long activityCount) {
+        if (activityCount >= 60) return "MASTER";
+        if (activityCount >= 30) return "ADULT";
+        if (activityCount >= 10) return "TEEN";
+        return "BASIC";
     }
 
     static String growthStageFromExp(int exp) {

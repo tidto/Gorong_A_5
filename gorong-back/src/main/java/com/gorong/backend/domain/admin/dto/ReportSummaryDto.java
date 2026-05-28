@@ -11,8 +11,10 @@ import java.time.OffsetDateTime;
 public class ReportSummaryDto {
     private Long reportId;
     private Long reporterId;
+    private String reporterNickname;
     private String reporterEmail;
     private Long reportedUserId;
+    private String reportedUserNickname;
     private String reportedUserEmail;
     private String reason;
     private Report.ReportStatus status;

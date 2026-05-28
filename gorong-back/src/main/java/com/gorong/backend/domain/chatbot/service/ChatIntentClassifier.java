@@ -30,10 +30,21 @@ public final class ChatIntentClassifier {
     }
 
     private static boolean matchesServiceGuide(String m) {
+        if (containsAny(m, "방법", "어떻", "이용", "사용", "안내", "설명", "뭐야", "무엇")) {
+            if (containsAny(m, "행사", "그룹", "동행", "모임", "채팅", "리뷰", "후기", "캣타워", "cattower", "고냥", "미니홈", "참여", "신청", "성장")) {
+                return true;
+            }
+        }
         if (containsAny(m, "리뷰", "후기") && containsAny(m, "작성", "쓰", "방법", "어떻", "등록", "남기", "올리")) {
             return true;
         }
-        if (containsAny(m, "동행", "모임", "그룹") && containsAny(m, "모집", "글", "기능", "설명", "방법", "어떻", "서비스", "이용")) {
+        if (containsAny(m, "동행", "모임", "그룹") && containsAny(m, "모집", "글", "기능", "설명", "방법", "어떻", "서비스", "이용", "참여", "신청")) {
+            return true;
+        }
+        if (containsAny(m, "채팅", "채팅방") && containsAny(m, "방법", "이용", "어떻", "사용")) {
+            return true;
+        }
+        if (containsAny(m, "다른", "유저", "친구") && containsAny(m, "캣타워", "cattower", "미니홈", "방문", "보기")) {
             return true;
         }
         return containsAny(
@@ -41,15 +52,24 @@ public final class ChatIntentClassifier {
                 "미니홈", "미니 홈", "캣타워", "cattower", "cat tower",
                 "고냥이", "미니홈피", "행사 기록", "활동 기록",
                 "프로필 수정", "프로필 변경", "마이페이지", "회원가입 방법",
-                "로그인 방법", "앱 사용법", "이용 방법", "사용 방법", "기능 설명", "서비스 안내"
+                "로그인 방법", "앱 사용법", "이용 방법", "사용 방법", "기능 설명", "서비스 안내",
+                "고롱 사용", "서비스 도우미"
         );
     }
 
     private static boolean matchesLocationRecommendation(String m) {
-        return containsAny(m, "주변", "근처", "가까운", "내 주변", "우리 동네", "동네", "집 근처", "근방");
+        if (containsAny(m, "주변", "근처", "가까운", "내 주변", "우리 동네", "동네", "집 근처", "근방", "내 근처")) {
+            return true;
+        }
+        return containsAny(m, "대구", "서울", "부산", "인천", "광주", "대전")
+                && containsAny(m, "행사", "추천", "갈만", "어디", "관광", "축제", "전시")
+                && !containsAny(m, "방법", "어떻", "이용법", "사용법");
     }
 
     private static boolean matchesEventRecommendation(String m) {
+        if (containsAny(m, "인기", "핫", "이번 주", "주말", "갈만", "추천해", "추천 해")) {
+            return true;
+        }
         return containsAny(
                 m,
                 "행사", "추천", "전시", "축제", "공연", "데이트", "사진", "맛집", "야경",
