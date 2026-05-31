@@ -1,17 +1,41 @@
-import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+// ──────────────────────────────────────────────────────────────
+// firebaseConfig.ts — Firebase 초기화
+//
+// Expo Go 호환: Firebase JS SDK 사용 (네이티브 모듈 불필요)
+// 환경변수: 프로젝트 루트 .env 파일에 EXPO_PUBLIC_FIREBASE_* 설정 필요
+//
+// getApps() 체크: 핫리로드(Expo Go) 시 중복 초기화 방지
+// ──────────────────────────────────────────────────────────────
+
+import { initializeApp, getApps } from 'firebase/app'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth/react-native'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  apiKey:            process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain:        process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId:         process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket:     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  appId:             process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 }
 
-const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+// Expo Go 핫리로드 시 "Firebase App already exists" 오류 방지
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+
+// RN/Expo에서는 auth persistence를 명시적으로 초기화해야
+// "Component auth has not been registered yet" 오류를 피할 수 있습니다.
+let authInstance
+try {
+  authInstance = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  })
+} catch {
+  // 이미 initializeAuth 된 경우 fallback
+  authInstance = getAuth(app)
+}
+
+export const auth = authInstance
 export const db = getFirestore(app)
 export default app

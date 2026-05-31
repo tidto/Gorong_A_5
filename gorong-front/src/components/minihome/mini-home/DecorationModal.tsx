@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
-import { motion } from "framer-motion";
 import Button from "../../Button";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import DecorationCatStage from "../decoration/DecorationCatStage";
@@ -28,12 +27,7 @@ export default function DecorationModal(props: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-amber-950/20 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 28 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 28 }}
-        className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-[28px] border border-amber-100/90 bg-gradient-to-b from-[#fffaf5] to-[#fef3e8] shadow-2xl sm:rounded-[28px]"
-      >
+      <div className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-[28px] border border-amber-100/90 bg-gradient-to-b from-[#fffaf5] to-[#fef3e8] shadow-2xl sm:rounded-[28px]">
         <header className="flex shrink-0 items-center justify-between px-4 py-2 sm:px-5">
           <h2 className="text-lg font-extrabold text-amber-950">Go냥이 꾸미기</h2>
           <button
@@ -75,7 +69,7 @@ export default function DecorationModal(props: {
             </div>
           </aside>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
