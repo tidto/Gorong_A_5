@@ -1,55 +1,51 @@
-// 공통 타입 정의
+// ─────────────────────────────────────────────
+// 공통 타입 정의 (gorong-app)
+// 백엔드 응답 구조에 맞춰 정의합니다.
+// ─────────────────────────────────────────────
 
-// 행사/장소
+// ─── 로그인된 유저 정보 ───────────────────────
+// 백엔드 /api/v1/users/login 응답에서 채워지는 값
+export interface User {
+  uid: string       // Firebase UID (로컬 식별용)
+  email: string
+  nickname: string
+  roleType: 'USER' | 'ADMIN' // 백엔드 RoleType
+}
+
+// ─── 행사·문화장소 ────────────────────────────
+// 백엔드 /api/v1/app/venues/nearby 응답 구조
 export interface Venue {
   id: string
   name: string
   lat: number
   lng: number
-  radius: number            // 지오펜스 반경 (미터)
+  radius: number           // 지오펜스 반경 (미터)
   address: string
-  category: string           // TourAPI 카테고리 
-  barrierFreeInfo?: string
+  category: string          // TourAPI 카테고리
+  barrierFreeInfo?: string  // 무장애 정보
   imageUrl?: string
 }
 
-// 유저
-// token 제거 (Firebase가 관리)
-export interface User {
-  uid: string
-  email: string
-  nickname: string
-}
-
-// 채팅 메시지
+// ─── 채팅 메시지 ──────────────────────────────
+// Firestore 문서 구조
 export interface ChatMessage {
   id: string
   text: string
   userId: string
   nickname: string
-  createdAt: number
+  createdAt: number    // Unix ms
   isAnonymous: boolean
 }
 
-// GPS 동선
+// ─── GPS 동선 포인트 ──────────────────────────
+// react-native-maps Polyline 좌표 형식과 통일
 export interface TrailPoint {
-  latitude: number   // latitude/longitude로 통일
+  latitude: number
   longitude: number
   timestamp: number
 }
 
-// 모임
-export interface Group {
-  id: string
-  venueId: string
-  leaderId: string
-  memberIds: string[]
-  maxMembers: number        // 최대 4명
-  chatRoomId: string
-  isGathered: boolean       // 모였다 인증 여부
-}
-
-// 앱 그룹 목록 응답 타입 (백엔드 /api/v1/app/groups 기준)
+// ─── 앱 그룹 (백엔드 /api/v1/app/groups) ─────
 export interface AppGroup {
   id: number
   title: string
@@ -57,7 +53,21 @@ export interface AppGroup {
   location: string
   maxMembers: number
   currentMembers: number
-  joined: boolean
-  gathered: boolean
+  joined: boolean       // 내가 이미 참가했는지
+  gathered: boolean     // 모임 성사 인증 여부
   status: string
+}
+
+// ─── 회원가입 요청 DTO (앱 → 백엔드) ─────────
+// 백엔드 SignUpRequestDto 와 매핑
+export interface SignUpPayload {
+  email: string
+  nickname: string
+  barrierFreeType?: 'NONE' | 'PHYSICAL' | 'VISUAL' | 'AUDITORY'
+  isForeigner?: boolean
+  baseAddress?: string
+  latitude?: number
+  longitude?: number
+  gorongHz?: string
+  interestIds?: number[]
 }
