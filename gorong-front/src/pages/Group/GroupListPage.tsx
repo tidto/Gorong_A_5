@@ -1,13 +1,9 @@
-// ============================================================
 // 경로: src/pages/Group/GroupListPage.tsx
-//
-// 변경 사항:
-//  - 카드 클릭 시 인라인 아코디언 펼치기 → /groups/:id 페이지 이동으로 변경
-//  - selectedId, isChatOpen, chatMessage, activeChatTitle, connectedGroupId 상태 제거
-//  - messagesEndRef, connectChat, handleOpenChat, handleSend, handleDelete, handleJoinRequest 제거
-//  - useChatRoom 에서 isMyGroup 만 사용 (채팅 관련 구조분해 제거)
-//  - 카드에 지도 보기 버튼 유지 (stopPropagation으로 페이지 이동과 분리)
-// ============================================================
+// 변경사항:
+//  1. 배너가 네비게이션 바 바로 아래에 붙도록 marginTop: '-64px' 적용
+//     (GroupDetailPage와 동일한 방식)
+//  2. 정렬 선택 기능 추가 (등록순 / 일정 가까운 순)
+//  3. meetingDate가 오늘 이전이면 프론트에서 자동 마감 처리
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,483 +13,404 @@ import { useChatRoom } from '../../hooks/useChatRoom';
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
 const ITEMS_PER_PAGE = 10;
 
-// ────────────────────────────────────────────────────────────
-// 타입 정의
-// ────────────────────────────────────────────────────────────
-
 interface Group {
-  id: number
-  title: string
-  content?: string
-  location?: string
-  maxCapacity?: number
-  currentCapacity?: number
-  status?: string
-  event?: string
-  meetingDate?: string
-  meetingTime?: string
-  condition?: string
-  authorName?: string
-  author?: {
-    id?: number
-    email?: string
-  }
+  id: number; title: string; content?: string; location?: string;
+  maxCapacity?: number; currentCapacity?: number; status?: string;
+  event?: string; meetingDate?: string; meetingTime?: string;
+  condition?: string; authorName?: string;
+  author?: { id?: number; email?: string };
 }
-
-interface GroupForPermission {
-  authorEmail?: string
-  authorName?: string
-}
-
+interface GroupForPermission { authorEmail?: string; authorName?: string }
 declare global { interface Window { kakao: any } }
 
-const escapeHtml = (value: string) =>
-    value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+type SortOrder = 'createdAt' | 'meetingDate';
+
+const escapeHtml = (v: string) =>
+    v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ── 날짜가 오늘 이전인지 확인 ──────────────────────────────────────
+const isDatePassed = (dateStr?: string): boolean => {
+  if (!dateStr) return false;
+  try {
+    const meeting = new Date(dateStr);
+    meeting.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return meeting < today;
+  } catch { return false; }
+};
 
 const GroupListPage = () => {
   const navigate = useNavigate();
-
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [groups, setGroups]                           = useState<Group[]>([]);
+  const [searchTerm, setSearchTerm]                   = useState('');
   const [selectedEventFilter, setSelectedEventFilter] = useState('ALL');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [joinedGroupIds, setJoinedGroupIds] = useState<number[]>([]);
-  const [mapTarget, setMapTarget] = useState<Group | null>(null);
-  const [isMapLoading, setIsMapLoading] = useState(false);
-  const [mapError, setMapError] = useState('');
-
+  const [sortOrder, setSortOrder]                     = useState<SortOrder>('createdAt');  // ✅ 정렬 상태
+  const [currentPage, setCurrentPage]                 = useState(1);
+  const [joinedGroupIds, setJoinedGroupIds]           = useState<number[]>([]);
+  const [mapTarget, setMapTarget]                     = useState<Group | null>(null);
+  const [isMapLoading, setIsMapLoading]               = useState(false);
+  const [mapError, setMapError]                       = useState('');
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapMarkerRef = useRef<any>(null);
-
-  // isMyGroup 만 사용 (채팅 연결 관련 구조분해 제거)
+  const mapMarkerRef    = useRef<any>(null);
   const { isMyGroup } = useChatRoom();
 
-  useEffect(() => {
-    fetchGroups();
-    fetchJoinedGroupIds();
-  }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedEventFilter]);
-
-  // ────────────────────────────────────────────────────────────
-  // 카카오 지도 SDK
-  // ────────────────────────────────────────────────────────────
+  useEffect(() => { fetchGroups(); fetchJoinedGroupIds(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedEventFilter, sortOrder]);
 
   const loadKakaoMapSdk = useCallback(() => {
     if (window.kakao?.maps?.services) return Promise.resolve();
-
     return new Promise<void>((resolve, reject) => {
-      const existingScript = document.getElementById('kakao-map-sdk-group-list') as HTMLScriptElement | null;
-
-      if (existingScript) {
-        if (window.kakao?.maps?.load) {
-          window.kakao.maps.load(resolve);
-          return;
-        }
-        existingScript.addEventListener('load', () => window.kakao.maps.load(resolve), { once: true });
-        existingScript.addEventListener('error', () => reject(new Error('kakao map sdk load failed')), { once: true });
+      const ex = document.getElementById('kakao-map-sdk-group-list') as HTMLScriptElement | null;
+      if (ex) {
+        window.kakao?.maps?.load ? window.kakao.maps.load(resolve)
+            : ex.addEventListener('load', () => window.kakao.maps.load(resolve), { once: true });
         return;
       }
-
-      const script = document.createElement('script');
-      script.id = 'kakao-map-sdk-group-list';
-      script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
-      script.onload = () => window.kakao.maps.load(resolve);
-      script.onerror = () => reject(new Error('kakao map sdk load failed'));
-      document.head.appendChild(script);
+      const s = document.createElement('script');
+      s.id = 'kakao-map-sdk-group-list';
+      s.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+      s.onload = () => window.kakao.maps.load(resolve);
+      s.onerror = () => reject(new Error('load failed'));
+      document.head.appendChild(s);
     });
-  }, []);
-
-  const showLocationOnMap = useCallback((group: Group) => {
-    setMapTarget(group);
-    setMapError('');
   }, []);
 
   useEffect(() => {
     if (!mapTarget || !mapContainerRef.current) return;
-
     let cancelled = false;
-    const location = mapTarget.location?.trim();
-
-    const renderMap = async () => {
-      if (!location) {
-        setMapError('모임 장소 정보가 없습니다.');
-        return;
-      }
-
-      setIsMapLoading(true);
-      setMapError('');
-
+    const loc = mapTarget.location?.trim();
+    const run = async () => {
+      if (!loc) { setMapError('모임 장소 정보가 없습니다.'); return; }
+      setIsMapLoading(true); setMapError('');
       try {
         await loadKakaoMapSdk();
         if (cancelled || !mapContainerRef.current) return;
-
         const geocoder = new window.kakao.maps.services.Geocoder();
-        const places = new window.kakao.maps.services.Places();
-
-        const resolvePosition = () => new Promise<any>((resolve, reject) => {
-          geocoder.addressSearch(location, (addressResult: any, addressStatus: any) => {
-            if (addressStatus === window.kakao.maps.services.Status.OK && addressResult.length > 0) {
-              resolve(new window.kakao.maps.LatLng(Number(addressResult[0].y), Number(addressResult[0].x)));
-              return;
-            }
-            places.keywordSearch(location, (placeResult: any, placeStatus: any) => {
-              if (placeStatus === window.kakao.maps.services.Status.OK && placeResult.length > 0) {
-                resolve(new window.kakao.maps.LatLng(Number(placeResult[0].y), Number(placeResult[0].x)));
-              } else {
-                reject(new Error('location not found'));
-              }
-            });
+        const places   = new window.kakao.maps.services.Places();
+        const pos = await new Promise<any>((res, rej) => {
+          geocoder.addressSearch(loc, (r: any, s: any) => {
+            if (s === window.kakao.maps.services.Status.OK && r.length > 0)
+              return res(new window.kakao.maps.LatLng(+r[0].y, +r[0].x));
+            places.keywordSearch(loc, (pr: any, ps: any) =>
+                ps === window.kakao.maps.services.Status.OK && pr.length > 0
+                    ? res(new window.kakao.maps.LatLng(+pr[0].y, +pr[0].x))
+                    : rej(new Error('not found'))
+            );
           });
         });
-
-        const position = await resolvePosition();
         if (cancelled || !mapContainerRef.current) return;
-
-        const map = new window.kakao.maps.Map(mapContainerRef.current, { center: position, level: 3 });
-
+        const map = new window.kakao.maps.Map(mapContainerRef.current, { center: pos, level: 3 });
         if (mapMarkerRef.current) mapMarkerRef.current.setMap(null);
-        mapMarkerRef.current = new window.kakao.maps.Marker({ position, map });
-
-        const infoWindow = new window.kakao.maps.InfoWindow({
-          content: `<div style="padding:8px 12px;font-size:13px;font-weight:700;white-space:nowrap;">${escapeHtml(location)}</div>`,
-        });
-        infoWindow.open(map, mapMarkerRef.current);
-      } catch {
-        setMapError('지도로 표시할 수 있는 위치를 찾지 못했습니다.');
-      } finally {
-        if (!cancelled) setIsMapLoading(false);
-      }
+        mapMarkerRef.current = new window.kakao.maps.Marker({ position: pos, map });
+        new window.kakao.maps.InfoWindow({
+          content: `<div style="padding:8px 12px;font-size:13px;font-weight:700;white-space:nowrap;">${escapeHtml(loc)}</div>`,
+        }).open(map, mapMarkerRef.current);
+      } catch { setMapError('위치를 찾지 못했습니다.'); }
+      finally { if (!cancelled) setIsMapLoading(false); }
     };
-
-    renderMap();
+    run();
     return () => { cancelled = true; };
   }, [mapTarget, loadKakaoMapSdk]);
 
-  // ────────────────────────────────────────────────────────────
-  // 데이터 로드
-  // ────────────────────────────────────────────────────────────
-
-  const fetchGroups = () => {
-    axiosInstance.get<Group[]>('/groups')
-        .then(res => setGroups(res.data))
-        .catch(err => console.error('데이터 로딩 실패', err));
-  };
-
+  const fetchGroups = () => axiosInstance.get<Group[]>('/groups').then(r => setGroups(r.data)).catch(console.error);
   const fetchJoinedGroupIds = async () => {
-    try {
-      const res = await axiosInstance.get<number[]>('/groups/joined-ids');
-      setJoinedGroupIds(res.data);
-    } catch {
-      // 비로그인 상태면 무시
-    }
+    try { const r = await axiosInstance.get<number[]>('/groups/joined-ids'); setJoinedGroupIds(r.data); } catch {}
   };
 
-  // ────────────────────────────────────────────────────────────
-  // 권한 판정 어댑터
-  // ────────────────────────────────────────────────────────────
+  const toPermissionShape = (g: Group): GroupForPermission => ({ authorEmail: g.author?.email, authorName: g.authorName });
+  const handleGoToHost = useCallback((g: Group) => {
+    const id = g.author?.id;
+    if (id != null && Number.isFinite(id) && id > 0) navigate(`/cattower/${id}`);
+  }, [navigate]);
 
-  const toPermissionShape = (group: Group): GroupForPermission => ({
-    authorEmail: group.author?.email,
-    authorName:  group.authorName,
+  const eventCategories = Array.from(new Set(groups.map(g => g.event?.trim()).filter(Boolean) as string[])).sort((a,b) => a.localeCompare(b,'ko'));
+
+  // ── 필터링 ──────────────────────────────────────────────────────
+  const filteredGroups = groups.filter(g => {
+    const q = searchTerm.toLowerCase();
+    const matchSearch = g.title?.toLowerCase().includes(q) || g.event?.toLowerCase().includes(q) || g.location?.toLowerCase().includes(q);
+    const matchEvent  = selectedEventFilter === 'ALL' || g.event?.trim() === selectedEventFilter;
+    return matchSearch && matchEvent;
   });
 
-  const handleGoToHostCatTower = useCallback(
-      (group: Group) => {
-        const id = group.author?.id;
-        if (id == null || !Number.isFinite(id) || id <= 0) return;
-        navigate(`/cattower/${id}`);
-      },
-      [navigate]
-  );
-
-  // ────────────────────────────────────────────────────────────
-  // 검색 / 필터 / 페이징
-  // ────────────────────────────────────────────────────────────
-
-  const eventCategories = Array.from(
-      new Set(groups.map(group => group.event?.trim()).filter((event): event is string => Boolean(event)))
-  ).sort((a, b) => a.localeCompare(b, 'ko'));
-
-  const filteredGroups = groups.filter(group => {
-    const matchesSearch =
-        group.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (group.event && group.event.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (group.location && group.location.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesEvent = selectedEventFilter === 'ALL' || group.event?.trim() === selectedEventFilter;
-    return matchesSearch && matchesEvent;
+  // ── 정렬 ✅ ───────────────────────────────────────────────────
+  const sortedGroups = [...filteredGroups].sort((a, b) => {
+    if (sortOrder === 'meetingDate') {
+      // 날짜 없는 항목은 뒤로
+      if (!a.meetingDate && !b.meetingDate) return b.id - a.id;
+      if (!a.meetingDate) return 1;
+      if (!b.meetingDate) return -1;
+      return new Date(a.meetingDate).getTime() - new Date(b.meetingDate).getTime();
+    }
+    // 기본: 등록 최신순 (id 내림차순)
+    return b.id - a.id;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / ITEMS_PER_PAGE));
-  const paginatedGroups = filteredGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages      = Math.max(1, Math.ceil(sortedGroups.length / ITEMS_PER_PAGE));
+  const paginatedGroups = sortedGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages]);
-
-  // ────────────────────────────────────────────────────────────
-  // 렌더
-  // ────────────────────────────────────────────────────────────
+  // ── 통계: 자동 마감 포함 ✅ ────────────────────────────────────
+  const openCount   = groups.filter(g => {
+    const isFull   = (g.currentCapacity ?? 0) >= (g.maxCapacity ?? 999);
+    const isPassed = isDatePassed(g.meetingDate);
+    return g.status !== 'CLOSED' && !isFull && !isPassed;
+  }).length;
+  const closedCount = groups.length - openCount;
 
   return (
-      <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '100px' }}>
-        <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '0 20px' }}>
+      <div style={{ backgroundColor: '#f1f5f9', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '100px', marginTop: '-64px' }}> {/* ✅ 1. 네비 바에 딱 붙도록 */}
 
-          {/* 헤더 */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '30px' }}>
-            <div>
-              <h1 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 8px 0' }}>👥 모집게시판</h1>
-              <p style={{ color: '#94a3b8', margin: 0 }}>함께 행사에 참여할 동행자를 찾아보세요</p>
+        {/* ── 배너 ── */}
+        <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '88px 20px 28px' }}> {/* paddingTop에 nav 높이 포함 */}
+          <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <h1 style={{ fontSize: '26px', fontWeight: '900', color: 'white', margin: '0 0 6px' }}>👥 모집게시판</h1>
+                <p style={{ color: 'rgba(255,255,255,0.82)', margin: 0, fontSize: '14px' }}>함께 행사에 참여할 동행자를 찾아보세요</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: '12px', padding: '8px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: 'white' }}>{openCount}</div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.75)', fontWeight: '700' }}>모집중</div>
+                  </div>
+                  <div style={{ backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: '12px', padding: '8px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: 'rgba(255,255,255,0.7)' }}>{closedCount}</div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.55)', fontWeight: '700' }}>마감</div>
+                  </div>
+                </div>
+                <button
+                    onClick={() => navigate('/groups/create')}
+                    style={{ backgroundColor: 'white', color: '#ff5e00', border: 'none', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: '800', fontSize: '14px', whiteSpace: 'nowrap', boxShadow: '0 2px 12px rgba(0,0,0,0.12)' }}
+                >
+                  + 모집글 작성
+                </button>
+              </div>
             </div>
-            <button
-                onClick={() => navigate('/groups/create')}
-                style={{ backgroundColor: '#ff8a3d', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              + 모집글 작성
-            </button>
+          </div>
+        </div>
+
+        <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 20px 0' }}>
+
+          {/* ── 검색바 ── */}
+          <div style={{ position: 'relative', marginBottom: '16px' }}>
+            <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', pointerEvents: 'none' }}>🔍</span>
+            <input
+                type="text"
+                placeholder="제목, 행사명, 장소로 검색"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '14px', border: '1.5px solid #e2e8f0', boxSizing: 'border-box', outline: 'none', fontSize: '14px', backgroundColor: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'border-color 0.2s' }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#ff8a3d' }}
+                onBlur={e =>  { e.currentTarget.style.borderColor = '#e2e8f0' }}
+            />
           </div>
 
-          {/* 검색 */}
-          <input
-              type="text"
-              placeholder="제목, 행사명, 장소로 검색"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ width: '100%', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '25px', boxSizing: 'border-box', outline: 'none' }}
-          />
-
-          {/* 행사 필터 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '22px' }}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '700' }}>행사 분류</span>
-            <button
-                type="button"
-                onClick={() => setSelectedEventFilter('ALL')}
-                style={{
-                  border: selectedEventFilter === 'ALL' ? '1.5px solid #ff8a3d' : '1.5px solid #e2e8f0',
-                  backgroundColor: selectedEventFilter === 'ALL' ? '#fff4ed' : 'white',
-                  color: selectedEventFilter === 'ALL' ? '#ff8a3d' : '#64748b',
-                  padding: '8px 14px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700',
-                }}
-            >
-              전체
-            </button>
-            {eventCategories.map(event => (
-                <button
-                    key={event}
-                    type="button"
-                    onClick={() => setSelectedEventFilter(event)}
-                    style={{
-                      border: selectedEventFilter === event ? '1.5px solid #ff8a3d' : '1.5px solid #e2e8f0',
-                      backgroundColor: selectedEventFilter === event ? '#fff4ed' : 'white',
-                      color: selectedEventFilter === event ? '#ff8a3d' : '#64748b',
-                      padding: '8px 14px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700',
-                      maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}
-                    title={event}
+          {/* ── 행사 필터 ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>행사 분류</span>
+            {['ALL', ...eventCategories].map(ev => (
+                <button key={ev} type="button" onClick={() => setSelectedEventFilter(ev)}
+                        style={{
+                          border: selectedEventFilter === ev ? '1.5px solid #ff8a3d' : '1.5px solid #e2e8f0',
+                          backgroundColor: selectedEventFilter === ev ? '#ff8a3d' : 'white',
+                          color: selectedEventFilter === ev ? 'white' : '#64748b',
+                          padding: '6px 14px', borderRadius: '20px', cursor: 'pointer', fontWeight: '700', fontSize: '12px',
+                          maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          transition: 'all 0.15s',
+                        }}
+                        title={ev === 'ALL' ? '전체' : ev}
                 >
-                  {event}
+                  {ev === 'ALL' ? '전체' : ev}
                 </button>
             ))}
           </div>
 
-          {/* 그룹 카드 목록 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {paginatedGroups.map((group) => {
-              const isFull = (group.currentCapacity ?? 0) >= (group.maxCapacity ?? 0);
-              const isClosed = group.status === 'CLOSED' || isFull;
-              const isAlreadyJoined = joinedGroupIds.includes(group.id);
-              const canEdit = isMyGroup(toPermissionShape(group));
+          {/* ── 결과 수 + 정렬 버튼 ✅ ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '600' }}>
+              {sortedGroups.length > 0 ? `총 ${sortedGroups.length}개` : ''}
+            </span>
 
-              return (
-                  <div
-                      key={group.id}
-                      onClick={() => navigate(`/groups/${group.id}`)}
+            {/* ── 정렬 선택 ── */}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {([
+                { key: 'createdAt',  label: '⏱ 최신 등록순' },
+                { key: 'meetingDate', label: '📅 일정 가까운 순' },
+              ] as { key: SortOrder; label: string }[]).map(({ key, label }) => (
+                  <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSortOrder(key)}
                       style={{
-                        backgroundColor: 'white',
-                        borderRadius: '20px',
-                        border: '1px solid #f1f5f9',
-                        boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
-                        cursor: 'pointer',
-                        transition: 'box-shadow 0.15s ease, transform 0.15s ease',
-                        overflow: 'hidden',
-                      }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 24px rgba(0,0,0,0.09)';
-                        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 10px rgba(0,0,0,0.03)';
-                        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                        padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700',
+                        cursor: 'pointer', border: 'none', transition: 'all 0.15s',
+                        backgroundColor: sortOrder === key ? '#1e293b' : '#f1f5f9',
+                        color: sortOrder === key ? 'white' : '#64748b',
                       }}
                   >
-                    <div style={{ padding: '22px 24px' }}>
-                      {/* 상단: 제목 + 상태 뱃지 */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', gap: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {group.title}
-                          </h3>
-                          {canEdit && (
-                              <span style={{ flexShrink: 0, fontSize: '11px', backgroundColor: '#fff4ed', color: '#ff8a3d', padding: '2px 8px', borderRadius: '10px', fontWeight: '600' }}>
-                                내 글
-                              </span>
-                          )}
-                          {isAlreadyJoined && !canEdit && (
-                              <span style={{ flexShrink: 0, fontSize: '11px', backgroundColor: '#ecfdf5', color: '#10b981', padding: '2px 8px', borderRadius: '10px', fontWeight: '600' }}>
-                                참여중
-                              </span>
-                          )}
+                    {label}
+                  </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── 카드 목록 ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {paginatedGroups.map(group => {
+              const cur = group.currentCapacity ?? 0;
+              const max = group.maxCapacity ?? 4;
+              const pct = Math.min(100, Math.round((cur / max) * 100));
+              const isFull     = cur >= max;
+              const isPassed   = isDatePassed(group.meetingDate);   // ✅ 3. 날짜 지난 게시글 자동 마감
+              const isClosed   = group.status === 'CLOSED' || isFull || isPassed;
+              const isJoined   = joinedGroupIds.includes(group.id);
+              const canEdit    = isMyGroup(toPermissionShape(group));
+
+              return (
+                  <div key={group.id} onClick={() => navigate(`/groups/${group.id}`)}
+                       style={{
+                         backgroundColor: 'white', borderRadius: '16px', cursor: 'pointer',
+                         border: '1px solid #e8edf5',
+                         borderLeft: `4px solid ${isClosed ? '#cbd5e1' : '#ff8a3d'}`,
+                         boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+                         transition: 'box-shadow 0.15s, transform 0.15s',
+                         overflow: 'hidden',
+                         opacity: isClosed ? 0.75 : 1,   // 마감된 글은 살짝 흐리게
+                       }}
+                       onMouseEnter={e => {
+                         (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 24px rgba(0,0,0,0.10)';
+                         (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+                       }}
+                       onMouseLeave={e => {
+                         (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 6px rgba(0,0,0,0.04)';
+                         (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                       }}
+                  >
+                    <div style={{ padding: '18px 20px' }}>
+                      {/* 제목 행 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {group.title}
+                      </span>
+                          {canEdit && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#fff4ed', color: '#ff8a3d', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>내 글</span>}
+                          {isJoined && !canEdit && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#ecfdf5', color: '#10b981', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>참여중</span>}
+                          {isPassed && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#f1f5f9', color: '#94a3b8', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>일정 종료</span>}
                         </div>
                         <span style={{
-                          flexShrink: 0,
+                          flexShrink: 0, fontSize: '11px', fontWeight: '800', padding: '3px 10px', borderRadius: '20px',
                           backgroundColor: isClosed ? '#f1f5f9' : '#ecfdf5',
                           color: isClosed ? '#94a3b8' : '#10b981',
-                          padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold',
                         }}>
-                          {isClosed ? '모집완료' : '모집중'}
-                        </span>
+                      {isClosed ? '마감' : '● 모집중'}
+                    </span>
                       </div>
 
                       {/* 호스트 */}
-                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '14px' }}>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px' }}>
                         호스트:{' '}
-                        {group.author?.id ? (
-                            <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleGoToHostCatTower(group); }}
-                                style={{ border: 'none', background: 'transparent', padding: 0, margin: 0, color: '#ff8a3d', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                            >
+                        {group.author?.id
+                            ? <button type="button" onClick={e => { e.stopPropagation(); handleGoToHost(group); }}
+                                      style={{ border: 'none', background: 'transparent', padding: 0, color: '#ff8a3d', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px', fontSize: '12px' }}>
                               {group.authorName || '익명'}
                             </button>
-                        ) : (
-                            <span>{group.authorName || '익명'}</span>
-                        )}
+                            : <span style={{ fontWeight: '600', color: '#64748b' }}>{group.authorName || '익명'}</span>
+                        }
                       </div>
 
-                      {/* 하단 메타 정보 + 지도 버튼 */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', fontSize: '13px', color: '#475569' }}>
+                      {/* 메타 정보 행 */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '12px', color: '#64748b', alignItems: 'center' }}>
                           <span>📍 {group.location || '장소 미정'}</span>
-                          <span>👥 {group.currentCapacity ?? 1} / {group.maxCapacity ?? 4}명</span>
-                          {group.meetingDate && <span>📅 {group.meetingDate}</span>}
+                          {group.meetingDate && (
+                              <span style={{ color: isPassed ? '#94a3b8' : '#64748b' }}>
+                              📅 {group.meetingDate}{isPassed ? ' (종료)' : ''}
+                            </span>
+                          )}
                           {group.event && (
-                              <span style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '8px', fontSize: '12px', color: '#64748b' }}>
-                                🎟️ {group.event}
-                              </span>
+                              <span style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '8px', color: '#64748b' }}>
+                          🎟️ {group.event}
+                        </span>
                           )}
                         </div>
 
-                        {/* 지도 버튼 (클릭 시 페이지 이동 차단) */}
-                        {group.location && (
-                            <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); showLocationOnMap(group); }}
-                                style={{
-                                  flexShrink: 0,
-                                  border: 'none', borderRadius: '10px', padding: '7px 14px',
-                                  backgroundColor: '#fff4ed', color: '#ff8a3d',
-                                  fontWeight: '700', fontSize: '12px', cursor: 'pointer',
-                                }}
-                            >
-                              🗺️ 지도 보기
-                            </button>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                          {/* 정원 미니 바 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '56px', height: '5px', backgroundColor: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isClosed ? '#cbd5e1' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s' }} />
+                            </div>
+                            <span style={{ fontSize: '11px', color: isClosed ? '#94a3b8' : '#ff8a3d', fontWeight: '700' }}>{cur}/{max}명</span>
+                          </div>
+
+                          {group.location && (
+                              <button type="button" onClick={e => { e.stopPropagation(); setMapTarget(group); setMapError(''); }}
+                                      style={{ border: 'none', borderRadius: '8px', padding: '5px 10px', backgroundColor: '#fff4ed', color: '#ff8a3d', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>
+                                🗺️ 지도
+                              </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {/* 하단 액센트 바 */}
-                    <div style={{ height: '3px', backgroundColor: isClosed ? '#f1f5f9' : '#ff8a3d', opacity: isClosed ? 1 : 0.25 }} />
                   </div>
               );
             })}
           </div>
 
-          {/* 결과 없음 */}
-          {filteredGroups.length === 0 && (
-              <div style={{ marginTop: '30px', padding: '48px 20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #f1f5f9' }}>
-                조건에 맞는 모집글이 없습니다.
+          {/* 빈 결과 */}
+          {sortedGroups.length === 0 && (
+              <div style={{ marginTop: '20px', padding: '60px 20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #e8edf5' }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🔍</div>
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>조건에 맞는 모집글이 없습니다.</p>
               </div>
           )}
 
           {/* 페이지네이션 */}
-          {filteredGroups.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '28px', flexWrap: 'wrap' }}>
-                <button
-                    type="button"
-                    onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
-                    disabled={currentPage === 1}
-                    style={{ padding: '9px 13px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: currentPage === 1 ? '#f8fafc' : 'white', color: currentPage === 1 ? '#cbd5e1' : '#64748b', cursor: currentPage === 1 ? 'default' : 'pointer', fontWeight: '800' }}
-                >
-                  이전
-                </button>
-                {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
-                    <button
-                        key={page}
-                        type="button"
-                        onClick={() => setCurrentPage(page)}
-                        style={{ minWidth: '38px', padding: '9px 12px', borderRadius: '10px', border: currentPage === page ? '1.5px solid #ff8a3d' : '1px solid #e2e8f0', backgroundColor: currentPage === page ? '#fff4ed' : 'white', color: currentPage === page ? '#ff8a3d' : '#64748b', cursor: 'pointer', fontWeight: '800' }}
-                    >
-                      {page}
+          {sortedGroups.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '28px', flexWrap: 'wrap' }}>
+                {[
+                  { label: '이전', onClick: () => setCurrentPage(p => Math.max(1, p - 1)), disabled: currentPage === 1 },
+                  ...Array.from({ length: totalPages }, (_, i) => ({ label: String(i + 1), onClick: () => setCurrentPage(i + 1), disabled: false, active: currentPage === i + 1 })),
+                  { label: '다음', onClick: () => setCurrentPage(p => Math.min(totalPages, p + 1)), disabled: currentPage === totalPages },
+                ].map((btn, i) => (
+                    <button key={i} type="button" onClick={btn.onClick} disabled={btn.disabled}
+                            style={{
+                              minWidth: '36px', padding: '8px 12px', borderRadius: '10px', fontWeight: '800', fontSize: '13px', cursor: btn.disabled ? 'default' : 'pointer',
+                              border: (btn as any).active ? '1.5px solid #ff8a3d' : '1px solid #e2e8f0',
+                              backgroundColor: (btn as any).active ? '#fff4ed' : btn.disabled ? '#f8fafc' : 'white',
+                              color: (btn as any).active ? '#ff8a3d' : btn.disabled ? '#cbd5e1' : '#64748b',
+                            }}>
+                      {btn.label}
                     </button>
                 ))}
-                <button
-                    type="button"
-                    onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
-                    disabled={currentPage === totalPages}
-                    style={{ padding: '9px 13px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: currentPage === totalPages ? '#f8fafc' : 'white', color: currentPage === totalPages ? '#cbd5e1' : '#64748b', cursor: currentPage === totalPages ? 'default' : 'pointer', fontWeight: '800' }}
-                >
-                  다음
-                </button>
               </div>
           )}
         </div>
 
         {/* 지도 모달 */}
         {mapTarget && (
-            <div
-                onClick={() => setMapTarget(null)}
-                style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '20px' }}
-            >
-              <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ width: '720px', maxWidth: '96vw', backgroundColor: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }}
-              >
-                <div style={{ padding: '18px 22px', backgroundColor: '#ff8a3d', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+            <div onClick={() => setMapTarget(null)}
+                 style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '20px' }}>
+              <div onClick={e => e.stopPropagation()}
+                   style={{ width: '720px', maxWidth: '96vw', backgroundColor: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }}>
+                <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '17px', fontWeight: '900', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {mapTarget.title}
-                    </div>
-                    <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {mapTarget.location || '모임 장소 정보 없음'}
-                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: '900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapTarget.title}</div>
+                    <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapTarget.location}</div>
                   </div>
-                  <button
-                      type="button"
-                      onClick={() => setMapTarget(null)}
-                      style={{ border: 'none', borderRadius: '9px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '7px 12px', cursor: 'pointer', fontWeight: '800', flexShrink: 0 }}
-                  >
+                  <button type="button" onClick={() => setMapTarget(null)}
+                          style={{ border: 'none', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '6px 12px', cursor: 'pointer', fontWeight: '800', flexShrink: 0 }}>
                     닫기
                   </button>
                 </div>
                 <div style={{ position: 'relative' }}>
-                  <div ref={mapContainerRef} style={{ width: '100%', height: '420px', backgroundColor: '#f8fafc' }} />
-                  {isMapLoading && (
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontWeight: '800', backgroundColor: 'rgba(248,250,252,0.82)' }}>
-                        지도를 불러오는 중...
-                      </div>
-                  )}
-                  {mapError && (
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', fontWeight: '800', backgroundColor: 'rgba(255,255,255,0.92)', textAlign: 'center', padding: '20px' }}>
-                        {mapError}
-                      </div>
-                  )}
+                  <div ref={mapContainerRef} style={{ width: '100%', height: '400px', backgroundColor: '#f8fafc' }} />
+                  {isMapLoading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b' }}>지도를 불러오는 중...</div>}
+                  {mapError && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.92)', color: '#ef4444', fontWeight: '700', textAlign: 'center', padding: '20px' }}>{mapError}</div>}
                 </div>
               </div>
             </div>
