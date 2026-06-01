@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import Home from '../pages/Home'
 import EventList from '../pages/EventList'
 import EventDetail from '../pages/EventDetail'
@@ -8,10 +8,9 @@ import Chat from '../pages/Chat'
 import CatTower from '../pages/minihome/CatTower'
 import History from '../pages/History'
 import MyPage from '../pages/user/MyPage'
-import Chatbot from '../pages/Chatbot'
+import Chatbot from '../pages/chatbot/Chatbot'
 import Signup from '../pages/user/Signup'
 import Login from '../pages/user/Login'
-import MiniHome from '../pages/minihome/MiniHome'
 import Profile from '../pages/user/Profile'
 import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
@@ -20,15 +19,49 @@ import { setNavigate } from '../utils/navigationHelper'
 import { useEffect } from 'react'
 import GroupListPage from "../pages/Group/GroupListPage.tsx"
 import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx';
+import ErrorPage from '../pages/ErrorPage'
+import GroupEditPage from "../pages/Group/GroupEditPage.tsx";
+import AdminPage from '../pages/admin/AdminPage'
+import RiveCustomizerDevPage from '../pages/minihome/dev/RiveCustomizerDevPage'
 
-// 이 부분만 수정
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const auth = useAuth()
-  const location = useLocation()  // ← 추가
+  const location = useLocation() 
+
+  // isLoading 중엔 판단 보류 : firebase 인증 상태가 아직 초기화되지 않았을 수 있음
+  if (auth.isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>)
+  }
 
   if (!auth.loggedIn || !auth.user) {
       // 현재 경로를 state.from에 담아서 login으로 이동
     return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  return children
+}
+
+function AdminRoute({ children }: { children: JSX.Element }) {
+  const auth = useAuth()
+  const location = useLocation()
+
+  if (auth.isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    )
+  }
+
+  if (!auth.loggedIn || !auth.user) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  if (auth.user.roleType !== 'ADMIN') {
+    return <Navigate to="/error/403" replace />
   }
 
   return children
@@ -41,6 +74,11 @@ function NavigationInitializer() {
   return null
 }
 
+function RedirectMiniHomeUserToCatTower() {
+  const { userId } = useParams<{ userId: string }>()
+  return <Navigate to={userId ? `/cattower/${userId}` : "/cattower"} replace />
+}
+
 export default function AppRouter() {
   return (
     <Router>
@@ -51,6 +89,7 @@ export default function AppRouter() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
             <Route path="/groups/create" element={<GroupCreatePage />} />
+            <Route path="/groups/edit/:id" element={<GroupEditPage />} />
           <Route
             path="/events"
             element={
@@ -59,12 +98,15 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           />
+          <Route 
+            path="/error/:code" 
+            element={<ErrorPage />} 
+          />
+
           <Route
             path="/events/:id"
             element={
-              <ProtectedRoute>
                 <EventDetail />
-              </ProtectedRoute>
             }
           />
           <Route
@@ -108,6 +150,22 @@ export default function AppRouter() {
             }
           />
           <Route
+            path="/cattower/user/:userId"
+            element={
+              <ProtectedRoute>
+                <CatTower />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cattower/:userId"
+            element={
+              <ProtectedRoute>
+                <CatTower />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/cattower"
             element={
               <ProtectedRoute>
@@ -115,6 +173,16 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           />
+          {import.meta.env.DEV ? (
+            <Route
+              path="/dev/rive-customizer"
+              element={
+                <ProtectedRoute>
+                  <RiveCustomizerDevPage />
+                </ProtectedRoute>
+              }
+            />
+          ) : null}
           <Route
             path="/history"
             element={
@@ -142,9 +210,19 @@ export default function AppRouter() {
           <Route
             path="/minihome"
             element={
-              <ProtectedRoute>
-                <MiniHome />
-              </ProtectedRoute>
+              <Navigate to="/cattower" replace />
+            }
+          />
+          <Route
+            path="/minihome/:userId"
+            element={
+              <RedirectMiniHomeUserToCatTower />
+            }
+          />
+          <Route
+            path="/users/:userId/minihome"
+            element={
+              <RedirectMiniHomeUserToCatTower />
             }
           />
           <Route
@@ -153,6 +231,14 @@ export default function AppRouter() {
               <ProtectedRoute>
                 <Profile />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
             }
           />
           <Route
@@ -168,5 +254,5 @@ export default function AppRouter() {
       </Layout>
     </Router>
   )
-  
+
 }

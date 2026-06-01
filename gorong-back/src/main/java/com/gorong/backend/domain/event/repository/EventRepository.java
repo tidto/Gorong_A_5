@@ -10,4 +10,10 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e WHERE e.tourCategoryCode IN :codes " +
             "AND (e.areaCode = '4' OR e.areaCode = '35')")
     List<Event> findRecommendedEvents(@Param("codes") List<String> codes);
+
+    List<Event> findTop20ByEventEndDateGreaterThanEqualOrderByEventStartDateAsc(String today);
+
+    List<Event> findTop100ByEventEndDateGreaterThanEqualOrderByEventStartDateAsc(String today);
+
+    List<Event> findTop20ByOrderByCreatedAtDesc();
 }

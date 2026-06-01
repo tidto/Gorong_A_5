@@ -12,6 +12,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -20,6 +22,14 @@ public class AppVenueService {
 
     @Value("${tour.api.service-key}")
     private String tourApiKey;
+
+    private final Map<String, VenueGeo> venueGeoCache = new ConcurrentHashMap<>();
+
+    public record VenueGeo(String id, double lat, double lng, int radius) {}
+
+    public Optional<VenueGeo> findCachedVenueGeo(String venueId) {
+        return Optional.ofNullable(venueGeoCache.get(venueId));
+    }
 
     // TourAPI 호출 후 앱에 반환 (키는 백엔드에만 존재)
     @SuppressWarnings("unchecked")
@@ -48,17 +58,34 @@ public class AppVenueService {
             Map<String, Object> body = (Map<String, Object>)
                     ((Map<String, Object>) response.get("response")).get("body");
             Map<String, Object> items = (Map<String, Object>) body.get("items");
-            List<Map<String, Object>> itemList = (List<Map<String, Object>>) items.get("item");
+            Object rawItems = (items == null) ? null : items.get("item");
+            List<Map<String, Object>> itemList = new ArrayList<>();
+            if (rawItems instanceof List<?> list) {
+                for (Object entry : list) {
+                    if (entry instanceof Map<?, ?> map) {
+                        itemList.add((Map<String, Object>) map);
+                    }
+                }
+            } else if (rawItems instanceof Map<?, ?> map) {
+                itemList.add((Map<String, Object>) map);
+            }
 
             List<NearbyVenueResponseDto> result = new ArrayList<>();
             if (itemList != null) {
                 for (Map<String, Object> item : itemList) {
+                    String id = String.valueOf(item.get("contentid"));
+                    double venueLat = Double.parseDouble(String.valueOf(item.get("mapy")));
+                    double venueLng = Double.parseDouble(String.valueOf(item.get("mapx")));
+                    int geofenceRadius = 150;
+
+                    venueGeoCache.put(id, new VenueGeo(id, venueLat, venueLng, geofenceRadius));
+
                     result.add(NearbyVenueResponseDto.builder()
-                            .id(String.valueOf(item.get("contentid")))
+                            .id(id)
                             .name(String.valueOf(item.get("title")))
-                            .lat(Double.parseDouble(String.valueOf(item.get("mapy"))))
-                            .lng(Double.parseDouble(String.valueOf(item.get("mapx"))))
-                            .radius(150)
+                            .lat(venueLat)
+                            .lng(venueLng)
+                            .radius(geofenceRadius)
                             .address(String.valueOf(item.get("addr1")))
                             .category(String.valueOf(item.get("cat1")))
                             .imageUrl(String.valueOf(item.getOrDefault("firstimage", "")))

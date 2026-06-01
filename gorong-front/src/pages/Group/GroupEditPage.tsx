@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axiosInstance from '../../api/axiosInstance';  // ← 추가
+import axios from 'axios';  // ← GET 조회용으로 유지
+
+const API_BASE_URL = 'http://98.84.85.31:8080';
+// const API_BASE_URL = 'http://localhost:8080';
 
 const GroupEditPage = () => {
-    const { id } = useParams(); // URL의 :id 값을 가져옴
+    const { id } = useParams();
     const navigate = useNavigate();
 
-    // 입력 필드 상태 관리
     const [formData, setFormData] = useState({
         title: '',
         content: '',
@@ -19,35 +22,31 @@ const GroupEditPage = () => {
         tags: ''
     });
 
-    // 1. 페이지 접속 시 기존 데이터 불러오기
+    // 기존 데이터 불러오기 (GET은 인증 불필요 → axios 그대로)
     useEffect(() => {
-        axios.get(`http://localhost:8080/api/groups/${id}`)
+        axios.get(`${API_BASE_URL}/api/groups/${id}`)
             .then(res => {
                 setFormData(res.data);
             })
             .catch(err => {
                 console.error("데이터 로딩 실패:", err);
                 alert("글 정보를 불러올 수 없습니다.");
-                navigate('/groups');
+                navigate('/group');
             });
     }, [id, navigate]);
 
-    // 입력값 변경 핸들러
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // 2. 수정 완료 (PUT 요청)
+    // 수정 완료 (PUT은 인증 필요 → axiosInstance 사용)
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.put(`http://localhost:8080/api/groups/${id}`, formData);
+            await axiosInstance.put(`/groups/${id}`, formData);  // ← 이게 핵심 변경점
             alert("수정이 완료되었습니다! ✨");
-            navigate('/groups'); // 목록으로 이동
+            navigate('/group');
         } catch (err) {
             console.error("수정 실패:", err);
             alert("수정 중 오류가 발생했습니다.");
@@ -99,7 +98,6 @@ const GroupEditPage = () => {
     );
 };
 
-// 스타일 객체
 const inputStyle = {
     width: '100%',
     padding: '10px',

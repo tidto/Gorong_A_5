@@ -1,8 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'node:path'
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      'framer-motion': path.resolve(__dirname, 'src/shims/framer-motion.tsx'),
+    },
+  },
   server: {
     port: 3000,
     open: true,
@@ -11,7 +17,8 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        // localhost → ::1(IPv6) 로 붙으면 Java(8080) 연결 거부될 수 있음
+        target: 'http://127.0.0.1:8080',
         changeOrigin: true,
       }
     }

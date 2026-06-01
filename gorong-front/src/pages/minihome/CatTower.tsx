@@ -1,262 +1,263 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import Card from "../../components/Card";
-import Button from "../../components/Button";
-import { BarChart3, Share2 } from "lucide-react";
-import { useRive, Layout, Fit, Alignment } from "@rive-app/react-canvas";
-
-import SummaryCards from "../../components/minihome/SummaryCards";
-import GoCatCard from "../../components/minihome/GoCatCard";
-import ActivityHistory from "../../components/minihome/ActivityHistory";
-import GallerySection from "../../components/minihome/GallerySection";
-import DecorationModal, { type DecorItem, type SlotType } from "../../components/minihome/DecorationModal";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import DecorationModal from "../../components/minihome/mini-home/DecorationModal";
+import DecorationCustomizePanel from "../../components/minihome/decoration/DecorationCustomizePanel";
+import CatTowerDashboard from "../../components/minihome/cat-tower/CatTowerDashboard";
+import DecorateCatPreview from "../../components/minihome/rive/DecorateCatPreview";
 import { useMiniHomeUserId } from "./hooks/useMiniHomeUserId";
-import { createMiniHome, getMiniHomePage } from "../../api/minihome/miniHomeApi";
-import { equipItem, getEquipments, getUserItems, unequipSlot } from "../../api/minihome/itemApi";
-
-import type { MiniHomePage } from "../../types/minihome/minihome";
-import type { Equipment, UserItem } from "../../types/minihome/item";
-
-const SLOTS: SlotType[] = ["HEAD", "BODY", "ACCESSORY"];
-
-const MOCK_ITEMS: (UserItem & { slotType: SlotType })[] = [
-  {
-    userItemId: -1,
-    itemId: -101,
-    itemCode: "MOCK_RIBBON",
-    itemName: "리본",
-    itemType: "HEAD",
-    imageUrl: null,
-    acquiredAt: new Date(0).toISOString(),
-    slotType: "HEAD",
-  },
-  {
-    userItemId: -2,
-    itemId: -102,
-    itemCode: "MOCK_HAT",
-    itemName: "모자",
-    itemType: "BODY",
-    imageUrl: null,
-    acquiredAt: new Date(0).toISOString(),
-    slotType: "BODY",
-  },
-  {
-    userItemId: -3,
-    itemId: -103,
-    itemCode: "MOCK_NECKLACE",
-    itemName: "목걸이",
-    itemType: "ACCESSORY",
-    imageUrl: null,
-    acquiredAt: new Date(0).toISOString(),
-    slotType: "ACCESSORY",
-  },
-];
-
-function errorMessage(e: any) {
-  const msg = e?.response?.data?.message;
-  if (typeof msg === "string" && msg.trim()) return msg;
-  if (typeof e?.message === "string" && e.message.trim()) return e.message;
-  return "요청 처리 중 오류가 발생했습니다.";
-}
-
-function GoCatPreview() {
-  const [failed, setFailed] = useState(false);
-  const { RiveComponent } = useRive({
-    src: "/rive/cat.riv",
-    autoplay: true,
-    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
-    onLoadError: () => setFailed(true),
-  });
-  if (failed || !RiveComponent) {
-    return (
-      <div className="w-28 h-28 rounded-full bg-primary-100 border border-primary-200 flex items-center justify-center text-4xl">
-        🐾
-      </div>
-    );
-  }
-  return (
-    <div className="w-28 h-28 rounded-full bg-primary-50 border border-primary-200 overflow-hidden">
-      <RiveComponent />
-    </div>
-  );
-}
+import { useCatTowerView } from "./hooks/useCatTowerView";
+import { useGoCatCustomize } from "./hooks/useGoCatCustomize";
+import {
+  applyEquipDraftToPage,
+  equipPreviewFromDraft,
+  normalizeEquipPreview,
+} from "../../utils/minihome/gocat/items";
+import {
+  loadEquippedDecorDraft,
+  ownerEquipPreviewFromPage,
+} from "../../utils/minihome/gocat/gocatEquippedStorage";
+import { emptyDraft } from "../../utils/minihome/gocat/items";
+import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
+import {
+  completeMyCatSetup,
+  createMyMiniHome,
+} from "../../api/minihome/miniHomeApi";
+import { computeGrowthState } from "../../utils/minihome/growth/growth";
+import {
+  isCatAppearanceConfigured,
+  parseCatAppearance,
+  toAppearanceApiPayload,
+} from "../../utils/minihome/gocat/catAppearance";
+import { mapMiniHomeApiError } from "../../utils/minihome/core/minihomeApiError";
+import GoCatOnboarding, { type GoCatOnboardingSubmit } from "../../components/minihome/onboarding/GoCatOnboarding";
 
 export default function CatTower() {
   const navigate = useNavigate();
-  const { userId, displayName } = useMiniHomeUserId();
+  const { userId: routeUserId } = useParams<{ userId?: string }>();
+  const { displayName, firebaseUser, loadingUserId, userIdError, isReady } = useMiniHomeUserId();
 
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [page, setPage] = useState<MiniHomePage | null>(null);
+  const {
+    page,
+    loading,
+    err,
+    canEdit,
+    isReadOnly,
+    isOwner,
+    loadPage,
+    setPage,
+    setErr,
+    resolvingOwner,
+  } = useCatTowerView({ routeUserId, isReady });
 
   const [decorateOpen, setDecorateOpen] = useState(false);
-  const [slot, setSlot] = useState<SlotType>("HEAD");
-  const [items, setItems] = useState<UserItem[]>([]);
-  const [equipments, setEquipmentsState] = useState<Equipment[]>([]);
-  const [draft, setDraft] = useState<Record<SlotType, DecorItem | null>>({ HEAD: null, BODY: null, ACCESSORY: null });
-  const [saving, setSaving] = useState(false);
-  const [saveInfo, setSaveInfo] = useState<string | null>(null);
+  const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [onboardingErr, setOnboardingErr] = useState<string | null>(null);
+  const [equippedDraft, setEquippedDraft] = useState<Record<SlotType, DecorItem | null>>(() =>
+    emptyDraft()
+  );
 
-  const equipBySlot = useMemo(() => {
-    const map: Record<SlotType, Equipment | null> = { HEAD: null, BODY: null, ACCESSORY: null };
-    for (const e of equipments) {
-      const s = (e.slotType || "").toUpperCase();
-      if (s === "HEAD" || s === "BODY" || s === "ACCESSORY") {
-        if (!map[s]) map[s] = e;
-      }
-    }
-    return map;
-  }, [equipments]);
+  const growth = useMemo(() => computeGrowthState(page), [page]);
 
-  const usingMock = items.length === 0;
-  const itemsForSlot: DecorItem[] = useMemo(() => {
-    if (usingMock) return MOCK_ITEMS.filter((m) => m.slotType === slot);
-    return items;
-  }, [usingMock, items, slot]);
+  const needsOnboarding = useMemo(() => {
+    if (!page?.miniHome?.cat) return true;
+    const cat = page.miniHome.cat;
+    return !isCatAppearanceConfigured(cat.appearanceState, cat.appearanceConfigured);
+  }, [page]);
 
-  async function loadMiniHome() {
-    setLoading(true);
-    setErr(null);
-    try {
-      const data = await getMiniHomePage(userId);
-      setPage(data);
-    } catch (e: any) {
-      const status = e?.response?.status;
-      if (status === 404) {
-        await createMiniHome(userId);
-        const data = await getMiniHomePage(userId);
-        setPage(data);
-      } else {
-        setErr(errorMessage(e));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
+  const showOnboarding =
+    canEdit && !loadingUserId && isReady && Boolean(firebaseUser) && !loading && needsOnboarding;
+  const cat = page?.miniHome?.cat ?? null;
 
-  async function loadDecoration() {
-    setErr(null);
-    setSaveInfo(null);
-    try {
-      const [owned, equips] = await Promise.all([getUserItems(userId), getEquipments(userId)]);
-      setItems(owned);
-      setEquipmentsState(equips);
+  const handleEquippedSaved = useCallback((draft: Record<SlotType, DecorItem | null>) => {
+    setEquippedDraft(draft);
+    setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
+  }, [setPage]);
 
-      const byItemId = new Map<number, DecorItem>();
-      for (const it of owned) byItemId.set(it.itemId, it);
-      setDraft({
-        HEAD: equipBySlot.HEAD ? byItemId.get(equipBySlot.HEAD.itemId) ?? null : null,
-        BODY: equipBySlot.BODY ? byItemId.get(equipBySlot.BODY.itemId) ?? null : null,
-        ACCESSORY: equipBySlot.ACCESSORY ? byItemId.get(equipBySlot.ACCESSORY.itemId) ?? null : null,
-      });
-    } catch (e: any) {
-      setErr(errorMessage(e));
-      setItems([]);
-      setEquipmentsState([]);
-      setDraft({ HEAD: null, BODY: null, ACCESSORY: null });
-    }
-  }
+  const customize = useGoCatCustomize(cat, growth.stage, decorateOpen, {
+    pageEquips: page?.activeEquips,
+    appearanceState: cat?.appearanceState,
+    goCatId: cat?.goCatId,
+    canEdit,
+    onEquippedSaved: handleEquippedSaved,
+  });
 
-  async function saveDecoration() {
-    setSaving(true);
-    setErr(null);
-    setSaveInfo(null);
-    try {
-      for (const s of SLOTS) {
-        const current = equipBySlot[s]?.itemId ?? null;
-        const next = draft[s]?.itemId ?? null;
-        if (current === next) continue;
-        if (next == null) await unequipSlot(userId, s);
-        else await equipItem(userId, { itemId: next, slotType: s });
-      }
-      await loadDecoration();
-      await loadMiniHome();
+  useEffect(() => {
+    setEquippedDraft(
+      loadEquippedDecorDraft(page?.activeEquips, cat?.appearanceState, {
+        useLocalStorage: canEdit,
+      })
+    );
+  }, [page?.activeEquips, cat?.appearanceState, canEdit]);
+
+  const myEquippedPreview = useMemo(
+    () => normalizeEquipPreview(equipPreviewFromDraft(equippedDraft)),
+    [equippedDraft]
+  );
+
+  const ownerEquippedPreview = useMemo(
+    () => ownerEquipPreviewFromPage(page?.activeEquips, cat?.appearanceState),
+    [page?.activeEquips, cat?.appearanceState]
+  );
+
+  const displayEquipped = canEdit ? myEquippedPreview : ownerEquippedPreview;
+
+  const handleReport = useCallback(() => {
+    const targetId = page?.miniHome?.userId;
+    console.log("[CatTower] report", { targetUserId: targetId, catName: page?.miniHome?.cat?.catName });
+    window.alert("신고 기능은 준비 중입니다.");
+  }, [page?.miniHome?.userId, page?.miniHome?.cat?.catName]);
+  const busy = loading || customize.saving || onboardingSaving;
+
+  const activityCount = page?.stats?.activityCount ?? growth.activityCount;
+  const galleryCount = page?.stats?.galleryCount ?? page?.galleries?.length ?? 0;
+
+  async function handleSaveDecoration() {
+    const { equipOk, draft } = await customize.saveAll();
+    if (equipOk) {
+      setEquippedDraft(draft);
+      setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
       setDecorateOpen(false);
-    } catch {
-      setSaveInfo("백엔드 연결 전이라 임시 저장되었습니다");
+    }
+  }
+
+  async function handleOnboardingSubmit(payload: GoCatOnboardingSubmit) {
+    setOnboardingSaving(true);
+    setOnboardingErr(null);
+    try {
+      const body = {
+        ...toAppearanceApiPayload(payload.appearance),
+        catName: payload.catName,
+      };
+      if (!canEdit) return;
+      if (!page?.miniHome?.cat) {
+        await createMyMiniHome(body);
+      } else {
+        await completeMyCatSetup(body);
+      }
+      await loadPage();
+    } catch (e: unknown) {
+      setOnboardingErr(mapMiniHomeApiError(e, "Go냥이 저장에 실패했습니다."));
     } finally {
-      setSaving(false);
+      setOnboardingSaving(false);
     }
   }
 
   useEffect(() => {
-    loadMiniHome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+    if (loadingUserId || !isReady) return;
+    if (!firebaseUser) {
+      setErr("로그인이 필요합니다.");
+      return;
+    }
+    if (userIdError) {
+      setErr(userIdError);
+      return;
+    }
+    void loadPage();
+  }, [isReady, loadingUserId, firebaseUser?.uid, userIdError, routeUserId, loadPage, setErr]);
 
-  useEffect(() => {
-    if (decorateOpen) loadDecoration();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decorateOpen]);
-
-  const summary = [
-    { label: "활동 기록", value: page?.stats?.activityCount ?? 0, icon: BarChart3 },
-    { label: "갤러리", value: page?.galleries?.length ?? 0, icon: Share2 },
-  ];
+  const catName = page?.miniHome?.cat?.catName ?? "고냥이";
+  const ownerLabel = page?.ownerNickname ?? (isOwner ? displayName : "사용자");
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-900">CatTower</h1>
-          <p className="text-gray-600 mt-2">{displayName}님의 미니홈피(활동/갤러리/고냥이)를 한 화면에서 확인합니다.</p>
-          <p className="text-xs text-gray-400 mt-1">현재 userId: {userId}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => navigate("/events")} disabled={loading || saving}>
-            다음 행사 찾기
-          </Button>
-          <Button variant="secondary" onClick={() => setDecorateOpen(true)} disabled={loading || saving}>
-            꾸미기 모드 켜기
-          </Button>
-          <Button variant="primary" onClick={loadMiniHome} disabled={loading || saving}>
-            새로고침
-          </Button>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
+      {/* 페이지 배경 — 미니홈피 감성 */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute -left-20 top-20 h-64 w-64 rounded-full bg-emerald-200/20 blur-3xl" />
+        <div className="absolute -right-16 top-40 h-56 w-56 rounded-full bg-orange-200/20 blur-3xl" />
+        <div className="absolute bottom-32 left-1/4 h-48 w-48 rounded-full bg-rose-100/25 blur-3xl" />
+        <span className="absolute left-[8%] top-[18%] animate-float text-lg opacity-30">🌸</span>
+        <span
+          className="absolute right-[10%] top-[22%] animate-petal-sway text-base opacity-25"
+          style={{ animationDelay: "1s" }}
+        >
+          ✨
+        </span>
+        <span
+          className="absolute bottom-[20%] right-[15%] animate-cloud-drift text-xl opacity-20"
+          style={{ animationDelay: "0.5s" }}
+        >
+          ☁️
+        </span>
       </div>
 
-      {err ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div> : null}
-
-      <Card title="요약">
-        <SummaryCards items={summary} />
-      </Card>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="고냥이">
-          <GoCatCard
-            catName={page?.miniHome?.cat?.catName ?? "고냥이"}
-            catType={page?.miniHome?.cat?.characterType ?? "-"}
-            isPublic={Boolean(page?.miniHome?.isPublic)}
-            equipBySlot={equipBySlot}
-            onOpenDecoration={() => setDecorateOpen(true)}
+      <div className="relative mx-auto max-w-6xl px-4 py-6 sm:py-8">
+        {showOnboarding ? (
+          <GoCatOnboarding
+            growthStage={growth.stage}
+            initialCatName={cat?.catName}
+            initialAppearance={cat ? parseCatAppearance(cat.appearanceState) : undefined}
+            saving={onboardingSaving}
+            error={onboardingErr ?? err}
+            onSubmit={handleOnboardingSubmit}
           />
-        </Card>
+        ) : null}
 
-        <Card title="활동 기록(최근 30개)">
-          <ActivityHistory activities={page?.activities ?? []} />
-        </Card>
+        {!showOnboarding ? (
+          <>
+            <CatTowerDashboard
+              nickname={ownerLabel}
+              catName={catName}
+              growth={growth}
+              isPublic={Boolean(page?.miniHome?.isPublic)}
+              equipped={displayEquipped}
+              appearanceState={cat?.appearanceState}
+              activities={page?.activities ?? []}
+              galleries={page?.galleries ?? []}
+              activityCount={activityCount}
+              galleryCount={galleryCount}
+              loading={loading && !page}
+              busy={busy}
+              canEdit={canEdit}
+              isReadOnly={isReadOnly}
+              resolvingOwner={resolvingOwner}
+              onDecorate={() => setDecorateOpen(true)}
+              onBack={() => navigate("/cattower")}
+              onEvents={() => navigate("/events")}
+              onRefresh={loadPage}
+              onReport={isReadOnly ? handleReport : undefined}
+            />
+
+            {err || customize.error ? (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {err ?? customize.error}
+              </div>
+            ) : null}
+
+            {canEdit ? (
+              <DecorationModal
+                open={decorateOpen}
+                saving={customize.saving}
+                error={customize.error}
+                canEdit={customize.canEdit}
+                growthStage={growth.stage}
+                customizePanel={
+                  <DecorationCustomizePanel
+                    selectedHeadItem={customize.selectedHeadItem}
+                    selectedBodyItem={customize.selectedBodyItem}
+                    selectedAccessoryItem={customize.selectedAccessoryItem}
+                    setEquipDraft={customize.setEquipDraft}
+                    itemsLoading={customize.itemsLoading}
+                    itemsLoadError={customize.itemsLoadError}
+                    disabled={customize.saving}
+                    growthStage={growth.stage}
+                    activityCount={growth.activityCount}
+                  />
+                }
+                onClose={() => setDecorateOpen(false)}
+                onSave={handleSaveDecoration}
+                Preview={
+                  <DecorateCatPreview
+                    growthStage={growth.stage}
+                    activityCount={growth.activityCount}
+                    equipped={customize.equipPreview}
+                    interactive
+                  />
+                }
+              />
+            ) : null}
+          </>
+        ) : null}
       </div>
-
-      <Card title="나만의 갤러리">
-        <GallerySection galleries={page?.galleries ?? []} />
-      </Card>
-
-      <DecorationModal
-        open={decorateOpen}
-        saving={saving}
-        saveInfo={saveInfo}
-        slot={slot}
-        setSlot={setSlot}
-        draft={draft}
-        setDraft={setDraft}
-        items={itemsForSlot}
-        usingMock={usingMock}
-        onClose={() => setDecorateOpen(false)}
-        onSave={saveDecoration}
-        Preview={<GoCatPreview />}
-      />
     </div>
   );
 }
-

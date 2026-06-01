@@ -1,221 +1,417 @@
-import { useEffect, useState } from 'react';
+// 경로: src/pages/Group/GroupListPage.tsx
+// 변경사항:
+//  1. 배너가 네비게이션 바 바로 아래에 붙도록 marginTop: '-64px' 적용
+//     (GroupDetailPage와 동일한 방식)
+//  2. 정렬 선택 기능 추가 (등록순 / 일정 가까운 순)
+//  3. meetingDate가 오늘 이전이면 프론트에서 자동 마감 처리
+
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import SockJS from 'sockjs-client';
-import Stomp from 'stompjs';
+import axiosInstance from '../../api/axiosInstance';
+import { useChatRoom } from '../../hooks/useChatRoom';
+
+const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
+const ITEMS_PER_PAGE = 10;
+
+interface Group {
+  id: number; title: string; content?: string; location?: string;
+  maxCapacity?: number; currentCapacity?: number; status?: string;
+  event?: string; meetingDate?: string; meetingTime?: string;
+  condition?: string; authorName?: string;
+  author?: { id?: number; email?: string };
+}
+interface GroupForPermission { authorEmail?: string; authorName?: string }
+declare global { interface Window { kakao: any } }
+
+type SortOrder = 'createdAt' | 'meetingDate';
+
+const escapeHtml = (v: string) =>
+    v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ── 날짜가 오늘 이전인지 확인 ──────────────────────────────────────
+const isDatePassed = (dateStr?: string): boolean => {
+  if (!dateStr) return false;
+  try {
+    const meeting = new Date(dateStr);
+    meeting.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return meeting < today;
+  } catch { return false; }
+};
 
 const GroupListPage = () => {
   const navigate = useNavigate();
-  const [groups, setGroups] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [groups, setGroups]                           = useState<Group[]>([]);
+  const [searchTerm, setSearchTerm]                   = useState('');
+  const [selectedEventFilter, setSelectedEventFilter] = useState('ALL');
+  const [sortOrder, setSortOrder]                     = useState<SortOrder>('createdAt');  // ✅ 정렬 상태
+  const [currentPage, setCurrentPage]                 = useState(1);
+  const [joinedGroupIds, setJoinedGroupIds]           = useState<number[]>([]);
+  const [mapTarget, setMapTarget]                     = useState<Group | null>(null);
+  const [isMapLoading, setIsMapLoading]               = useState(false);
+  const [mapError, setMapError]                       = useState('');
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapMarkerRef    = useRef<any>(null);
+  const { isMyGroup } = useChatRoom();
 
-  // --- 🔄 상태 관리 ---
-  const [isJoining, setIsJoining] = useState(false);
-  const [joinedGroupIds, setJoinedGroupIds] = useState<number[]>([]);
+  useEffect(() => { fetchGroups(); fetchJoinedGroupIds(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedEventFilter, sortOrder]);
 
-  // --- 💬 채팅 관련 상태 ---
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessage, setChatMessage] = useState("");
-  const [messages, setMessages] = useState<any[]>([]);
-  const [stompClient, setStompClient] = useState<any>(null);
-  const [activeChatTitle, setActiveChatTitle] = useState("");
-  const [connectedGroupId, setConnectedGroupId] = useState<number | null>(null);
-
-  useEffect(() => {
-    fetchGroups();
+  const loadKakaoMapSdk = useCallback(() => {
+    if (window.kakao?.maps?.services) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      const ex = document.getElementById('kakao-map-sdk-group-list') as HTMLScriptElement | null;
+      if (ex) {
+        window.kakao?.maps?.load ? window.kakao.maps.load(resolve)
+            : ex.addEventListener('load', () => window.kakao.maps.load(resolve), { once: true });
+        return;
+      }
+      const s = document.createElement('script');
+      s.id = 'kakao-map-sdk-group-list';
+      s.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+      s.onload = () => window.kakao.maps.load(resolve);
+      s.onerror = () => reject(new Error('load failed'));
+      document.head.appendChild(s);
+    });
   }, []);
 
-  const fetchGroups = () => {
-    axios.get('http://localhost:8080/api/groups')
-        .then(res => setGroups(res.data))
-        .catch(err => console.error("데이터 로딩 실패", err));
-  };
-
-  // 1. 채팅 연결 로직
-  const connectChat = (groupId: number, groupTitle: string) => {
-    if (connectedGroupId === groupId) {
-      setIsChatOpen(true);
-      return;
-    }
-    if (stompClient) stompClient.disconnect();
-
-    const socket = new SockJS('http://localhost:8080/ws-chat');
-    const client = Stomp.over(socket);
-    client.debug = () => {};
-
-    client.connect({}, () => {
-      setStompClient(client);
-      setConnectedGroupId(groupId);
-      setActiveChatTitle(groupTitle);
-      setMessages([{ user: '시스템', text: `[${groupTitle}] 채팅방에 연결되었습니다.` }]);
-
-      client.subscribe(`/topic/group/${groupId}`, (message) => {
-        const receivedMsg = JSON.parse(message.body);
-        setMessages(prev => [...prev, receivedMsg]);
-      });
-    });
-  };
-
-  // 2. 참여 신청 핸들러
-  const handleJoinRequest = async (group: any) => {
-    if (isJoining || joinedGroupIds.includes(group.id)) return;
-
-    try {
-      if (group.currentCapacity < group.maxCapacity) {
-        setIsJoining(true);
-        await axios.put(`http://localhost:8080/api/groups/${group.id}/join`);
-        alert(`'${group.title}' 참여 성공!`);
-
-        setJoinedGroupIds(prev => [...prev, group.id]);
-
-        // ✅ 참여 성공 시 바로 채팅 연결 및 팝업 열기
-        connectChat(group.id, group.title);
-        setIsChatOpen(true);
-        fetchGroups();
-      } else {
-        alert("정원이 가득 찼습니다.");
-      }
-    } catch (err) {
-      console.error("신청 오류", err);
-      alert("참여 처리 중 오류가 발생했습니다.");
-    } finally {
-      setIsJoining(false);
-    }
-  };
-
-  // 3. 메시지 전송
-  const handleSend = () => {
-    if (chatMessage.trim() === "" || !stompClient || !connectedGroupId) return;
-    const payload = { roomId: connectedGroupId, user: '나', text: chatMessage };
-    stompClient.send(`/app/chat.sendMessage/${connectedGroupId}`, {}, JSON.stringify(payload));
-    setChatMessage("");
-  };
-
-  const handleDelete = async (id: number) => {
-    if (window.confirm("정말 이 모집글을 삭제하시겠습니까?")) {
+  useEffect(() => {
+    if (!mapTarget || !mapContainerRef.current) return;
+    let cancelled = false;
+    const loc = mapTarget.location?.trim();
+    const run = async () => {
+      if (!loc) { setMapError('모임 장소 정보가 없습니다.'); return; }
+      setIsMapLoading(true); setMapError('');
       try {
-        await axios.delete(`http://localhost:8080/api/groups/${id}`);
-        alert("삭제되었습니다.");
-        fetchGroups();
-      } catch (err) { console.error("삭제 실패", err); }
-    }
+        await loadKakaoMapSdk();
+        if (cancelled || !mapContainerRef.current) return;
+        const geocoder = new window.kakao.maps.services.Geocoder();
+        const places   = new window.kakao.maps.services.Places();
+        const pos = await new Promise<any>((res, rej) => {
+          geocoder.addressSearch(loc, (r: any, s: any) => {
+            if (s === window.kakao.maps.services.Status.OK && r.length > 0)
+              return res(new window.kakao.maps.LatLng(+r[0].y, +r[0].x));
+            places.keywordSearch(loc, (pr: any, ps: any) =>
+                ps === window.kakao.maps.services.Status.OK && pr.length > 0
+                    ? res(new window.kakao.maps.LatLng(+pr[0].y, +pr[0].x))
+                    : rej(new Error('not found'))
+            );
+          });
+        });
+        if (cancelled || !mapContainerRef.current) return;
+        const map = new window.kakao.maps.Map(mapContainerRef.current, { center: pos, level: 3 });
+        if (mapMarkerRef.current) mapMarkerRef.current.setMap(null);
+        mapMarkerRef.current = new window.kakao.maps.Marker({ position: pos, map });
+        new window.kakao.maps.InfoWindow({
+          content: `<div style="padding:8px 12px;font-size:13px;font-weight:700;white-space:nowrap;">${escapeHtml(loc)}</div>`,
+        }).open(map, mapMarkerRef.current);
+      } catch { setMapError('위치를 찾지 못했습니다.'); }
+      finally { if (!cancelled) setIsMapLoading(false); }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [mapTarget, loadKakaoMapSdk]);
+
+  const fetchGroups = () => axiosInstance.get<Group[]>('/groups').then(r => setGroups(r.data)).catch(console.error);
+  const fetchJoinedGroupIds = async () => {
+    try { const r = await axiosInstance.get<number[]>('/groups/joined-ids'); setJoinedGroupIds(r.data); } catch {}
   };
 
-  const filteredGroups = groups.filter((group: any) =>
-      group.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (group.event && group.event.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (group.location && group.location.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const toPermissionShape = (g: Group): GroupForPermission => ({ authorEmail: g.author?.email, authorName: g.authorName });
+  const handleGoToHost = useCallback((g: Group) => {
+    const id = g.author?.id;
+    if (id != null && Number.isFinite(id) && id > 0) navigate(`/cattower/${id}`);
+  }, [navigate]);
+
+  const eventCategories = Array.from(new Set(groups.map(g => g.event?.trim()).filter(Boolean) as string[])).sort((a,b) => a.localeCompare(b,'ko'));
+
+  // ── 필터링 ──────────────────────────────────────────────────────
+  const filteredGroups = groups.filter(g => {
+    const q = searchTerm.toLowerCase();
+    const matchSearch = g.title?.toLowerCase().includes(q) || g.event?.toLowerCase().includes(q) || g.location?.toLowerCase().includes(q);
+    const matchEvent  = selectedEventFilter === 'ALL' || g.event?.trim() === selectedEventFilter;
+    return matchSearch && matchEvent;
+  });
+
+  // ── 정렬 ✅ ───────────────────────────────────────────────────
+  const sortedGroups = [...filteredGroups].sort((a, b) => {
+    if (sortOrder === 'meetingDate') {
+      // 날짜 없는 항목은 뒤로
+      if (!a.meetingDate && !b.meetingDate) return b.id - a.id;
+      if (!a.meetingDate) return 1;
+      if (!b.meetingDate) return -1;
+      return new Date(a.meetingDate).getTime() - new Date(b.meetingDate).getTime();
+    }
+    // 기본: 등록 최신순 (id 내림차순)
+    return b.id - a.id;
+  });
+
+  const totalPages      = Math.max(1, Math.ceil(sortedGroups.length / ITEMS_PER_PAGE));
+  const paginatedGroups = sortedGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
+
+  // ── 통계: 자동 마감 포함 ✅ ────────────────────────────────────
+  const openCount   = groups.filter(g => {
+    const isFull   = (g.currentCapacity ?? 0) >= (g.maxCapacity ?? 999);
+    const isPassed = isDatePassed(g.meetingDate);
+    return g.status !== 'CLOSED' && !isFull && !isPassed;
+  }).length;
+  const closedCount = groups.length - openCount;
 
   return (
-      <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '100px' }}>
-        <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '0 20px' }}>
+      <div style={{ backgroundColor: '#f1f5f9', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '100px', marginTop: '-64px' }}> {/* ✅ 1. 네비 바에 딱 붙도록 */}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '30px' }}>
-            <div>
-              <h1 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 8px 0' }}>👥 모집게시판</h1>
-              <p style={{ color: '#94a3b8', margin: 0 }}>함께 행사에 참여할 동행자를 찾아보세요</p>
+        {/* ── 배너 ── */}
+        <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '88px 20px 28px' }}> {/* paddingTop에 nav 높이 포함 */}
+          <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <h1 style={{ fontSize: '26px', fontWeight: '900', color: 'white', margin: '0 0 6px' }}>👥 모집게시판</h1>
+                <p style={{ color: 'rgba(255,255,255,0.82)', margin: 0, fontSize: '14px' }}>함께 행사에 참여할 동행자를 찾아보세요</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: '12px', padding: '8px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: 'white' }}>{openCount}</div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.75)', fontWeight: '700' }}>모집중</div>
+                  </div>
+                  <div style={{ backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: '12px', padding: '8px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: 'rgba(255,255,255,0.7)' }}>{closedCount}</div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.55)', fontWeight: '700' }}>마감</div>
+                  </div>
+                </div>
+                <button
+                    onClick={() => navigate('/groups/create')}
+                    style={{ backgroundColor: 'white', color: '#ff5e00', border: 'none', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', fontWeight: '800', fontSize: '14px', whiteSpace: 'nowrap', boxShadow: '0 2px 12px rgba(0,0,0,0.12)' }}
+                >
+                  + 모집글 작성
+                </button>
+              </div>
             </div>
-            <button onClick={() => navigate('/groups/create')} style={{ backgroundColor: '#ff8a3d', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ 모집글 작성</button>
+          </div>
+        </div>
+
+        <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 20px 0' }}>
+
+          {/* ── 검색바 ── */}
+          <div style={{ position: 'relative', marginBottom: '16px' }}>
+            <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', pointerEvents: 'none' }}>🔍</span>
+            <input
+                type="text"
+                placeholder="제목, 행사명, 장소로 검색"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: '14px', border: '1.5px solid #e2e8f0', boxSizing: 'border-box', outline: 'none', fontSize: '14px', backgroundColor: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'border-color 0.2s' }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#ff8a3d' }}
+                onBlur={e =>  { e.currentTarget.style.borderColor = '#e2e8f0' }}
+            />
           </div>
 
-          <input type="text" placeholder="제목, 행사명, 장소로 검색" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: '100%', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '25px', boxSizing: 'border-box', outline: 'none' }} />
+          {/* ── 행사 필터 ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>행사 분류</span>
+            {['ALL', ...eventCategories].map(ev => (
+                <button key={ev} type="button" onClick={() => setSelectedEventFilter(ev)}
+                        style={{
+                          border: selectedEventFilter === ev ? '1.5px solid #ff8a3d' : '1.5px solid #e2e8f0',
+                          backgroundColor: selectedEventFilter === ev ? '#ff8a3d' : 'white',
+                          color: selectedEventFilter === ev ? 'white' : '#64748b',
+                          padding: '6px 14px', borderRadius: '20px', cursor: 'pointer', fontWeight: '700', fontSize: '12px',
+                          maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          transition: 'all 0.15s',
+                        }}
+                        title={ev === 'ALL' ? '전체' : ev}
+                >
+                  {ev === 'ALL' ? '전체' : ev}
+                </button>
+            ))}
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {filteredGroups.map((group: any) => {
-              const isFull = group.currentCapacity >= group.maxCapacity;
-              const isClosed = group.status === 'CLOSED' || isFull;
-              const isAlreadyJoined = joinedGroupIds.includes(group.id);
+          {/* ── 결과 수 + 정렬 버튼 ✅ ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '600' }}>
+              {sortedGroups.length > 0 ? `총 ${sortedGroups.length}개` : ''}
+            </span>
+
+            {/* ── 정렬 선택 ── */}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {([
+                { key: 'createdAt',  label: '⏱ 최신 등록순' },
+                { key: 'meetingDate', label: '📅 일정 가까운 순' },
+              ] as { key: SortOrder; label: string }[]).map(({ key, label }) => (
+                  <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSortOrder(key)}
+                      style={{
+                        padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700',
+                        cursor: 'pointer', border: 'none', transition: 'all 0.15s',
+                        backgroundColor: sortOrder === key ? '#1e293b' : '#f1f5f9',
+                        color: sortOrder === key ? 'white' : '#64748b',
+                      }}
+                  >
+                    {label}
+                  </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── 카드 목록 ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {paginatedGroups.map(group => {
+              const cur = group.currentCapacity ?? 0;
+              const max = group.maxCapacity ?? 4;
+              const pct = Math.min(100, Math.round((cur / max) * 100));
+              const isFull     = cur >= max;
+              const isPassed   = isDatePassed(group.meetingDate);   // ✅ 3. 날짜 지난 게시글 자동 마감
+              const isClosed   = group.status === 'CLOSED' || isFull || isPassed;
+              const isJoined   = joinedGroupIds.includes(group.id);
+              const canEdit    = isMyGroup(toPermissionShape(group));
 
               return (
-                  <div key={group.id} style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #f1f5f9', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-                    <div onClick={() => setSelectedId(selectedId === group.id ? null : group.id)} style={{ padding: '24px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', fontWeight: '700' }}>{group.title}</h3>
-                        <div style={{ fontSize: '14px', color: '#64748b' }}>📍 {group.location} | 호스트: {group.authorName || '익명'}</div>
+                  <div key={group.id} onClick={() => navigate(`/groups/${group.id}`)}
+                       style={{
+                         backgroundColor: 'white', borderRadius: '16px', cursor: 'pointer',
+                         border: '1px solid #e8edf5',
+                         borderLeft: `4px solid ${isClosed ? '#cbd5e1' : '#ff8a3d'}`,
+                         boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+                         transition: 'box-shadow 0.15s, transform 0.15s',
+                         overflow: 'hidden',
+                         opacity: isClosed ? 0.75 : 1,   // 마감된 글은 살짝 흐리게
+                       }}
+                       onMouseEnter={e => {
+                         (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 24px rgba(0,0,0,0.10)';
+                         (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+                       }}
+                       onMouseLeave={e => {
+                         (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 6px rgba(0,0,0,0.04)';
+                         (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                       }}
+                  >
+                    <div style={{ padding: '18px 20px' }}>
+                      {/* 제목 행 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {group.title}
+                      </span>
+                          {canEdit && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#fff4ed', color: '#ff8a3d', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>내 글</span>}
+                          {isJoined && !canEdit && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#ecfdf5', color: '#10b981', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>참여중</span>}
+                          {isPassed && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#f1f5f9', color: '#94a3b8', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>일정 종료</span>}
+                        </div>
+                        <span style={{
+                          flexShrink: 0, fontSize: '11px', fontWeight: '800', padding: '3px 10px', borderRadius: '20px',
+                          backgroundColor: isClosed ? '#f1f5f9' : '#ecfdf5',
+                          color: isClosed ? '#94a3b8' : '#10b981',
+                        }}>
+                      {isClosed ? '마감' : '● 모집중'}
+                    </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <span style={{ backgroundColor: isClosed ? '#f1f5f9' : '#ecfdf5', color: isClosed ? '#94a3b8' : '#10b981', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>
-                          {isClosed ? '모집완료' : '모집중'}
+
+                      {/* 호스트 */}
+                      <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px' }}>
+                        호스트:{' '}
+                        {group.author?.id
+                            ? <button type="button" onClick={e => { e.stopPropagation(); handleGoToHost(group); }}
+                                      style={{ border: 'none', background: 'transparent', padding: 0, color: '#ff8a3d', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px', fontSize: '12px' }}>
+                              {group.authorName || '익명'}
+                            </button>
+                            : <span style={{ fontWeight: '600', color: '#64748b' }}>{group.authorName || '익명'}</span>
+                        }
+                      </div>
+
+                      {/* 메타 정보 행 */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '12px', color: '#64748b', alignItems: 'center' }}>
+                          <span>📍 {group.location || '장소 미정'}</span>
+                          {group.meetingDate && (
+                              <span style={{ color: isPassed ? '#94a3b8' : '#64748b' }}>
+                              📅 {group.meetingDate}{isPassed ? ' (종료)' : ''}
+                            </span>
+                          )}
+                          {group.event && (
+                              <span style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '8px', color: '#64748b' }}>
+                          🎟️ {group.event}
                         </span>
-                        <div style={{ fontSize: '20px', color: '#cbd5e1', transform: selectedId === group.id ? 'rotate(90deg)' : 'rotate(0deg)', transition: '0.3s' }}>〉</div>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                          {/* 정원 미니 바 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '56px', height: '5px', backgroundColor: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isClosed ? '#cbd5e1' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s' }} />
+                            </div>
+                            <span style={{ fontSize: '11px', color: isClosed ? '#94a3b8' : '#ff8a3d', fontWeight: '700' }}>{cur}/{max}명</span>
+                          </div>
+
+                          {group.location && (
+                              <button type="button" onClick={e => { e.stopPropagation(); setMapTarget(group); setMapError(''); }}
+                                      style={{ border: 'none', borderRadius: '8px', padding: '5px 10px', backgroundColor: '#fff4ed', color: '#ff8a3d', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>
+                                🗺️ 지도
+                              </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {selectedId === group.id && (
-                        <div style={{ padding: '0 30px 30px 30px', borderTop: '1px solid #f8fafc', backgroundColor: '#fff' }}>
-                          <div style={{ padding: '25px 0', borderBottom: '1px solid #f1f5f9' }}>
-                            <p style={{ fontSize: '16px', color: '#334155', lineHeight: '1.6', margin: 0, fontWeight: '500' }}>{group.content}</p>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginTop: '25px' }}>
-                            <div style={{ textAlign: 'center' }}>
-                              <div style={{ marginBottom: '25px' }}>
-                                <div style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 'bold', marginBottom: '10px' }}>참여 현황</div>
-                                <div style={{ fontSize: '17px', color: '#334155', fontWeight: '600' }}>👥 {group.currentCapacity || 1} / {group.maxCapacity || 4}명</div>
-                              </div>
-                              <div>
-                                <div style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 'bold', marginBottom: '10px' }}>참여 조건</div>
-                                <div style={{ fontSize: '16px', color: '#334155' }}>{group.condition || '제한 없음'}</div>
-                              </div>
-                            </div>
-                            <div>
-                              <div style={{ marginBottom: '20px' }}>
-                                <div style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 'bold', marginBottom: '8px' }}>집합 상세 정보</div>
-                                <div style={{ fontSize: '15px', color: '#334155', lineHeight: '1.8' }}>
-                                  📅 <strong>날짜:</strong> {group.meetingDate || '미정'} <br/>
-                                  ⏰ <strong>시간:</strong> {group.meetingTime || '미정'} <br/>
-                                  🎟️ <strong>참여 행사:</strong> {group.event || '정보 없음'} <br/>
-                                  📍 <strong>모임 장소:</strong> <span style={{ color: '#ff8a3d', fontWeight: 'bold' }}>{group.location || '정보 없음'}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '40px' }}>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleJoinRequest(group); }}
-                                disabled={isClosed || isJoining || isAlreadyJoined}
-                                style={{
-                                  backgroundColor: isAlreadyJoined ? '#10b981' : (isClosed || isJoining ? '#cbd5e1' : '#ff8a3d'),
-                                  color: 'white', border: 'none', padding: '15px 60px', borderRadius: '12px',
-                                  fontWeight: 'bold', cursor: isClosed || isJoining || isAlreadyJoined ? 'default' : 'pointer', fontSize: '16px'
-                                }}
-                            >
-                              {isJoining ? '참여 신청 중...' : (isAlreadyJoined ? '참여 완료' : (isClosed ? '모집이 마감되었습니다' : '참여 신청'))}
-                            </button>
-                            <button onClick={() => navigate(`/groups/edit/${group.id}`)} style={{ backgroundColor: '#f1f5f9', color: '#64748b', border: 'none', padding: '15px 30px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>수정하기</button>
-                            <button onClick={() => handleDelete(group.id)} style={{ backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', padding: '15px 30px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>삭제하기</button>
-                          </div>
-                        </div>
-                    )}
                   </div>
               );
             })}
           </div>
-        </div>
 
-        {/* --- 💬 실시간 채팅 팝업 (가장 중요!) --- */}
-        {isChatOpen && (
-            <div style={{ position: 'fixed', bottom: '20px', right: '20px', width: '350px', height: '500px', backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', zIndex: 1000, overflow: 'hidden' }}>
-              <div style={{ backgroundColor: '#ff8a3d', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 'bold' }}>{activeChatTitle} 채팅방</span>
-                <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+          {/* 빈 결과 */}
+          {sortedGroups.length === 0 && (
+              <div style={{ marginTop: '20px', padding: '60px 20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #e8edf5' }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🔍</div>
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>조건에 맞는 모집글이 없습니다.</p>
               </div>
-              <div style={{ flex: 1, padding: '15px', overflowY: 'auto', backgroundColor: '#fdfdfd' }}>
-                {messages.map((msg, idx) => (
-                    <div key={idx} style={{ marginBottom: '10px', textAlign: msg.user === '나' ? 'right' : 'left' }}>
-                      <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '2px' }}>{msg.user}</div>
-                      <div style={{ display: 'inline-block', padding: '8px 12px', borderRadius: '12px', backgroundColor: msg.user === '나' ? '#ff8a3d' : '#f1f5f9', color: msg.user === '나' ? 'white' : '#334155', fontSize: '14px', maxWidth: '80%' }}>
-                        {msg.text}
-                      </div>
-                    </div>
+          )}
+
+          {/* 페이지네이션 */}
+          {sortedGroups.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '28px', flexWrap: 'wrap' }}>
+                {[
+                  { label: '이전', onClick: () => setCurrentPage(p => Math.max(1, p - 1)), disabled: currentPage === 1 },
+                  ...Array.from({ length: totalPages }, (_, i) => ({ label: String(i + 1), onClick: () => setCurrentPage(i + 1), disabled: false, active: currentPage === i + 1 })),
+                  { label: '다음', onClick: () => setCurrentPage(p => Math.min(totalPages, p + 1)), disabled: currentPage === totalPages },
+                ].map((btn, i) => (
+                    <button key={i} type="button" onClick={btn.onClick} disabled={btn.disabled}
+                            style={{
+                              minWidth: '36px', padding: '8px 12px', borderRadius: '10px', fontWeight: '800', fontSize: '13px', cursor: btn.disabled ? 'default' : 'pointer',
+                              border: (btn as any).active ? '1.5px solid #ff8a3d' : '1px solid #e2e8f0',
+                              backgroundColor: (btn as any).active ? '#fff4ed' : btn.disabled ? '#f8fafc' : 'white',
+                              color: (btn as any).active ? '#ff8a3d' : btn.disabled ? '#cbd5e1' : '#64748b',
+                            }}>
+                      {btn.label}
+                    </button>
                 ))}
               </div>
-              <div style={{ padding: '15px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '8px' }}>
-                <input type="text" value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} placeholder="메시지를 입력하세요" style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none' }} />
-                <button onClick={handleSend} style={{ backgroundColor: '#ff8a3d', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>전송</button>
+          )}
+        </div>
+
+        {/* 지도 모달 */}
+        {mapTarget && (
+            <div onClick={() => setMapTarget(null)}
+                 style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '20px' }}>
+              <div onClick={e => e.stopPropagation()}
+                   style={{ width: '720px', maxWidth: '96vw', backgroundColor: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }}>
+                <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '16px', fontWeight: '900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapTarget.title}</div>
+                    <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapTarget.location}</div>
+                  </div>
+                  <button type="button" onClick={() => setMapTarget(null)}
+                          style={{ border: 'none', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '6px 12px', cursor: 'pointer', fontWeight: '800', flexShrink: 0 }}>
+                    닫기
+                  </button>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <div ref={mapContainerRef} style={{ width: '100%', height: '400px', backgroundColor: '#f8fafc' }} />
+                  {isMapLoading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b' }}>지도를 불러오는 중...</div>}
+                  {mapError && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.92)', color: '#ef4444', fontWeight: '700', textAlign: 'center', padding: '20px' }}>{mapError}</div>}
+                </div>
               </div>
             </div>
         )}

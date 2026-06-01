@@ -22,25 +22,25 @@ public class Review {
     private Long id;
 
     @Column(name = "rating", nullable = false)
-    private Integer rating; // 1~5, 0.5 단위
+    private Integer rating;
 
     @Column(name = "title", nullable = false, length = 255)
-    private String title; // 필수: 한줄평
+    private String title;
 
     @Column(name = "content", columnDefinition = "TEXT")
-    private String content; // 선택: 상세 내용
+    private String content;
 
     @Column(name = "author_name", nullable = false, length = 255)
-    private String authorName; // 필수: 작성자명
+    private String authorName;
 
     @Column(name = "review_date", nullable = false)
     private OffsetDateTime reviewDate;
 
     @Column(name = "user_id", nullable = false)
-    private Long userId; // User FK
+    private Long userId;
 
     @Column(name = "event_id", nullable = false)
-    private Long eventId; // Event FK
+    private Long eventId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -54,7 +54,6 @@ public class Review {
     @Builder.Default
     private List<ReviewImage> reviewImages = new ArrayList<>();
 
-    // ─── 편의 메서드 ───
     public void addReviewImage(ReviewImage reviewImage) {
         reviewImages.add(reviewImage);
         reviewImage.setReview(this);

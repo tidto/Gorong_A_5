@@ -14,6 +14,7 @@ import { useNotification } from './NotificationContext'
 interface UserProfile {
   nickname: string
   email: string
+  roleType?: 'USER' | 'ADMIN'
   barrierFreeType?: string | null  // 체크박스 대신 어떤 장애인지 구체적인 타입으로 관리
   isForeigner?: boolean
   interests?: string[]

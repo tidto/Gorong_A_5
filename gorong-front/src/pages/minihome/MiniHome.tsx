@@ -1,94 +1,122 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import RiveCharacter from "../../components/RiveCharacter";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import GoCatVisual from "../../components/minihome/mini-home/GoCatVisual";
+import GoCatCard from "../../components/minihome/mini-home/GoCatCard";
+import DecorationModal from "../../components/minihome/mini-home/DecorationModal";
+import DecorationCustomizePanel from "../../components/minihome/decoration/DecorationCustomizePanel";
 import {
   addGalleryImage,
-  createActivity,
+  completeMyCatSetup,
   createGallery,
-  createMiniHome,
   getMiniHomePage,
+  createMyMiniHome,
+  getMyMiniHomePage,
 } from "../../api/minihome/miniHomeApi";
+import ActivityHistory from "../../components/minihome/mini-home/ActivityHistory";
+import GallerySection from "../../components/minihome/mini-home/GallerySection";
+import GrowthProgress from "../../components/minihome/mini-home/GrowthProgress";
+import { computeGrowthState } from "../../utils/minihome/growth/growth";
 import type { ActivityItem, MiniHomePage } from "../../types/minihome/minihome";
 import { useAuth } from "../../contexts/AuthContext";
+import { useMiniHomeUserId } from "./hooks/useMiniHomeUserId";
+import { useGoCatCustomize } from "./hooks/useGoCatCustomize";
+import {
+  applyEquipDraftToPage,
+  buildEquipBySlotFromDraft,
+  enrichEquipItems,
+  equipPreviewFromDraft,
+  normalizeEquipPreview,
+} from "../../utils/minihome/gocat/items";
+import { loadEquippedDecorDraft } from "../../utils/minihome/gocat/gocatEquippedStorage";
+import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
+import DecorateCatPreview from "../../components/minihome/rive/DecorateCatPreview";
+import {
+  isCatAppearanceConfigured,
+  parseCatAppearance,
+  toAppearanceApiPayload,
+} from "../../utils/minihome/gocat/catAppearance";
+import { mapMiniHomeApiError } from "../../utils/minihome/core/minihomeApiError";
+import GoCatOnboarding, { type GoCatOnboardingSubmit } from "../../components/minihome/onboarding/GoCatOnboarding";
 
-function intOr(v: string, fallback: number) {
-  const n = Number.parseInt(v, 10);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function fmt(iso?: string | null) {
-  if (!iso) return "-";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
-// 기존 동작/레이아웃 유지 목적: 이 파일은 이전 MiniHome.tsx 로직을 그대로 옮긴 것입니다.
-function 캐릭터타입표시값(code?: string | null) {
-  const t = (code ?? "BASIC").toUpperCase();
-  if (t === "BASIC") return "기본";
-  if (t === "TEEN") return "성장 1";
-  if (t === "ADULT") return "성장 2";
-  if (t === "MASTER") return "마스터";
-  return t;
-}
-
-function 활동타입표시값(code?: string | null) {
-  const t = (code ?? "").toUpperCase();
-  if (t === "REVIEW_WRITTEN") return "후기 작성";
-  if (t === "EVENT_PARTICIPATED") return "행사 참여";
-  return code ?? "-";
-}
-
-function 에러메시지(e: any) {
-  const msg = e?.response?.data?.message;
+function 에러메시지(e: unknown) {
+  const anyErr = e as { response?: { status?: number; data?: { message?: string } }; message?: string };
+  const status = anyErr?.response?.status;
+  if (status === 401) return "로그인이 필요합니다.";
+  if (status === 403) return "접근 권한이 없습니다.";
+  const msg = anyErr?.response?.data?.message;
   if (typeof msg === "string" && msg.trim()) return msg;
-  if (typeof e?.message === "string" && e.message.trim()) return e.message;
+  if (typeof anyErr?.message === "string" && anyErr.message.trim()) return anyErr.message;
   return "요청 처리 중 오류가 발생했습니다.";
 }
 
 export default function MiniHome() {
-  const { firebaseUser, isLoading: authLoading } = useAuth();
+  const { userId: routeUserId } = useParams<{ userId?: string }>();
+  const { isLoading: authLoading } = useAuth();
+  const { userId, displayName, firebaseUser, loadingUserId, userIdError, isReady } = useMiniHomeUserId();
   const navigate = useNavigate();
-  // 로그인한 사용자의 UID를 숫자로 변환하여 사용 (또는 테스트용으로 직접 입력)
-  const [userId, setUserId] = useState<number>(() => {
-    if (firebaseUser?.uid) {
-      const hashCode = firebaseUser.uid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      return Math.abs(hashCode % 1000000) || 1;
-    }
-    return 1;
-  });
+  const targetUserId = routeUserId ? Number(routeUserId) : null;
+  const isReadOnly = targetUserId != null && Number.isFinite(targetUserId) && targetUserId > 0;
+  const canEdit = !isReadOnly;
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [page, setPage] = useState<MiniHomePage | null>(null);
-  const [noMiniHome, setNoMiniHome] = useState(false);
-
+  const [, setNoMiniHome] = useState(false);
   const [selectedTab, setSelectedTab] = useState<"character" | "activities" | "gallery">("character");
+  const [decorateOpen, setDecorateOpen] = useState(false);
+  const [equippedDraft, setEquippedDraft] = useState<Record<SlotType, DecorItem | null>>(() =>
+    loadEquippedDecorDraft()
+  );
 
   const [galleryTitle, setGalleryTitle] = useState("나의 갤러리");
   const [galleryDesc, setGalleryDesc] = useState("행사 사진 모음");
-  const [imageUrl, setImageUrl] = useState("https://via.placeholder.com/400x300?text=Gorong");
+  const [imageUrl, setImageUrl] = useState("");
+  const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [onboardingErr, setOnboardingErr] = useState<string | null>(null);
   const todayIso = useMemo(() => new Date().toISOString(), []);
 
   async function load() {
+    if (!isReady) return;
+
     setLoading(true);
     setErr(null);
     setNoMiniHome(false);
+
     try {
-      const data = await getMiniHomePage(userId);
-      setPage(data);
-    } catch (e: any) {
-      if (e?.message === "AUTH_REQUIRED") {
+      const data = isReadOnly
+        ? await getMiniHomePage(targetUserId!)
+        : await getMyMiniHomePage();
+      setPage({
+        ...data,
+        activeEquips: enrichEquipItems(data.activeEquips ?? []),
+      });
+    } catch (e: unknown) {
+      console.error("[MiniHome] load failed", e);
+      if ((e as Error)?.message === "AUTH_REQUIRED") {
         setErr("로그인이 필요합니다.");
         navigate("/login");
         return;
       }
-      const status = e?.response?.status;
-      if (status === 404) {
-        setNoMiniHome(true);
-        setPage(null);
+
+      const status = (e as { response?: { status?: number } })?.response?.status;
+
+      if (status === 404 && !isReadOnly) {
+        try {
+          await createMyMiniHome();
+          const data = await getMyMiniHomePage();
+          setPage({
+            ...data,
+            activeEquips: enrichEquipItems(data.activeEquips ?? []),
+          });
+          setNoMiniHome(false);
+        } catch (createErr: unknown) {
+          console.error("[MiniHome] create failed", createErr);
+          setNoMiniHome(true);
+          setPage(null);
+          setErr(에러메시지(createErr));
+        }
+      } else if (status === 404 && isReadOnly) {
+        setErr("해당 유저의 미니홈피를 찾을 수 없습니다.");
       } else {
         setErr(에러메시지(e));
       }
@@ -98,49 +126,105 @@ export default function MiniHome() {
   }
 
   useEffect(() => {
-    // Auth 초기화 전에는 currentUser가 null일 수 있어 토큰 없이 요청이 나가는 것을 방지
-    if (authLoading) return;
+    if (authLoading || loadingUserId) return;
+
     if (!firebaseUser) {
       setErr("로그인이 필요합니다.");
       return;
     }
+
+    if (userIdError) {
+      setErr(userIdError);
+      return;
+    }
+
+    if (!isReady) return;
+
+    setPage(null);
+    setErr(null);
+    setNoMiniHome(false);
     load();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, firebaseUser]);
+  }, [authLoading, loadingUserId, isReady, firebaseUser?.uid, userId, userIdError, routeUserId]);
 
   const cat = page?.miniHome?.cat ?? null;
+  const ownerUserId = page?.miniHome?.userId ?? 0;
+  const growth = useMemo(() => computeGrowthState(page), [page]);
 
-  async function onCreateMiniHome() {
-    setLoading(true);
-    setErr(null);
-    try {
-      await createMiniHome(userId);
-      await load();
-    } catch (e: any) {
-      setErr(에러메시지(e));
-    } finally {
-      setLoading(false);
+  const needsOnboarding = useMemo(() => {
+    if (!page?.miniHome?.cat) return true;
+    const cat = page.miniHome.cat;
+    return !isCatAppearanceConfigured(cat.appearanceState, cat.appearanceConfigured);
+  }, [page]);
+
+  const showOnboarding =
+    canEdit && !authLoading && !loadingUserId && isReady && Boolean(firebaseUser) && !loading && needsOnboarding;
+
+  const handleEquippedSaved = useCallback((draft: Record<SlotType, DecorItem | null>) => {
+    setEquippedDraft(draft);
+    setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
+  }, []);
+
+  const customize = useGoCatCustomize(cat, growth.stage, decorateOpen, {
+    pageEquips: page?.activeEquips,
+    appearanceState: cat?.appearanceState,
+    goCatId: cat?.goCatId,
+    canEdit,
+    onEquippedSaved: handleEquippedSaved,
+  });
+
+  useEffect(() => {
+    setEquippedDraft(loadEquippedDecorDraft(page?.activeEquips, cat?.appearanceState));
+  }, [page?.activeEquips, cat?.appearanceState]);
+
+  const equippedPreview = useMemo(() => {
+    const preview = decorateOpen
+      ? customize.equipPreview
+      : equipPreviewFromDraft(equippedDraft);
+    return normalizeEquipPreview(preview);
+  }, [decorateOpen, customize.equipPreview, equippedDraft]);
+
+  const equipBySlot = useMemo(() => buildEquipBySlotFromDraft(equippedDraft), [equippedDraft]);
+
+  async function handleSaveDecoration() {
+    const { equipOk, draft } = await customize.saveAll();
+    if (equipOk) {
+      setEquippedDraft(draft);
+      setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
+      setDecorateOpen(false);
     }
   }
 
-  async function onAddActivity(activityType: ActivityItem["activityType"]) {
-    setLoading(true);
-    setErr(null);
+  async function handleOnboardingSubmit(payload: GoCatOnboardingSubmit) {
+    setOnboardingSaving(true);
+    setOnboardingErr(null);
     try {
-      await createActivity(userId, { activityType: activityType ?? "REVIEW_WRITTEN" });
+      const body = {
+        ...toAppearanceApiPayload(payload.appearance),
+        catName: payload.catName,
+      };
+      if (!page?.miniHome?.cat) {
+        await createMyMiniHome(body);
+      } else {
+        await completeMyCatSetup(body);
+      }
+      setNoMiniHome(false);
       await load();
-    } catch (e: any) {
-      setErr(에러메시지(e));
+    } catch (e: unknown) {
+      setOnboardingErr(mapMiniHomeApiError(e, "Go냥이 저장에 실패했습니다."));
     } finally {
-      setLoading(false);
+      setOnboardingSaving(false);
     }
   }
 
   async function onCreateGallery() {
+    if (!canEdit) return;
     setLoading(true);
     setErr(null);
     try {
-      await createGallery(userId, { title: galleryTitle, description: galleryDesc });
+      if (!ownerUserId) throw new Error("미니홈 사용자 정보가 없습니다.");
+      await createGallery(ownerUserId, { title: galleryTitle, description: galleryDesc });
       await load();
     } catch (e: any) {
       setErr(에러메시지(e));
@@ -150,10 +234,21 @@ export default function MiniHome() {
   }
 
   async function onAddImage(galleryId: number) {
+    if (!canEdit) return;
+    const url = imageUrl.trim();
+    if (!url) {
+      setErr("이미지 URL을 입력해 주세요.");
+      return;
+    }
+
     setLoading(true);
     setErr(null);
     try {
-      await addGalleryImage(galleryId, { imageUrl, locationName: "고롱", takenAt: todayIso });
+      await addGalleryImage(galleryId, {
+        imageUrl: url,
+        locationName: "고롱",
+        takenAt: todayIso,
+      });
       await load();
     } catch (e: any) {
       setErr(에러메시지(e));
@@ -162,249 +257,327 @@ export default function MiniHome() {
     }
   }
 
+  const activityCount = page?.stats?.activityCount ?? page?.activities?.length ?? 0;
+  const galleryCount = page?.galleries?.length ?? 0;
+  const equipCount = page?.activeEquips?.length ?? 0;
+
+  function getActivityPostLink(activity: ActivityItem): string | null {
+    if (!activity.referenceId) return null;
+    const type = (activity.activityType ?? "").toUpperCase();
+    if (type.includes("EVENT_PARTICIPATION") || type.includes("EVENT_PARTICIPATED")) {
+      return "/group";
+    }
+    if (type.includes("EVENT") || type.includes("REVIEW")) {
+      return `/events/${activity.referenceId}`;
+    }
+    return null;
+  }
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold text-orange-700">미니홈피</h1>
-          <p className="text-sm text-slate-600">PostgreSQL 테이블 구조 기반</p>
-          {firebaseUser && (
-            <p className="text-sm text-orange-600 font-medium mt-2">
-              로그인: {firebaseUser.email || firebaseUser.uid}
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-pink-50">
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-7">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2 text-sm font-bold text-orange-700">
+              🐱 Gorong MiniHome
+            </div>
+            <h1 className="mt-4 text-4xl font-extrabold text-slate-900">미니홈피</h1>
+            <p className="mt-2 text-sm text-slate-600">
+              {(page?.ownerNickname ?? displayName)}님의 활동, 갤러리, 고냥이 상태를 한 공간에서 확인합니다.
             </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-col sm:flex-row">
-          {authLoading ? (
-            <div className="text-sm text-slate-600">인증 확인 중...</div>
-          ) : firebaseUser ? (
-            <div className="text-sm text-green-600 font-medium">
-              ✓ 로그인 완료
-            </div>
-          ) : (
-            <div className="text-sm text-red-600 font-medium">
-              ✗ 로그인 필요
-            </div>
-          )}
-          <div className="rounded-lg border border-orange-200 bg-white px-3 py-2">
-            <div className="text-[11px] font-semibold text-slate-600">사용자 ID</div>
-            <input
-              className="w-28 text-sm outline-none"
-              value={userId}
-              onChange={(e) => setUserId(intOr(e.target.value, 1))}
-              inputMode="numeric"
-            />
+            {isReadOnly ? (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                🔒 Read-only 미니홈피
+              </div>
+            ) : null}
+            {firebaseUser ? (
+              <p className="mt-2 text-sm font-semibold text-orange-600">
+                로그인: {firebaseUser.email || firebaseUser.uid}
+              </p>
+            ) : null}
           </div>
-          <button
-            className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
-            onClick={load}
-            disabled={loading}
-          >
-            조회
-          </button>
-        </div>
-      </div>
 
-      {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {authLoading ? (
+              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-600">인증 확인 중...</div>
+            ) : firebaseUser ? (
+              <div className="rounded-full bg-green-50 px-4 py-2 text-sm font-bold text-green-600">
+                ✓ 로그인 완료
+              </div>
+            ) : (
+              <div className="rounded-full bg-red-50 px-4 py-2 text-sm font-bold text-red-600">
+                ✗ 로그인 필요
+              </div>
+            )}
 
-      {noMiniHome ? (
-        <div className="rounded-xl border border-orange-200 bg-orange-50 p-6 text-slate-800">
-          <div className="text-sm font-bold">미니홈피가 없습니다.</div>
-          <div className="mt-1 text-sm text-slate-700">실제 DB에 생성되므로, 필요한 경우에만 생성 버튼을 눌러주세요.</div>
-          <div className="mt-4">
+            <div className="rounded-2xl border border-orange-200 bg-white px-4 py-2 shadow-sm">
+              <div className="text-sm font-semibold text-slate-700">
+                EXP {growth.experience} · Lv.{page?.stats?.level ?? cat?.level ?? 1}
+              </div>
+            </div>
+
             <button
-              className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
-              onClick={onCreateMiniHome}
+              className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
+              onClick={load}
               disabled={loading}
             >
-              미니홈피 생성
+              {loading ? "조회 중..." : "조회"}
             </button>
+            {isReadOnly ? (
+              <button
+                type="button"
+                className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50"
+              >
+                신고
+              </button>
+            ) : null}
           </div>
         </div>
-      ) : null}
 
-      {page ? (
-        <>
-          <div className="bg-gradient-to-r from-orange-400 via-amber-400 to-pink-400 rounded-2xl p-8 text-white">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-              <div className="flex-1">
-                <h2 className="text-2xl font-extrabold mb-2">{cat?.catName ?? "고냥이"}</h2>
-                <p className="text-sm opacity-90 mb-4">타입 {캐릭터타입표시값(cat?.characterType)}</p>
-
-                <div className="flex gap-2">
-                  <button
-                    className="rounded-md bg-white/20 px-3 py-2 text-sm font-semibold hover:bg-white/30 disabled:opacity-50"
-                    onClick={() => onAddActivity("REVIEW_WRITTEN")}
-                    disabled={loading}
-                  >
-                    후기 작성
-                  </button>
-                  <button
-                    className="rounded-md bg-white/20 px-3 py-2 text-sm font-semibold hover:bg-white/30 disabled:opacity-50"
-                    onClick={() => onAddActivity("EVENT_PARTICIPATED")}
-                    disabled={loading}
-                  >
-                    행사 참여
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 flex justify-center">
-                <RiveCharacter stateMachine="happy" message="미니홈피" />
-              </div>
-            </div>
+        {err || customize.error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {err ?? customize.error}
           </div>
+        ) : null}
 
-          <div className="flex gap-4 border-b border-gray-200">
-            {[
-              { id: "character", label: "캐릭터" },
-              { id: "activities", label: "활동" },
-              { id: "gallery", label: "갤러리" },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedTab(t.id as any)}
-                className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-                  selectedTab === t.id ? "border-orange-500 text-orange-700" : "border-transparent text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+        {showOnboarding ? (
+          <GoCatOnboarding
+            growthStage={growth.stage}
+            initialCatName={cat?.catName}
+            initialAppearance={cat ? parseCatAppearance(cat.appearanceState) : undefined}
+            saving={onboardingSaving}
+            error={onboardingErr ?? err}
+            onSubmit={handleOnboardingSubmit}
+          />
+        ) : null}
 
-          {selectedTab === "character" ? (
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="rounded-xl border border-orange-100 bg-white p-5 shadow-sm">
-                <div className="text-sm font-bold text-slate-900">캐릭터 상태(JSONB)</div>
-                <pre className="mt-3 overflow-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-800">
-                  {JSON.stringify(cat?.appearanceState ?? {}, null, 2)}
-                </pre>
-              </div>
-              <div className="rounded-xl border border-orange-100 bg-white p-5 shadow-sm">
-                <div className="text-sm font-bold text-slate-900">장착 아이템(활성)</div>
-                <div className="mt-3 space-y-2">
-                  {(page?.activeEquips ?? []).length === 0 ? (
-                    <div className="text-sm text-slate-600">장착 중인 아이템이 없습니다.</div>
-                  ) : (
-                    (page?.activeEquips ?? []).map((e) => (
-                      <div key={e.catEquipId} className="flex items-center justify-between gap-3 rounded-lg border border-orange-100 p-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-slate-900 truncate">{e.itemName ?? `itemId=${e.itemId}`}</div>
-                          <div className="text-xs text-slate-500">
-                            슬롯: {e.slotType} | 장착일: {fmt(e.equippedAt)}
-                          </div>
-                        </div>
-                        {e.imageUrl ? <img src={e.imageUrl} alt="아이템" className="h-12 w-12 rounded-md border border-orange-100 object-cover" /> : null}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
+        {page && !needsOnboarding ? (
+          <>
+            <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-400 via-amber-400 to-pink-400 p-6 text-white shadow-xl">
+              <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-white/20" />
+              <div className="absolute bottom-8 right-20 text-4xl opacity-40">♡</div>
+              <div className="absolute left-8 top-8 text-2xl opacity-30">✦</div>
 
-          {selectedTab === "activities" ? (
-            <div className="rounded-xl border border-orange-100 bg-white p-5 shadow-sm">
-              <div className="text-sm font-bold text-slate-900">활동 기록</div>
-              <div className="mt-2 text-xs text-slate-500">최신순으로 30개까지 표시됩니다.</div>
-              <div className="mt-4 divide-y divide-orange-100 rounded-lg border border-orange-100">
-                {(page?.activities ?? []).length === 0 ? (
-                  <div className="p-4 text-sm text-slate-600">활동 기록이 없습니다.</div>
-                ) : (
-                  (page?.activities ?? []).map((a) => (
-                    <div key={a.activityId} className="p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold text-orange-700">{활동타입표시값(a.activityType)}</div>
-                          <div className="text-sm text-slate-900">변화량: {a.temperatureChange}</div>
-                          <div className="text-xs text-slate-500">참조 ID: {a.referenceId ?? "-"}</div>
-                        </div>
-                        <div className="text-xs text-slate-500">{fmt(a.createAt)}</div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          ) : null}
-
-          {selectedTab === "gallery" ? (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-orange-100 bg-white p-5 shadow-sm">
-                <div className="text-sm font-bold text-slate-900">갤러리 만들기</div>
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <input
-                    className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-300"
-                    value={galleryTitle}
-                    onChange={(e) => setGalleryTitle(e.target.value)}
-                    placeholder="제목"
-                  />
-                  <input
-                    className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-300"
-                    value={galleryDesc}
-                    onChange={(e) => setGalleryDesc(e.target.value)}
-                    placeholder="설명"
-                  />
-                  <button
-                    className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
-                    onClick={onCreateGallery}
-                    disabled={loading}
-                  >
-                    생성
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-orange-100 bg-white p-5 shadow-sm">
-                <div className="text-sm font-bold text-slate-900">이미지 URL 추가</div>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-300"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://..."
-                  />
-                </div>
-              </div>
-
-              {(page?.galleries ?? []).length === 0 ? (
-                <div className="rounded-xl border border-orange-100 bg-orange-50 p-5 text-sm text-slate-700">갤러리가 없습니다.</div>
-              ) : (
-                (page?.galleries ?? []).map((g) => (
-                  <div key={g.galleryId} className="rounded-xl border border-orange-100 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-bold text-slate-900">{g.title ?? `galleryId=${g.galleryId}`}</div>
-                        <div className="text-xs text-slate-500">{g.description ?? ""}</div>
-                      </div>
-                      <button
-                        className="rounded-md bg-orange-100 px-3 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-200 disabled:opacity-50"
-                        onClick={() => onAddImage(g.galleryId)}
-                        disabled={loading}
-                      >
-                        이미지 추가
-                      </button>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                      {g.images.map((img) => (
-                        <div key={img.galleryImageId} className="overflow-hidden rounded-lg border border-orange-100">
-                          <img src={img.imageUrl} alt="갤러리 이미지" className="aspect-[4/3] w-full object-cover" />
-                          <div className="px-2 py-1 text-[11px] text-slate-600">
-                            {img.locationName ?? "-"} | {fmt(img.takenAt)}
-                          </div>
-                        </div>
-                      ))}
+              <div className="relative grid gap-6 md:grid-cols-[1.2fr_0.8fr] md:items-center">
+                <div className="space-y-5">
+                  <div>
+                    <div className="text-sm font-bold text-white/80">MY CAT PROFILE</div>
+                    <h2 className="mt-2 text-4xl font-extrabold">
+                      {cat?.catName ?? "고냥이"}
+                    </h2>
+                    <p className="mt-2 text-sm font-semibold text-white/90">
+                      {growth.stage} · {growth.stageLabel}
+                    </p>
+                    <div className="mt-4 max-w-md">
+                      <GrowthProgress growth={growth} tone="hero" compact />
                     </div>
                   </div>
-                ))
-              )}
+
+                  {canEdit ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-xl bg-white/20 px-4 py-2 text-sm font-bold backdrop-blur hover:bg-white/30"
+                        onClick={() => navigate("/group")}
+                        type="button"
+                      >
+                        행사 찾기
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="grid grid-cols-3 gap-3 pt-2">
+                    <div className="rounded-2xl bg-white/20 p-4 backdrop-blur">
+                      <div className="text-2xl font-extrabold">{activityCount}</div>
+                      <div className="text-xs font-semibold text-white/80">활동</div>
+                    </div>
+                    <div className="rounded-2xl bg-white/20 p-4 backdrop-blur">
+                      <div className="text-2xl font-extrabold">{galleryCount}</div>
+                      <div className="text-xs font-semibold text-white/80">갤러리</div>
+                    </div>
+                    <div className="rounded-2xl bg-white/20 p-4 backdrop-blur">
+                      <div className="text-2xl font-extrabold">{equipCount}</div>
+                      <div className="text-xs font-semibold text-white/80">아이템</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-center">
+                  <GoCatVisual
+                    stage={growth.stage}
+                    variant="hero"
+                    equipped={equippedPreview}
+                    activityCount={growth.activityCount}
+                    interactive
+                  />
+                </div>
+              </div>
+            </section>
+
+            <div className="rounded-3xl border border-orange-100 bg-white p-2 shadow-sm">
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "character", label: "캐릭터", emoji: "🐾" },
+                  { id: "activities", label: "활동", emoji: "📌" },
+                  { id: "gallery", label: "갤러리", emoji: "🖼️" },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedTab(t.id as any)}
+                    className={`rounded-2xl px-4 py-3 text-sm font-extrabold transition ${
+                      selectedTab === t.id
+                        ? "bg-orange-600 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-orange-50"
+                    }`}
+                  >
+                    <span className="mr-1">{t.emoji}</span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : null}
-        </>
-      ) : null}
+
+            {selectedTab === "character" ? (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
+                  <div className="text-lg font-extrabold text-slate-900">캐릭터 성장</div>
+                  <p className="mt-1 text-sm text-slate-500">
+                    활동 기록에 따라 단계가 올라갑니다.
+                  </p>
+                  <div className="mt-5">
+                    <GrowthProgress growth={growth} tone="card" />
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-2xl bg-orange-50 p-3">
+                      <div className="text-xs font-bold text-orange-600">레벨 (API)</div>
+                      <div className="mt-1 font-extrabold text-slate-900">
+                        {page?.stats?.level ?? cat?.level ?? 1}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-orange-50 p-3">
+                      <div className="text-xs font-bold text-orange-600">누적 온도</div>
+                      <div className="mt-1 font-extrabold text-slate-900">
+                        {page?.stats?.temperatureTotal ?? cat?.temperatureTotal ?? 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
+                  <GoCatCard
+                    catName={cat?.catName ?? "고냥이"}
+                    growth={growth}
+                    isPublic={Boolean(page?.miniHome?.isPublic)}
+                    equipBySlot={equipBySlot}
+                    onOpenDecoration={() => setDecorateOpen(true)}
+                    canDecorate={canEdit}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {selectedTab === "activities" ? (
+              <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
+                <div className="text-lg font-extrabold text-slate-900">활동 기록</div>
+                <p className="mt-1 text-sm text-slate-500">최신순으로 30개까지 표시됩니다.</p>
+
+                <div className="mt-5">
+                  <ActivityHistory
+                    activities={page?.activities ?? []}
+                    variant="full"
+                    emptyMessage="등록된 활동 기록이 없습니다."
+                    getActivityLink={isReadOnly ? getActivityPostLink : undefined}
+                    activityLinkLabel="관련 글 보기"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {selectedTab === "gallery" ? (
+              <div className="space-y-5">
+                {canEdit ? (
+                  <>
+                    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
+                      <div className="text-lg font-extrabold text-slate-900">갤러리 만들기</div>
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <input
+                          className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-300"
+                          value={galleryTitle}
+                          onChange={(e) => setGalleryTitle(e.target.value)}
+                          placeholder="제목"
+                        />
+                        <input
+                          className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-300"
+                          value={galleryDesc}
+                          onChange={(e) => setGalleryDesc(e.target.value)}
+                          placeholder="설명"
+                        />
+                        <button
+                          className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-orange-700 disabled:opacity-50"
+                          onClick={onCreateGallery}
+                          disabled={loading}
+                        >
+                          생성
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
+                      <div className="text-lg font-extrabold text-slate-900">이미지 URL 추가</div>
+                      <input
+                        className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-300"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="https://..."
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                <GallerySection
+                  galleries={page?.galleries ?? []}
+                  variant="full"
+                  onAddImage={canEdit ? onAddImage : undefined}
+                  addImageDisabled={loading}
+                  emptyMessage="등록된 갤러리가 없습니다."
+                />
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        {canEdit ? (
+          <DecorationModal
+            open={decorateOpen}
+            saving={customize.saving}
+            error={customize.error}
+            canEdit={customize.canEdit}
+            growthStage={growth.stage}
+            customizePanel={
+              <DecorationCustomizePanel
+                selectedHeadItem={customize.selectedHeadItem}
+                selectedBodyItem={customize.selectedBodyItem}
+                selectedAccessoryItem={customize.selectedAccessoryItem}
+                setEquipDraft={customize.setEquipDraft}
+                itemsLoading={customize.itemsLoading}
+                itemsLoadError={customize.itemsLoadError}
+                disabled={customize.saving}
+                growthStage={growth.stage}
+                activityCount={growth.activityCount}
+              />
+            }
+            onClose={() => setDecorateOpen(false)}
+            onSave={handleSaveDecoration}
+            Preview={
+              <DecorateCatPreview
+                growthStage={growth.stage}
+                activityCount={growth.activityCount}
+                equipped={customize.equipPreview}
+                interactive
+              />
+            }
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
-

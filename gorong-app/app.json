@@ -6,7 +6,12 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
+
+    "updates": {
+      "enabled": false
+    },
+
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -32,9 +37,6 @@
     },
     "extra": {
       "TOUR_API_KEY": "c038469ef1c6916d564071bb43ae4c0343a7e11a602e2a6a2e12a1a583be5fc8"
-    },
-    "plugins": [
-      "@react-native-firebase/auth"
-    ]
+    }
   }
 }

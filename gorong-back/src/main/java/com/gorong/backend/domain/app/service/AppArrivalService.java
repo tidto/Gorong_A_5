@@ -11,12 +11,10 @@ import org.springframework.stereotype.Service;
 public class AppArrivalService {
 
     private final JdbcTemplate jdbcTemplate;
-
-    private static final double DEFAULT_RADIUS = 150.0;  // 기본 150m
+    private final AppVenueService appVenueService;
 
     // PostGIS ST_Distance로 거리 검증 (Fake GPS 방어)
     public boolean verifyArrival(String venueId, double lat, double lng, String userEmail) {
-        // venues 테이블에서 해당 venue 위치 가져와서 ST_Distance 계산
         String sql = """
             SELECT ST_Distance(
                 ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
@@ -25,12 +23,31 @@ public class AppArrivalService {
             """;
 
         try {
-            // TODO: venue의 실제 위치는 캐시 테이블에서 가져와야 함
-            // 현재는 venueId로 캐시된 위경도를 조회하는 로직 필요
-            // 임시: venueId를 파싱해서 사용 (추후 venue 캐시 테이블 추가)
+            var venueGeo = appVenueService.findCachedVenueGeo(venueId).orElse(null);
+            if (venueGeo == null) {
+                log.warn("도착 인증 실패 - venue 캐시 없음: venueId={}, user={}", venueId, userEmail);
+                return false;
+            }
+
+            Double distance = jdbcTemplate.queryForObject(
+                    sql,
+                    Double.class,
+                    lng,
+                    lat,
+                    venueGeo.lng(),
+                    venueGeo.lat()
+            );
+
+            if (distance == null) {
+                return false;
+            }
+
+            boolean verified = distance <= venueGeo.radius();
             log.info("도착 인증 요청 - venueId: {}, lat: {}, lng: {}, user: {}",
                     venueId, lat, lng, userEmail);
-            return true;  // TODO: PostGIS 검증 완성 후 실제 거리 비교
+            log.info("도착 인증 거리 계산 - venueId={}, user={}, distance={}m, radius={}m, verified={}",
+                    venueId, userEmail, Math.round(distance), venueGeo.radius(), verified);
+            return verified;
         } catch (Exception e) {
             log.error("도착 인증 실패: {}", e.getMessage());
             return false;

@@ -1,3 +1,5 @@
+import type { GrowthStage } from "../../utils/minihome/growth/growth";
+
 export type UserItem = {
   userItemId: number;
   itemId: number;
@@ -6,6 +8,8 @@ export type UserItem = {
   itemType: string | null;
   imageUrl: string | null;
   acquiredAt: string;
+  /** 이 아이템을 장착하기 위해 필요한 최소 성장 단계 */
+  requiredGrowthStage?: GrowthStage;
 };
 
 export type Equipment = {
