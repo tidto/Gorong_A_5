@@ -77,6 +77,10 @@ const GroupCreatePage = () => {
     const [tags, setTags] = useState<string[]>([]);
     const [tagInput, setTagInput] = useState('');
 
+    // ─── 날짜/시간 필수 입력 에러 ────────────────────────────────
+    const [dateError, setDateError] = useState(false);
+    const [timeError, setTimeError] = useState(false);
+
     // ─── 행사 모달 ───────────────────────────────────────────────
     const [showEventModal, setShowEventModal] = useState(false);
     const [eventTab, setEventTab] = useState<'db' | 'tour'>('db');
@@ -307,6 +311,17 @@ const GroupCreatePage = () => {
 
     const handleSubmit = async (e: any) => {
         e.preventDefault();
+
+        // 날짜·시간 필수 체크
+        const missingDate = !formData.meetingDate;
+        const missingTime = !formData.meetingTime;
+        setDateError(missingDate);
+        setTimeError(missingTime);
+        if (missingDate || missingTime) {
+            alert('모임 날짜와 집합 시간은 필수 입력 항목입니다.');
+            return;
+        }
+
         try {
             await axiosInstance.post('/groups', formData);
             alert('모집글이 성공적으로 등록되었습니다! 🐈');
@@ -382,11 +397,39 @@ const GroupCreatePage = () => {
                         <Field label="최대 인원" style={{ flex: 1, marginBottom: 0 }}>
                             <input type="number" name="maxCapacity" value={formData.maxCapacity} min="2" max="20" onChange={handleChange} style={inputStyle} />
                         </Field>
-                        <Field label="모임 날짜" style={{ flex: 1, marginBottom: 0 }}>
-                            <input type="date" name="meetingDate" onChange={handleChange} style={inputStyle} />
+                        <Field label="모임 날짜 *" style={{ flex: 1, marginBottom: 0 }}>
+                            <input
+                                type="date"
+                                name="meetingDate"
+                                onChange={e => { handleChange(e); setDateError(false); }}
+                                required
+                                style={{
+                                    ...inputStyle,
+                                    padding: '16px 18px',
+                                    fontSize: '16px',
+                                    border: `1.5px solid ${dateError ? '#ef4444' : '#e2e8f0'}`,
+                                    backgroundColor: dateError ? '#fff5f5' : 'white',
+                                    cursor: 'pointer',
+                                }}
+                            />
+                            {dateError && <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444', fontWeight: '600' }}>⚠ 날짜를 선택해주세요</p>}
                         </Field>
-                        <Field label="집합 시간" style={{ flex: 1, marginBottom: 0 }}>
-                            <input type="time" name="meetingTime" onChange={handleChange} style={inputStyle} />
+                        <Field label="집합 시간 *" style={{ flex: 1, marginBottom: 0 }}>
+                            <input
+                                type="time"
+                                name="meetingTime"
+                                onChange={e => { handleChange(e); setTimeError(false); }}
+                                required
+                                style={{
+                                    ...inputStyle,
+                                    padding: '16px 18px',
+                                    fontSize: '16px',
+                                    border: `1.5px solid ${timeError ? '#ef4444' : '#e2e8f0'}`,
+                                    backgroundColor: timeError ? '#fff5f5' : 'white',
+                                    cursor: 'pointer',
+                                }}
+                            />
+                            {timeError && <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444', fontWeight: '600' }}>⚠ 시간을 선택해주세요</p>}
                         </Field>
                     </div>
 

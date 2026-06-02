@@ -7,6 +7,7 @@ import lombok.Setter;
 /**
  * 공개 그룹 채팅 WebSocket 메시지 DTO
  * - catName / characterType / catColor 포함 → 프론트 슬롯 UI에서 미니홈 캐릭터 렌더링
+ * - senderId 추가 → 프론트에서 슬롯 클릭 시 /cattower/:userId 이동에 사용
  */
 @Getter
 @Setter
@@ -20,6 +21,9 @@ public class PublicChatMessage {
 
     /** Firebase 이메일 (클라이언트 → 서버) */
     private String senderEmail;
+
+    /** 유저 숫자 ID — 캣타워 링크(/cattower/:senderId)용 */
+    private Long senderId;
 
     /** 고냥이 이름 (미니홈 GoCat.catName) */
     private String catName;
