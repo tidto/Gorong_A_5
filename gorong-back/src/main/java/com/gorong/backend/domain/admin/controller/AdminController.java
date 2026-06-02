@@ -58,6 +58,15 @@ public class AdminController {
         return ResponseEntity.ok(adminService.markAppealReviewing(banId));
     }
 
+    @PatchMapping("/bans/{banId}/appeals/reject")
+    public ResponseEntity<BanSummaryDto> rejectAppeal(
+            @PathVariable Long banId,
+            @RequestBody(required = false) AppealReviewRequestDto requestDto
+    ) {
+        String reviewNote = requestDto == null ? null : requestDto.getReviewNote();
+        return ResponseEntity.ok(adminService.rejectAppeal(banId, reviewNote));
+    }
+
     @GetMapping("/bans")
     public ResponseEntity<Page<BanSummaryDto>> getBanList(
             @RequestParam(required = false) UserBan.BanStatus banStatus,

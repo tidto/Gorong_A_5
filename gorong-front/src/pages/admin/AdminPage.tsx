@@ -4,11 +4,13 @@ import {
   getBans,
   getReports,
   markAppealReviewing,
+  rejectAppeal,
   unbanUser,
   type AppealStatus,
   type BanStatus,
   type ReportStatus,
 } from '../../api/adminApi'
+import { useNotification } from '../../contexts/NotificationContext'
 
 const BAN_DAY_OPTIONS = [1, 7, 15, 30, 0]
 
@@ -143,6 +145,7 @@ function Pagination({
 }
 
 export default function AdminPage() {
+  const { toast, confirm } = useNotification()
   const [reports, setReports] = useState<any[]>([])
   const [bans, setBans] = useState<any[]>([])
   const [reportPage, setReportPage] = useState(0)
@@ -201,9 +204,10 @@ export default function AdminPage() {
       })
       setBanReason('')
       setSelectedReportId(null)
+      toast('제재가 적용되었습니다.', 'success')
       await Promise.all([loadReports(), loadBans()])
     } catch (error) {
-      window.alert(extractErrorMessage(error))
+      toast(extractErrorMessage(error), 'error')
     } finally {
       setIsLoading(false)
     }
@@ -211,16 +215,47 @@ export default function AdminPage() {
 
   const handleUnban = async (banId: number) => {
     const inlineNote = appealReviewNotes[banId]?.trim()
-    const promptedNote = window.prompt('해제 사유를 입력하세요.', '소명 검토 후 해제')
-    const note = inlineNote || promptedNote || undefined
+    const approved = await confirm({
+      message: '이 밴을 해제하시겠습니까?',
+      description: inlineNote ? '입력한 검토 메모가 해제 사유로 저장됩니다.' : '해제 사유가 비어 있으면 기본 문구로 저장됩니다.',
+      confirmLabel: '해제',
+      cancelLabel: '취소',
+    })
+    if (!approved) return
+
+    const note = inlineNote || undefined
     await unbanUser(banId, note)
     setExpandedBanId((current) => (current === banId ? null : current))
+    toast('밴이 해제되었습니다.', 'success')
     await loadBans()
   }
 
   const handleAppealReviewing = async (banId: number) => {
     await markAppealReviewing(banId)
     setExpandedBanId(banId)
+    toast('소명 상태가 검토중으로 변경되었습니다.', 'info')
+    await loadBans()
+  }
+
+  const handleRejectAppeal = async (banId: number) => {
+    const reviewNote = appealReviewNotes[banId]?.trim()
+    if (!reviewNote) {
+      toast('기각 사유를 입력해주세요.', 'warning')
+      return
+    }
+
+    const approved = await confirm({
+      message: '이 소명을 기각하시겠습니까?',
+      description: '기각 처리 후 유저는 해당 사유를 메인 페이지에서 확인할 수 있습니다.',
+      confirmLabel: '기각',
+      cancelLabel: '취소',
+      danger: true,
+    })
+    if (!approved) return
+
+    await rejectAppeal(banId, reviewNote)
+    setExpandedBanId((current) => (current === banId ? null : current))
+    toast('소명이 기각 처리되었습니다.', 'success')
     await loadBans()
   }
 
@@ -505,10 +540,28 @@ export default function AdminPage() {
                                   }))}
                                   rows={5}
                                   className="w-full resize-y rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
-                                  placeholder="관리자 검토 메모를 입력하면 해제 시 함께 저장됩니다."
+                                  placeholder="기각 사유 또는 해제 검토 메모를 입력하세요."
                                 />
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {b.banStatus === 'ACTIVE' && (
+                                    <button
+                                      onClick={() => handleRejectAppeal(b.banId)}
+                                      className="rounded border border-red-700 bg-red-900/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-800/30"
+                                    >
+                                      소명 기각
+                                    </button>
+                                  )}
+                                  {b.banStatus === 'ACTIVE' && (
+                                    <button
+                                      onClick={() => handleUnban(b.banId)}
+                                      className="rounded border border-emerald-700 bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/30"
+                                    >
+                                      메모와 함께 해제
+                                    </button>
+                                  )}
+                                </div>
                                 <p className="text-xs text-zinc-500">
-                                  `해제` 버튼을 누르면 이 메모가 해제 사유로 함께 저장됩니다.
+                                  기각 시에는 밴이 유지되고, 해제 시에는 밴 상태가 `RELEASED`로 바뀝니다.
                                 </p>
                               </div>
                             </div>

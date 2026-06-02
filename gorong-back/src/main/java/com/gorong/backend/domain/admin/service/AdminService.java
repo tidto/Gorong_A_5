@@ -95,6 +95,19 @@ public class AdminService {
         return toBanSummary(ban);
     }
 
+    @Transactional
+    public BanSummaryDto rejectAppeal(Long banId, String reviewNote) {
+        UserBan ban = userBanRepository.findById(banId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 밴 정보입니다."));
+
+        String normalizedNote = (reviewNote == null || reviewNote.isBlank())
+                ? "반론이 기각되었습니다."
+                : reviewNote.trim();
+
+        ban.rejectAppeal(normalizedNote);
+        return toBanSummary(ban);
+    }
+
     @Transactional(readOnly = true)
     public Page<BanSummaryDto> getBanList(UserBan.BanStatus status, UserBan.AppealStatus appealStatus, Pageable pageable) {
         Specification<UserBan> spec = (root, query, cb) -> cb.conjunction();

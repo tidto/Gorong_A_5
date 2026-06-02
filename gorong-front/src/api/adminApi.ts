@@ -85,3 +85,8 @@ export async function markAppealReviewing(banId: number) {
   const { data } = await axiosInstance.patch(`/v1/admin/bans/${banId}/appeals/reviewing`)
   return data as BanSummary
 }
+
+export async function rejectAppeal(banId: number, reviewNote?: string) {
+  const { data } = await axiosInstance.patch(`/v1/admin/bans/${banId}/appeals/reject`, { reviewNote })
+  return data as BanSummary
+}
