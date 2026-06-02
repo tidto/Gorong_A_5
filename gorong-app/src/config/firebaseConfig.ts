@@ -8,8 +8,7 @@
 // ──────────────────────────────────────────────────────────────
 
 import { initializeApp, getApps } from 'firebase/app'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth/react-native'
+import { getAuth, initializeAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -24,15 +23,11 @@ const firebaseConfig = {
 // Expo Go 핫리로드 시 "Firebase App already exists" 오류 방지
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 
-// RN/Expo에서는 auth persistence를 명시적으로 초기화해야
-// "Component auth has not been registered yet" 오류를 피할 수 있습니다.
+// Expo Go/HMR 환경에서 auth 컴포넌트 등록 타이밍 이슈를 줄이기 위한 안전 초기화
 let authInstance
 try {
-  authInstance = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
-  })
+  authInstance = initializeAuth(app)
 } catch {
-  // 이미 initializeAuth 된 경우 fallback
   authInstance = getAuth(app)
 }
 

@@ -122,6 +122,15 @@ public class UserBan {
         this.appealStatus = AppealStatus.REVIEWING;
     }
 
+    public void rejectAppeal(String note) {
+        if (appealStatus != AppealStatus.REVIEWING && appealStatus != AppealStatus.SUBMITTED) {
+            throw new IllegalStateException("검토 가능한 반론 상태가 아닙니다.");
+        }
+        this.appealStatus = AppealStatus.RESOLVED;
+        this.appealReviewNote = note;
+        this.appealReviewedAt = OffsetDateTime.now();
+    }
+
     /**
      * 관리자가 이의 제기 검토를 마치고 최종 결정을 내립니다. (기각 또는 수용)
      */

@@ -1,16 +1,38 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   banUser,
   getBans,
   getReports,
   markAppealReviewing,
+  rejectAppeal,
   unbanUser,
   type AppealStatus,
   type BanStatus,
   type ReportStatus,
 } from '../../api/adminApi'
+import { useNotification } from '../../contexts/NotificationContext'
 
 const BAN_DAY_OPTIONS = [1, 7, 15, 30, 0]
+
+const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
+  PENDING: '대기 (PENDING)',
+  REVIEWING: '검토중 (REVIEWING)',
+  ACTIONED: '조치완료 (ACTIONED)',
+  DISMISSED: '반려 (DISMISSED)',
+}
+
+const BAN_STATUS_LABEL: Record<BanStatus, string> = {
+  ACTIVE: '제재중 (ACTIVE)',
+  RELEASED: '해제됨 (RELEASED)',
+  EXPIRED: '만료됨 (EXPIRED)',
+}
+
+const APPEAL_STATUS_LABEL: Record<AppealStatus, string> = {
+  NONE: '없음 (NONE)',
+  SUBMITTED: '제출됨 (SUBMITTED)',
+  REVIEWING: '검토중 (REVIEWING)',
+  RESOLVED: '처리완료 (RESOLVED)',
+}
 
 const REPORT_STATUS_STYLE: Record<string, string> = {
   PENDING: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
@@ -44,11 +66,29 @@ function formatIdentity(nickname?: string, email?: string) {
 
 function Badge({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {
   const cls = styleMap[label] ?? 'bg-zinc-700/30 text-zinc-400 border border-zinc-600/20'
+  const labelText =
+    REPORT_STATUS_LABEL[label as ReportStatus]
+    ?? BAN_STATUS_LABEL[label as BanStatus]
+    ?? APPEAL_STATUS_LABEL[label as AppealStatus]
+    ?? label
   return (
     <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-mono font-semibold tracking-wider ${cls}`}>
-      {label}
+      {labelText}
     </span>
   )
+}
+
+function extractErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error !== null) {
+    const maybeResponse = (error as { response?: { data?: unknown } }).response
+    const data = maybeResponse?.data
+    if (typeof data === 'string') return data
+    if (typeof data === 'object' && data !== null) {
+      const message = (data as { message?: unknown }).message
+      if (typeof message === 'string') return message
+    }
+  }
+  return '요청 처리 중 오류가 발생했습니다.'
 }
 
 function FilterSelect({
@@ -105,6 +145,7 @@ function Pagination({
 }
 
 export default function AdminPage() {
+  const { toast, confirm } = useNotification()
   const [reports, setReports] = useState<any[]>([])
   const [bans, setBans] = useState<any[]>([])
   const [reportPage, setReportPage] = useState(0)
@@ -115,6 +156,8 @@ export default function AdminPage() {
   const [banStatus, setBanStatus] = useState<BanStatus | ''>('')
   const [appealStatus, setAppealStatus] = useState<AppealStatus | ''>('')
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null)
+  const [expandedBanId, setExpandedBanId] = useState<number | null>(null)
+  const [appealReviewNotes, setAppealReviewNotes] = useState<Record<number, string>>({})
   const [banReason, setBanReason] = useState('')
   const [banDays, setBanDays] = useState(7)
   const [isLoading, setIsLoading] = useState(false)
@@ -161,20 +204,58 @@ export default function AdminPage() {
       })
       setBanReason('')
       setSelectedReportId(null)
+      toast('제재가 적용되었습니다.', 'success')
       await Promise.all([loadReports(), loadBans()])
+    } catch (error) {
+      toast(extractErrorMessage(error), 'error')
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleUnban = async (banId: number) => {
-    const note = window.prompt('해제 사유를 입력하세요.', '소명 검토 후 해제') ?? undefined
+    const inlineNote = appealReviewNotes[banId]?.trim()
+    const approved = await confirm({
+      message: '이 밴을 해제하시겠습니까?',
+      description: inlineNote ? '입력한 검토 메모가 해제 사유로 저장됩니다.' : '해제 사유가 비어 있으면 기본 문구로 저장됩니다.',
+      confirmLabel: '해제',
+      cancelLabel: '취소',
+    })
+    if (!approved) return
+
+    const note = inlineNote || undefined
     await unbanUser(banId, note)
+    setExpandedBanId((current) => (current === banId ? null : current))
+    toast('밴이 해제되었습니다.', 'success')
     await loadBans()
   }
 
   const handleAppealReviewing = async (banId: number) => {
     await markAppealReviewing(banId)
+    setExpandedBanId(banId)
+    toast('소명 상태가 검토중으로 변경되었습니다.', 'info')
+    await loadBans()
+  }
+
+  const handleRejectAppeal = async (banId: number) => {
+    const reviewNote = appealReviewNotes[banId]?.trim()
+    if (!reviewNote) {
+      toast('기각 사유를 입력해주세요.', 'warning')
+      return
+    }
+
+    const approved = await confirm({
+      message: '이 소명을 기각하시겠습니까?',
+      description: '기각 처리 후 유저는 해당 사유를 메인 페이지에서 확인할 수 있습니다.',
+      confirmLabel: '기각',
+      cancelLabel: '취소',
+      danger: true,
+    })
+    if (!approved) return
+
+    await rejectAppeal(banId, reviewNote)
+    setExpandedBanId((current) => (current === banId ? null : current))
+    toast('소명이 기각 처리되었습니다.', 'success')
     await loadBans()
   }
 
@@ -208,10 +289,10 @@ export default function AdminPage() {
               onChange={(v) => { setReportPage(0); setReportStatus(v as ReportStatus | '') }}
               options={[
                 { value: '', label: '전체 상태' },
-                { value: 'PENDING', label: 'PENDING' },
-                { value: 'REVIEWING', label: 'REVIEWING' },
-                { value: 'ACTIONED', label: 'ACTIONED' },
-                { value: 'DISMISSED', label: 'DISMISSED' },
+                { value: 'PENDING', label: REPORT_STATUS_LABEL.PENDING },
+                { value: 'REVIEWING', label: REPORT_STATUS_LABEL.REVIEWING },
+                { value: 'ACTIONED', label: REPORT_STATUS_LABEL.ACTIONED },
+                { value: 'DISMISSED', label: REPORT_STATUS_LABEL.DISMISSED },
               ]}
             />
           </div>
@@ -356,9 +437,9 @@ export default function AdminPage() {
                 onChange={(v) => { setBanPage(0); setBanStatus(v as BanStatus | '') }}
                 options={[
                   { value: '', label: '전체 밴 상태' },
-                  { value: 'ACTIVE', label: 'ACTIVE' },
-                  { value: 'RELEASED', label: 'RELEASED' },
-                  { value: 'EXPIRED', label: 'EXPIRED' },
+                  { value: 'ACTIVE', label: BAN_STATUS_LABEL.ACTIVE },
+                  { value: 'RELEASED', label: BAN_STATUS_LABEL.RELEASED },
+                  { value: 'EXPIRED', label: BAN_STATUS_LABEL.EXPIRED },
                 ]}
               />
               <FilterSelect
@@ -366,10 +447,10 @@ export default function AdminPage() {
                 onChange={(v) => { setBanPage(0); setAppealStatus(v as AppealStatus | '') }}
                 options={[
                   { value: '', label: '전체 소명 상태' },
-                  { value: 'NONE', label: 'NONE' },
-                  { value: 'SUBMITTED', label: 'SUBMITTED' },
-                  { value: 'REVIEWING', label: 'REVIEWING' },
-                  { value: 'RESOLVED', label: 'RESOLVED' },
+                  { value: 'NONE', label: APPEAL_STATUS_LABEL.NONE },
+                  { value: 'SUBMITTED', label: APPEAL_STATUS_LABEL.SUBMITTED },
+                  { value: 'REVIEWING', label: APPEAL_STATUS_LABEL.REVIEWING },
+                  { value: 'RESOLVED', label: APPEAL_STATUS_LABEL.RESOLVED },
                 ]}
               />
             </div>
@@ -389,40 +470,107 @@ export default function AdminPage() {
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-xs text-zinc-600">데이터가 없습니다.</td>
                   </tr>
-                ) : bans.map((b) => (
-                  <tr key={b.banId} className="hover:bg-zinc-800/40 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{b.banId}</td>
-                    <td className="px-4 py-3 text-xs text-zinc-200">{b.email}</td>
-                    <td className="px-4 py-3">
-                      {b.banDays === 0
-                        ? <span className="font-mono text-xs font-bold text-red-400">영구</span>
-                        : <span className="font-mono text-xs text-zinc-300">{b.banDays}일</span>}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-400 max-w-[180px] truncate">{b.banReason}</td>
-                    <td className="px-4 py-3"><Badge label={b.banStatus} styleMap={BAN_STATUS_STYLE} /></td>
-                    <td className="px-4 py-3"><Badge label={b.appealStatus} styleMap={APPEAL_STATUS_STYLE} /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {b.appealStatus === 'SUBMITTED' && (
-                          <button
-                            onClick={() => handleAppealReviewing(b.banId)}
-                            className="rounded border border-blue-700 bg-blue-900/30 px-2.5 py-1 text-xs text-blue-400 hover:bg-blue-800/40"
-                          >
-                            검토중
-                          </button>
-                        )}
-                        {b.banStatus === 'ACTIVE' && (
-                          <button
-                            onClick={() => handleUnban(b.banId)}
-                            className="rounded border border-emerald-700 bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-800/40"
-                          >
-                            해제
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                ) : bans.map((b) => {
+                  const isExpanded = expandedBanId === b.banId
+                  const canOpenAppeal = b.appealStatus === 'REVIEWING'
+
+                  return (
+                    <Fragment key={b.banId}>
+                      <tr key={b.banId} className="hover:bg-zinc-800/40 transition-colors">
+                        <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{b.banId}</td>
+                        <td className="px-4 py-3 text-xs text-zinc-200">{b.email}</td>
+                        <td className="px-4 py-3">
+                          {b.banDays === 0
+                            ? <span className="font-mono text-xs font-bold text-red-400">영구</span>
+                            : <span className="font-mono text-xs text-zinc-300">{b.banDays}일</span>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-zinc-400 max-w-[180px] truncate">{b.banReason}</td>
+                        <td className="px-4 py-3"><Badge label={b.banStatus} styleMap={BAN_STATUS_STYLE} /></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Badge label={b.appealStatus} styleMap={APPEAL_STATUS_STYLE} />
+                            {canOpenAppeal && (
+                              <button
+                                onClick={() => setExpandedBanId((current) => (current === b.banId ? null : b.banId))}
+                                className="rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-zinc-500 hover:text-white"
+                              >
+                                {isExpanded ? '닫기' : '소명 보기'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {b.appealStatus === 'SUBMITTED' && (
+                              <button
+                                onClick={() => handleAppealReviewing(b.banId)}
+                                className="rounded border border-blue-700 bg-blue-900/30 px-2.5 py-1 text-xs text-blue-400 hover:bg-blue-800/40"
+                              >
+                                검토중
+                              </button>
+                            )}
+                            {b.banStatus === 'ACTIVE' && (
+                              <button
+                                onClick={() => handleUnban(b.banId)}
+                                className="rounded border border-emerald-700 bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-800/40"
+                              >
+                                해제
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && canOpenAppeal && (
+                        <tr className="bg-zinc-950/70">
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="grid gap-4 rounded-lg border border-blue-900/40 bg-blue-950/10 p-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <div className="font-mono text-[11px] uppercase tracking-widest text-blue-300">Appeal Text</div>
+                                <div className="min-h-[112px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm leading-6 text-zinc-200">
+                                  {b.appealText?.trim() || '제출된 소명문이 없습니다.'}
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="font-mono text-[11px] uppercase tracking-widest text-emerald-300">Review Note</div>
+                                <textarea
+                                  value={appealReviewNotes[b.banId] ?? b.appealReviewNote ?? ''}
+                                  onChange={(e) => setAppealReviewNotes((current) => ({
+                                    ...current,
+                                    [b.banId]: e.target.value,
+                                  }))}
+                                  rows={5}
+                                  className="w-full resize-y rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
+                                  placeholder="기각 사유 또는 해제 검토 메모를 입력하세요."
+                                />
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {b.banStatus === 'ACTIVE' && (
+                                    <button
+                                      onClick={() => handleRejectAppeal(b.banId)}
+                                      className="rounded border border-red-700 bg-red-900/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-800/30"
+                                    >
+                                      소명 기각
+                                    </button>
+                                  )}
+                                  {b.banStatus === 'ACTIVE' && (
+                                    <button
+                                      onClick={() => handleUnban(b.banId)}
+                                      className="rounded border border-emerald-700 bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-800/30"
+                                    >
+                                      메모와 함께 해제
+                                    </button>
+                                  )}
+                                </div>
+                                <p className="text-xs text-zinc-500">
+                                  기각 시에는 밴이 유지되고, 해제 시에는 밴 상태가 `RELEASED`로 바뀝니다.
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>

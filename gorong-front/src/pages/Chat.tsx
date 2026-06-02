@@ -10,6 +10,18 @@ export default function Chat() {
   const { user } = useAuth()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // GroupListPage / GroupDetailPage 와 동일한 날짜 만료 체크
+  const isDatePassed = (dateStr?: string): boolean => {
+    if (!dateStr) return false
+    try {
+      const meeting = new Date(dateStr)
+      meeting.setHours(0, 0, 0, 0)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      return meeting < today
+    } catch { return false }
+  }
+
   const [joinedGroups, setJoinedGroups] = useState<JoinedGroup[]>([])
   const [activeGroup, setActiveGroup] = useState<JoinedGroup | null>(null)
   const [loadingGroups, setLoadingGroups] = useState(true)
@@ -34,6 +46,13 @@ export default function Chat() {
   } = useChatRoom()
 
   const myNickname = user?.nickname || '나'
+
+  // 현재 활성 채팅방의 마감 여부 (날짜 만료 + 정원 초과 + 상태값 모두 체크)
+  const isClosed = activeGroup
+      ? activeGroup.status === 'CLOSED' ||
+      activeGroup.currentCapacity >= activeGroup.maxCapacity ||
+      isDatePassed(activeGroup.meetingDate)
+      : false
 
   // 참여중인 그룹 로드
   useEffect(() => {
@@ -173,7 +192,10 @@ export default function Chat() {
             ) : (
                 joinedGroups.map(group => {
                   const isActive = activeGroup?.id === group.id
-                  const isFull = group.currentCapacity >= group.maxCapacity
+                  const isGroupClosed =
+                      group.status === 'CLOSED' ||
+                      group.currentCapacity >= group.maxCapacity ||
+                      isDatePassed(group.meetingDate)
                   return (
                       <div
                           key={group.id}
@@ -217,11 +239,11 @@ export default function Chat() {
                       fontSize: '11px',
                       padding: '2px 8px',
                       borderRadius: '20px',
-                      backgroundColor: isFull ? '#f1f5f9' : '#ecfdf5',
-                      color: isFull ? '#94a3b8' : '#10b981',
+                      backgroundColor: isGroupClosed ? '#f1f5f9' : '#ecfdf5',
+                      color: isGroupClosed ? '#94a3b8' : '#10b981',
                       fontWeight: '600',
                     }}>
-                      {isFull ? '모집완료' : '모집중'}
+                      {isGroupClosed ? '마감' : '모집중'}
                     </span>
                           <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
                       인원: {group.currentCapacity}/{group.maxCapacity}명
@@ -269,6 +291,17 @@ export default function Chat() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <h1 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>{activeGroup.title}</h1>
+                      {isClosed && (
+                          <span style={{
+                            backgroundColor: 'rgba(239,68,68,0.2)',
+                            color: '#fca5a5',
+                            border: '1px solid rgba(239,68,68,0.4)',
+                            borderRadius: '20px',
+                            padding: '2px 10px',
+                            fontSize: '11px',
+                            fontWeight: '800',
+                          }}>🔒 마감</span>
+                      )}
                       {isConnecting ? (
                           <span style={{ fontSize: '11px', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> 연결 중..
@@ -453,88 +486,120 @@ export default function Chat() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* 메시지 입력창 */}
-              <div style={{
-                padding: '16px 20px',
-                borderTop: '1px solid #f1f5f9',
-                backgroundColor: 'white',
-              }}>
-                {selectedImage && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                      <img
-                          src={URL.createObjectURL(selectedImage)}
-                          alt="미리보기"
-                          style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }}
+              {/* 메시지 입력창 / 마감 배너 */}
+              {isClosed ? (
+                  <div style={{
+                    padding: '20px',
+                    borderTop: '1px solid #fecaca',
+                    backgroundColor: '#fff5f5',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}>
+                    <span style={{ fontSize: '20px' }}>🔒</span>
+                    <span style={{ fontSize: '15px', color: '#dc2626', fontWeight: '800' }}>마감된 모집입니다.</span>
+                    <span style={{ fontSize: '12px', color: '#f87171', fontWeight: '600' }}>채팅 전송이 종료되었습니다.</span>
+                    <button
+                        onClick={() => navigate('/group')}
+                        style={{
+                          marginTop: '6px',
+                          padding: '8px 20px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          backgroundColor: '#ff8a3d',
+                          color: 'white',
+                          fontWeight: '700',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                        }}
+                    >
+                      다른 모임 찾기
+                    </button>
+                  </div>
+              ) : (
+                  <div style={{
+                    padding: '16px 20px',
+                    borderTop: '1px solid #f1f5f9',
+                    backgroundColor: 'white',
+                  }}>
+                    {selectedImage && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                          <img
+                              src={URL.createObjectURL(selectedImage)}
+                              alt="미리보기"
+                              style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }}
+                          />
+                          <button
+                              onClick={() => setSelectedImage(null)}
+                              style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                          >
+                            취소
+                          </button>
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <input
+                          type="text"
+                          placeholder={isConnecting ? '연결 중..' : '메시지를 입력하세요...'}
+                          value={inputText}
+                          onChange={e => setInputText(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          disabled={isConnecting || !isConnected}
+                          style={{
+                            flex: 1,
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            border: '1.5px solid #e2e8f0',
+                            outline: 'none',
+                            fontSize: '14px',
+                            backgroundColor: isConnected ? 'white' : '#f8fafc',
+                            color: '#1e293b',
+                            transition: 'border-color 0.15s',
+                          }}
+                          onFocus={e => (e.target.style.borderColor = '#ff8a3d')}
+                          onBlur={e => (e.target.style.borderColor = '#e2e8f0')}
                       />
-                      <button
-                          onClick={() => setSelectedImage(null)}
-                          style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                      <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageSelect}
+                          id="chat-image-input"
+                          style={{ display: 'none' }}
+                      />
+                      <label
+                          htmlFor="chat-image-input"
+                          style={{
+                            padding: '10px',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            color: '#94a3b8',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
                       >
-                        취소
+                        <Image size={20} />
+                      </label>
+                      <button
+                          onClick={handleSend}
+                          disabled={(!inputText.trim() && !selectedImage) || isConnecting || !isConnected}
+                          style={{
+                            padding: '10px 18px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            backgroundColor: (!inputText.trim() && !selectedImage) || !isConnected ? '#e2e8f0' : '#ff8a3d',
+                            color: (!inputText.trim() && !selectedImage) || !isConnected ? '#94a3b8' : 'white',
+                            cursor: (!inputText.trim() && !selectedImage) || !isConnected ? 'default' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            transition: 'all 0.15s',
+                          }}
+                      >
+                        <Send size={18} />
                       </button>
                     </div>
-                )}
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <input
-                      type="text"
-                      placeholder={isConnecting ? '연결 중..' : '메시지를 입력하세요...'}
-                      value={inputText}
-                      onChange={e => setInputText(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      disabled={isConnecting || !isConnected}
-                      style={{
-                        flex: 1,
-                        padding: '12px 16px',
-                        borderRadius: '12px',
-                        border: '1.5px solid #e2e8f0',
-                        outline: 'none',
-                        fontSize: '14px',
-                        backgroundColor: isConnected ? 'white' : '#f8fafc',
-                        color: '#1e293b',
-                        transition: 'border-color 0.15s',
-                      }}
-                      onFocus={e => (e.target.style.borderColor = '#ff8a3d')}
-                      onBlur={e => (e.target.style.borderColor = '#e2e8f0')}
-                  />
-                  <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageSelect}
-                      id="chat-image-input"
-                      style={{ display: 'none' }}
-                  />
-                  <label
-                      htmlFor="chat-image-input"
-                      style={{
-                        padding: '10px',
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        color: '#94a3b8',
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                  >
-                    <Image size={20} />
-                  </label>
-                  <button
-                      onClick={handleSend}
-                      disabled={(!inputText.trim() && !selectedImage) || isConnecting || !isConnected}
-                      style={{
-                        padding: '10px 18px',
-                        borderRadius: '12px',
-                        border: 'none',
-                        backgroundColor: (!inputText.trim() && !selectedImage) || !isConnected ? '#e2e8f0' : '#ff8a3d',
-                        color: (!inputText.trim() && !selectedImage) || !isConnected ? '#94a3b8' : 'white',
-                        cursor: (!inputText.trim() && !selectedImage) || !isConnected ? 'default' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        transition: 'all 0.15s',
-                      }}
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
-              </div>
+                  </div>
+              )} {/* isClosed 삼항 끝 */}
             </div>
         ) : (
             /* 채팅방 미선택 상태 */

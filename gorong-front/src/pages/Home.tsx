@@ -369,6 +369,11 @@ export default function Home() {
                   {[`신고 누적: ${banInfo.reportCount ?? 0}회`, `사유: ${banInfo.banReason}`, `반론 상태: ${banInfo.appealStatus}`].map(t => (
                       <p key={t} style={{ margin: 0, fontSize: 14, color: '#555' }}>{t}</p>
                   ))}
+                  {banInfo.appealStatus === 'RESOLVED' && banInfo.banStatus === 'ACTIVE' && banInfo.appealReviewNote && (
+                    <p style={{ margin: 0, fontSize: 14, color: '#991b1b', fontWeight: 600 }}>
+                      소명 기각 사유: {banInfo.appealReviewNote}
+                    </p>
+                  )}
                 </div>
                 {banInfo.appealStatus === 'NONE' ? (
                     <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
