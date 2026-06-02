@@ -8,12 +8,27 @@ const api = axios.create({
   timeout: 10000,  // 10초 타임아웃 추가
 })
 
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timeout:${ms}`)), ms)
+    promise
+      .then((value) => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch((error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+  })
+
 // 매 요청마다 최신 토큰 자동 갱신
 api.interceptors.request.use(async (config) => {
   const currentUser = auth.currentUser
   if (currentUser) {
     try {
-      const token = await currentUser.getIdToken()
+      // 네트워크/SDK 지연으로 getIdToken이 멈추는 경우 무한로딩 방지
+      const token = await withTimeout(currentUser.getIdToken(), 3000)
       config.headers.Authorization = `Bearer ${token}`
     } catch (e) {
       // 토큰 갱신 실패해도 요청은 계속 보냄 (백엔드에서 401 처리)

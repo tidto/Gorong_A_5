@@ -12,6 +12,26 @@ import {
 
 const BAN_DAY_OPTIONS = [1, 7, 15, 30, 0]
 
+const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
+  PENDING: '대기 (PENDING)',
+  REVIEWING: '검토중 (REVIEWING)',
+  ACTIONED: '조치완료 (ACTIONED)',
+  DISMISSED: '반려 (DISMISSED)',
+}
+
+const BAN_STATUS_LABEL: Record<BanStatus, string> = {
+  ACTIVE: '제재중 (ACTIVE)',
+  RELEASED: '해제됨 (RELEASED)',
+  EXPIRED: '만료됨 (EXPIRED)',
+}
+
+const APPEAL_STATUS_LABEL: Record<AppealStatus, string> = {
+  NONE: '없음 (NONE)',
+  SUBMITTED: '제출됨 (SUBMITTED)',
+  REVIEWING: '검토중 (REVIEWING)',
+  RESOLVED: '처리완료 (RESOLVED)',
+}
+
 const REPORT_STATUS_STYLE: Record<string, string> = {
   PENDING: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
   REVIEWING: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
@@ -44,11 +64,29 @@ function formatIdentity(nickname?: string, email?: string) {
 
 function Badge({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {
   const cls = styleMap[label] ?? 'bg-zinc-700/30 text-zinc-400 border border-zinc-600/20'
+  const labelText =
+    REPORT_STATUS_LABEL[label as ReportStatus]
+    ?? BAN_STATUS_LABEL[label as BanStatus]
+    ?? APPEAL_STATUS_LABEL[label as AppealStatus]
+    ?? label
   return (
     <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-mono font-semibold tracking-wider ${cls}`}>
-      {label}
+      {labelText}
     </span>
   )
+}
+
+function extractErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error !== null) {
+    const maybeResponse = (error as { response?: { data?: unknown } }).response
+    const data = maybeResponse?.data
+    if (typeof data === 'string') return data
+    if (typeof data === 'object' && data !== null) {
+      const message = (data as { message?: unknown }).message
+      if (typeof message === 'string') return message
+    }
+  }
+  return '요청 처리 중 오류가 발생했습니다.'
 }
 
 function FilterSelect({
@@ -162,6 +200,8 @@ export default function AdminPage() {
       setBanReason('')
       setSelectedReportId(null)
       await Promise.all([loadReports(), loadBans()])
+    } catch (error) {
+      window.alert(extractErrorMessage(error))
     } finally {
       setIsLoading(false)
     }
@@ -208,10 +248,10 @@ export default function AdminPage() {
               onChange={(v) => { setReportPage(0); setReportStatus(v as ReportStatus | '') }}
               options={[
                 { value: '', label: '전체 상태' },
-                { value: 'PENDING', label: 'PENDING' },
-                { value: 'REVIEWING', label: 'REVIEWING' },
-                { value: 'ACTIONED', label: 'ACTIONED' },
-                { value: 'DISMISSED', label: 'DISMISSED' },
+                { value: 'PENDING', label: REPORT_STATUS_LABEL.PENDING },
+                { value: 'REVIEWING', label: REPORT_STATUS_LABEL.REVIEWING },
+                { value: 'ACTIONED', label: REPORT_STATUS_LABEL.ACTIONED },
+                { value: 'DISMISSED', label: REPORT_STATUS_LABEL.DISMISSED },
               ]}
             />
           </div>
@@ -356,9 +396,9 @@ export default function AdminPage() {
                 onChange={(v) => { setBanPage(0); setBanStatus(v as BanStatus | '') }}
                 options={[
                   { value: '', label: '전체 밴 상태' },
-                  { value: 'ACTIVE', label: 'ACTIVE' },
-                  { value: 'RELEASED', label: 'RELEASED' },
-                  { value: 'EXPIRED', label: 'EXPIRED' },
+                  { value: 'ACTIVE', label: BAN_STATUS_LABEL.ACTIVE },
+                  { value: 'RELEASED', label: BAN_STATUS_LABEL.RELEASED },
+                  { value: 'EXPIRED', label: BAN_STATUS_LABEL.EXPIRED },
                 ]}
               />
               <FilterSelect
@@ -366,10 +406,10 @@ export default function AdminPage() {
                 onChange={(v) => { setBanPage(0); setAppealStatus(v as AppealStatus | '') }}
                 options={[
                   { value: '', label: '전체 소명 상태' },
-                  { value: 'NONE', label: 'NONE' },
-                  { value: 'SUBMITTED', label: 'SUBMITTED' },
-                  { value: 'REVIEWING', label: 'REVIEWING' },
-                  { value: 'RESOLVED', label: 'RESOLVED' },
+                  { value: 'NONE', label: APPEAL_STATUS_LABEL.NONE },
+                  { value: 'SUBMITTED', label: APPEAL_STATUS_LABEL.SUBMITTED },
+                  { value: 'REVIEWING', label: APPEAL_STATUS_LABEL.REVIEWING },
+                  { value: 'RESOLVED', label: APPEAL_STATUS_LABEL.RESOLVED },
                 ]}
               />
             </div>

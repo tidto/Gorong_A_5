@@ -44,7 +44,9 @@ function AppContent() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         // Firebase 로그인 확인 → 백엔드 DB 등록 여부 체크
-        await checkBackendLogin()
+        checkBackendLogin().catch((e) => {
+          console.warn('[App] checkBackendLogin 실패:', e)
+        })
       }
     })
 
