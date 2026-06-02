@@ -85,3 +85,8 @@ export async function markAppealReviewing(banId: number) {
   const { data } = await axiosInstance.patch(`/v1/admin/bans/${banId}/appeals/reviewing`)
   return data as BanSummary
 }
+
+export async function syncMissingRegionEvents() {
+  const { data } = await axiosInstance.post('/v1/admin/events/sync/missing-regions')
+  return data as { message: string; addedCount: number }
+}

@@ -39,7 +39,8 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter }
     const removeOverflowHidden = () => {
         if (!mapContainer.current) return;
         mapContainer.current.querySelectorAll<HTMLElement>('div').forEach(div => {
-            if (div.style.overflow === 'hidden') {
+            // 카드 팝업(border-radius 있는 div)은 건드리지 않음
+            if (div.style.overflow === 'hidden' && !div.style.borderRadius) {
                 div.style.overflow = 'visible';
             }
         });
@@ -84,6 +85,7 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter }
                 box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); 
                 width: 240px;
                 overflow: hidden;
+                clip-path: inset(0 round 16px);
                 pointer-events: auto;
                 font-family: system-ui, -apple-system, sans-serif;
             `;

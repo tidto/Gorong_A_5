@@ -256,22 +256,23 @@ export default function Home() {
     return ev.title.toLowerCase().includes(q) || (ev.addr1 || '').toLowerCase().includes(q)
   }), [events, searchQuery])
 
-  const recommendedEvents = useMemo(() => {
-    const wt = RECOMMEND_BY_WEATHER[weatherState] || []
-    const tt = RECOMMEND_BY_TIME[timeState] || []
-    const ic = (auth.user?.interests || []).map((i: string) => CATEGORY_MAP[i]).filter(Boolean)
-    return [...displayEvents]
-        .map(ev => {
-          let s = 0
-          const c = (ev.tourCategoryCode || ev.cat3 || '').toUpperCase()
-          if (ic.some((x: string) => c.startsWith(x))) s += 3
-          if (wt.some(x => c.startsWith(x))) s += 2
-          if (tt.some(x => c.startsWith(x))) s += 1
-          return { ...ev, score: s }
-        })
-        .sort((a, b) => b.score !== a.score ? b.score - a.score : Math.random() - .5)
-        .slice(0, 9)
-  }, [displayEvents, auth.user, weatherState, timeState])
+    const recommendedEvents = useMemo(() => {
+        const wt = RECOMMEND_BY_WEATHER[weatherState] || []
+        const tt = RECOMMEND_BY_TIME[timeState] || []
+        const ic = (auth.user?.interests || []).map((i: string) => CATEGORY_MAP[i]).filter(Boolean)
+        return [...displayEvents]
+            .map((ev, idx) => {
+                let s = 0
+                const c = (ev.cat1 || ev.tourCategoryCode || ev.cat3 || '').toUpperCase()
+                if (ic.some((x: string) => c.startsWith(x))) s += 3
+                if (wt.some(x => c.startsWith(x))) s += 2
+                if (tt.some(x => c.startsWith(x))) s += 1
+                return { ...ev, score: s, _idx: idx }
+            })
+            // 동점일 때 원본 순서(idx)를 유지 — useMemo 내 Math.random() 사용 금지
+            .sort((a, b) => b.score !== a.score ? b.score - a.score : a._idx - b._idx)
+            .slice(0, 9)
+    }, [displayEvents, auth.user, weatherState, timeState])
 
   const topCarousel = useCarousel(topEvents, 3)
   const recCarousel = useCarousel(recommendedEvents, 3)

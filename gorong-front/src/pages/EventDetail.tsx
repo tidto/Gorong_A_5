@@ -21,6 +21,8 @@ interface EventData {
   parking?: string;
   elevator?: string;
   restroom?: string;
+  eventstartdate?: string;
+  eventenddate?: string;
 }
 
 // 하버사인(Haversine) 공식을 이용한 두 좌표 간의 직선 거리 계산 함수 (km 단위)
@@ -158,7 +160,8 @@ export default function EventDetail() {
 
   const supportsGuideDog =
       event.title.includes('배리어프리') ||
-      event.overview?.includes('안내健') ||
+      event.overview?.includes('안내犬') ||
+      event.overview?.includes('안내견') ||
       event.overview?.includes('시각장애인');
 
   const mapData = [{
@@ -186,6 +189,17 @@ export default function EventDetail() {
     return `${dist.toFixed(1)} km`;
   })();
 
+  const formatDate = (d?: string) =>
+      d?.length === 8 ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : null;
+
+  const startDate = formatDate(event.eventstartdate);
+  const endDate   = formatDate(event.eventenddate);
+  const periodValue = startDate && endDate
+      ? `${startDate} ~ ${endDate}`
+      : startDate
+          ? `${startDate} ~`
+          : '상시 운영';
+
   return (
       <div className="max-w-6xl mx-auto px-4 py-8">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-6 font-medium">
@@ -208,7 +222,7 @@ export default function EventDetail() {
 
           <div className="p-8 space-y-10">
             <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <DetailInfoCard icon={<Clock className="w-4 h-4" />} label="기간" value="2026.05.01 ~ 05.31" />
+              <DetailInfoCard icon={<Clock className="w-4 h-4" />} label="기간" value={periodValue} />
               <DetailInfoCard icon={<Wallet className="w-4 h-4" />} label="요금" value={event.usefee || '무료'} />
               <DetailInfoCard icon={<Users className="w-4 h-4" />} label="분류" value={event.cat3 || '문화행사'} />
               <DetailInfoCard icon={<Phone className="w-4 h-4" />} label="문의" value={event.tel || '정보 없음'} />
