@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -83,7 +84,16 @@ public class GroupService {
 
         // 2. 부모 데이터(모임글) 지우기
         groupPostRepository.deleteById(groupId);
+    }
 
-
+    /**
+     * 모임 시간이 지난 RECRUITING 상태 그룹을 CLOSED 로 일괄 업데이트합니다.
+     * GroupScheduler 에서 주기적으로 호출합니다.
+     */
+    @Transactional
+    public int closeExpiredGroups() {
+        String now = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        return groupPostRepository.closeExpiredGroups(now);
     }
 }
