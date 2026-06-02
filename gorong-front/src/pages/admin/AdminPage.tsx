@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   banUser,
   getBans,
@@ -153,6 +153,8 @@ export default function AdminPage() {
   const [banStatus, setBanStatus] = useState<BanStatus | ''>('')
   const [appealStatus, setAppealStatus] = useState<AppealStatus | ''>('')
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null)
+  const [expandedBanId, setExpandedBanId] = useState<number | null>(null)
+  const [appealReviewNotes, setAppealReviewNotes] = useState<Record<number, string>>({})
   const [banReason, setBanReason] = useState('')
   const [banDays, setBanDays] = useState(7)
   const [isLoading, setIsLoading] = useState(false)
@@ -208,13 +210,17 @@ export default function AdminPage() {
   }
 
   const handleUnban = async (banId: number) => {
-    const note = window.prompt('해제 사유를 입력하세요.', '소명 검토 후 해제') ?? undefined
+    const inlineNote = appealReviewNotes[banId]?.trim()
+    const promptedNote = window.prompt('해제 사유를 입력하세요.', '소명 검토 후 해제')
+    const note = inlineNote || promptedNote || undefined
     await unbanUser(banId, note)
+    setExpandedBanId((current) => (current === banId ? null : current))
     await loadBans()
   }
 
   const handleAppealReviewing = async (banId: number) => {
     await markAppealReviewing(banId)
+    setExpandedBanId(banId)
     await loadBans()
   }
 
@@ -429,40 +435,89 @@ export default function AdminPage() {
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-xs text-zinc-600">데이터가 없습니다.</td>
                   </tr>
-                ) : bans.map((b) => (
-                  <tr key={b.banId} className="hover:bg-zinc-800/40 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{b.banId}</td>
-                    <td className="px-4 py-3 text-xs text-zinc-200">{b.email}</td>
-                    <td className="px-4 py-3">
-                      {b.banDays === 0
-                        ? <span className="font-mono text-xs font-bold text-red-400">영구</span>
-                        : <span className="font-mono text-xs text-zinc-300">{b.banDays}일</span>}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-400 max-w-[180px] truncate">{b.banReason}</td>
-                    <td className="px-4 py-3"><Badge label={b.banStatus} styleMap={BAN_STATUS_STYLE} /></td>
-                    <td className="px-4 py-3"><Badge label={b.appealStatus} styleMap={APPEAL_STATUS_STYLE} /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {b.appealStatus === 'SUBMITTED' && (
-                          <button
-                            onClick={() => handleAppealReviewing(b.banId)}
-                            className="rounded border border-blue-700 bg-blue-900/30 px-2.5 py-1 text-xs text-blue-400 hover:bg-blue-800/40"
-                          >
-                            검토중
-                          </button>
-                        )}
-                        {b.banStatus === 'ACTIVE' && (
-                          <button
-                            onClick={() => handleUnban(b.banId)}
-                            className="rounded border border-emerald-700 bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-800/40"
-                          >
-                            해제
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                ) : bans.map((b) => {
+                  const isExpanded = expandedBanId === b.banId
+                  const canOpenAppeal = b.appealStatus === 'REVIEWING'
+
+                  return (
+                    <Fragment key={b.banId}>
+                      <tr key={b.banId} className="hover:bg-zinc-800/40 transition-colors">
+                        <td className="px-4 py-3 font-mono text-xs text-zinc-400">#{b.banId}</td>
+                        <td className="px-4 py-3 text-xs text-zinc-200">{b.email}</td>
+                        <td className="px-4 py-3">
+                          {b.banDays === 0
+                            ? <span className="font-mono text-xs font-bold text-red-400">영구</span>
+                            : <span className="font-mono text-xs text-zinc-300">{b.banDays}일</span>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-zinc-400 max-w-[180px] truncate">{b.banReason}</td>
+                        <td className="px-4 py-3"><Badge label={b.banStatus} styleMap={BAN_STATUS_STYLE} /></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Badge label={b.appealStatus} styleMap={APPEAL_STATUS_STYLE} />
+                            {canOpenAppeal && (
+                              <button
+                                onClick={() => setExpandedBanId((current) => (current === b.banId ? null : b.banId))}
+                                className="rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-zinc-500 hover:text-white"
+                              >
+                                {isExpanded ? '닫기' : '소명 보기'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {b.appealStatus === 'SUBMITTED' && (
+                              <button
+                                onClick={() => handleAppealReviewing(b.banId)}
+                                className="rounded border border-blue-700 bg-blue-900/30 px-2.5 py-1 text-xs text-blue-400 hover:bg-blue-800/40"
+                              >
+                                검토중
+                              </button>
+                            )}
+                            {b.banStatus === 'ACTIVE' && (
+                              <button
+                                onClick={() => handleUnban(b.banId)}
+                                className="rounded border border-emerald-700 bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-800/40"
+                              >
+                                해제
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && canOpenAppeal && (
+                        <tr className="bg-zinc-950/70">
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="grid gap-4 rounded-lg border border-blue-900/40 bg-blue-950/10 p-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <div className="font-mono text-[11px] uppercase tracking-widest text-blue-300">Appeal Text</div>
+                                <div className="min-h-[112px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm leading-6 text-zinc-200">
+                                  {b.appealText?.trim() || '제출된 소명문이 없습니다.'}
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="font-mono text-[11px] uppercase tracking-widest text-emerald-300">Review Note</div>
+                                <textarea
+                                  value={appealReviewNotes[b.banId] ?? b.appealReviewNote ?? ''}
+                                  onChange={(e) => setAppealReviewNotes((current) => ({
+                                    ...current,
+                                    [b.banId]: e.target.value,
+                                  }))}
+                                  rows={5}
+                                  className="w-full resize-y rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
+                                  placeholder="관리자 검토 메모를 입력하면 해제 시 함께 저장됩니다."
+                                />
+                                <p className="text-xs text-zinc-500">
+                                  `해제` 버튼을 누르면 이 메모가 해제 사유로 함께 저장됩니다.
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
