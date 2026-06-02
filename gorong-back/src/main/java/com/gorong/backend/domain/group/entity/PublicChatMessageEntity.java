@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
  * 공개 그룹 채팅 메시지 엔티티
  * - 참여 신청 없이 상세 글을 보는 누구나 이용 가능한 채팅방
  * - catName / characterType / catColor 컬럼 추가 → 슬롯 UI에서 미니홈 캐릭터 표시용
+ * - senderId 컬럼 추가 → 프론트 캣타워 링크(/cattower/:userId)용
  */
 @Entity
 @Table(name = "public_chat_message", schema = "gorong_schema")
@@ -29,6 +30,13 @@ public class PublicChatMessageEntity {
 
     @Column(name = "sender_email", nullable = false, columnDefinition = "TEXT")
     private String senderEmail;
+
+    /**
+     * 발신자 유저 ID (users.user_id) — 캣타워 링크용
+     * nullable: 미니홈이 없는 유저는 null
+     */
+    @Column(name = "sender_id")
+    private Long senderId;
 
     /** UserProfile 닉네임 (전송 시점 스냅샷) */
     @Column(name = "sender_nickname", columnDefinition = "TEXT")

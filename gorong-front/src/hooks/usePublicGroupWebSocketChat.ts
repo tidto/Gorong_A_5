@@ -2,9 +2,9 @@
 //
 // 변경사항:
 //  - 메시지 2번 뜨는 버그 수정
-//    → React StrictMode에서 useEffect가 두 번 실행될 때
-//      cleanup 전에 connect callback이 발화하면 구독이 중복됨
-//    → `cancelled` 플래그 + SockJS socket.close() 강제 종료로 해결
+//  - ChatParticipant에 userId?: number 추가 (캣타워 링크용)
+//  - myCat에 userId 포함 (me/page API 응답에서 cat.userId 파싱)
+//  - 메시지/JOIN에서 senderId(숫자) 있으면 파싱
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import SockJS from 'sockjs-client'
@@ -17,12 +17,14 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://98.84.85.31:80
 export interface PublicChatMsg {
     user: string
     senderEmail?: string
-    nickname?: string      // 유저 닉네임
+    senderId?: number       // 유저 숫자 ID (캣타워 링크용)
+    nickname?: string
     catName?: string
     characterType?: string
     catColor?: string
     text: string
     sentAt?: string
+    type?: 'CHAT' | 'JOIN' | 'LEAVE'
 }
 
 export interface ChatParticipant {
@@ -31,13 +33,15 @@ export interface ChatParticipant {
     catName: string
     characterType: string
     catColor: string
+    userId?: number         // 캣타워 이동에 사용
 }
 
 interface MyCatCache {
     catName: string
     characterType: string
     catColor: string
-    nickname: string   // 유저 닉네임 (슬롯 표시용)
+    nickname: string
+    userId?: number         // 내 캣타워 링크용
 }
 
 function deriveParticipants(messages: PublicChatMsg[]): ChatParticipant[] {
@@ -52,6 +56,7 @@ function deriveParticipants(messages: PublicChatMsg[]): ChatParticipant[] {
             catName:       m.catName       || m.user,
             characterType: m.characterType || 'BASIC',
             catColor:      m.catColor      || 'CREAM',
+            userId:        m.senderId,
         })
         if (seen.size >= 6) break
     }
@@ -68,7 +73,7 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
     const stompRef = useRef<Client | null>(null)
     const subRef   = useRef<Subscription | null>(null)
 
-    // 1. 내 미니홈 캐릭터 + 닉네임 로딩
+    // 1. 내 미니홈 캐릭터 + 닉네임 + userId 로딩
     useEffect(() => {
         if (!auth.currentUser) return
         axiosInstance.get('/minihomes/me/page')
@@ -78,7 +83,6 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
                 if (!cat) return
                 const catColor = (cat.appearanceState?.color as string | undefined) ?? 'CREAM'
 
-                // 닉네임: 미니홈 API 응답 여러 경로 시도 → Firebase displayName → 이메일 앞부분 순서로 폴백
                 const nickname =
                     data?.miniHome?.user?.nickname ??
                     data?.user?.nickname            ??
@@ -91,6 +95,7 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
                     characterType: cat.characterType || 'BASIC',
                     catColor:      catColor.toUpperCase(),
                     nickname:      String(nickname),
+                    userId:        cat.userId ?? data?.miniHome?.userId ?? undefined,
                 })
             })
             .catch(() => {})
@@ -108,16 +113,6 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
     }, [groupId])
 
     // 3. WebSocket 연결 & 구독
-    //    ── 핵심 버그 수정 ──────────────────────────────────────
-    //    React StrictMode에서는 effect가 mount → cleanup → mount 순서로
-    //    두 번 실행된다. cleanup 시점에 아직 STOMP 연결이 진행 중이면
-    //    disconnect()가 무시되어 첫 번째 구독이 살아남고, 두 번째 구독이
-    //    추가로 생겨 메시지가 두 번 수신된다.
-    //    → `cancelled` 플래그: connect callback 진입 시 확인하여
-    //      cleanup된 연결이면 즉시 클라이언트를 끊는다.
-    //    → `socket.close()`: STOMP disconnect보다 빠르게 TCP 소켓을
-    //      강제 종료하여 재사용(zombie 연결) 방지.
-    // ────────────────────────────────────────────────────────────
     useEffect(() => {
         if (!groupId) return
         let cancelled = false
@@ -129,7 +124,6 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
         client.connect(
             {},
             () => {
-                // cleanup이 이미 실행됐으면 이 연결은 필요 없으므로 즉시 종료
                 if (cancelled) {
                     try { client.disconnect(() => {}) } catch {}
                     try { socket.close() } catch {}
@@ -140,9 +134,28 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
                 subRef.current = client.subscribe(
                     `/topic/public/${groupId}`,
                     frame => {
-                        if (cancelled) return  // 구독 콜백도 cancelled 체크
+                        if (cancelled) return
                         try {
                             const msg: PublicChatMsg = JSON.parse(frame.body)
+
+                            if (msg.type === 'JOIN' && msg.senderEmail) {
+                                setParticipants(prev => {
+                                    const already = prev.some(p => p.email === msg.senderEmail)
+                                    if (already) return prev
+                                    const newcomer: ChatParticipant = {
+                                        email:         msg.senderEmail!,
+                                        nickname:      msg.user || msg.senderEmail!.split('@')[0],
+                                        catName:       msg.catName       || msg.user || '고냥이',
+                                        characterType: msg.characterType || 'BASIC',
+                                        catColor:      msg.catColor      || 'CREAM',
+                                        userId:        msg.senderId,
+                                    }
+                                    const next = [...prev, newcomer]
+                                    return next.length > 6 ? next.slice(next.length - 6) : next
+                                })
+                                return
+                            }
+
                             setMessages(prev => {
                                 const next = [...prev, msg]
                                 setParticipants(deriveParticipants(next))
@@ -160,11 +173,11 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
         stompRef.current = client
 
         return () => {
-            cancelled = true  // 이후 모든 callback이 무시됨
+            cancelled = true
             try { subRef.current?.unsubscribe() } catch {}
             subRef.current = null
             try { if (client.connected) client.disconnect(() => {}) } catch {}
-            try { socket.close() } catch {}  // TCP 강제 종료
+            try { socket.close() } catch {}
             setConnected(false)
         }
     }, [groupId])
@@ -191,6 +204,7 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
                 {},
                 JSON.stringify({
                     senderEmail:   currentUser.email,
+                    senderId:      myCat?.userId,
                     nickname:      (myCat as any)?.nickname ?? currentUser.email?.split('@')[0] ?? '',
                     catName:       myCat?.catName       ?? '',
                     characterType: myCat?.characterType ?? 'BASIC',
@@ -204,5 +218,28 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
         }
     }, [groupId, myCat])
 
-    return { messages, participants, connected, sending, myCat, sendMessage }
+    // 5. 입장 알림
+    const sendJoin = useCallback(() => {
+        const currentUser = auth.currentUser
+        if (!currentUser || !stompRef.current?.connected) return
+        stompRef.current.send(
+            `/app/public.send/${groupId}`,
+            {},
+            JSON.stringify({
+                senderEmail: currentUser.email,
+                senderId:    myCat?.userId,
+                text:        '',
+                type:        'JOIN',
+            })
+        )
+    }, [groupId, myCat])
+
+    // 6. 퇴장
+    const sendLeave = useCallback(() => {
+        const currentUser = auth.currentUser
+        if (!currentUser) return
+        setParticipants(prev => prev.filter(p => p.email !== currentUser.email))
+    }, [])
+
+    return { messages, participants, connected, sending, myCat, sendMessage, sendJoin, sendLeave }
 }

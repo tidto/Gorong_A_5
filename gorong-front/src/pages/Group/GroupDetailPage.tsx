@@ -26,9 +26,38 @@ interface GroupPost {
     author?: { id?: number; email?: string }
 }
 
+interface UserRouteProfile {
+    nickname?: string
+    baseAddress?: string
+    address?: string
+    latitude?: number | string | null
+    longitude?: number | string | null
+}
+
+const toValidNumber = (value: unknown) => {
+    const num = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(num) && num !== 0 ? num : null;
+};
+
+// 💡 여기에 뒤에 붙어있던 .replace 코드들을 하나로 합쳐주었습니다.
 const escapeHtml = (v: string) =>
-    v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    v.replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+
+// GroupListPage와 동일한 날짜 만료 체크 헬퍼
+const isDatePassed = (dateStr?: string): boolean => {
+    if (!dateStr) return false;
+    try {
+        const meeting = new Date(dateStr);
+        meeting.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return meeting < today;
+    } catch { return false; }
+}; // 💡 이 밑에 붕 떠있던 .replace 코드를 지웠습니다.
 
 export default function GroupDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -40,11 +69,17 @@ export default function GroupDetailPage() {
     const [showMap, setShowMap]         = useState(false);
     const [mapLoading, setMapLoading]   = useState(false);
     const [mapError, setMapError]       = useState('');
+    const [routeTarget, setRouteTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
+    const [userRouteProfile, setUserRouteProfile] = useState<UserRouteProfile | null>(null);
 
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapMarkerRef    = useRef<any>(null);
 
     const { isMyGroup } = useChatRoom();
+
+    useEffect(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }, [id]);
 
     // ── 데이터 로드 ──────────────────────────────────────────
     useEffect(() => {
@@ -57,6 +92,12 @@ export default function GroupDetailPage() {
             .then(res => setIsJoined(res.data.includes(Number(id))))
             .catch(() => {});
     }, [id, navigate]);
+
+    useEffect(() => {
+        axiosInstance.get<UserRouteProfile>('/v1/users/me')
+            .then(res => setUserRouteProfile(res.data))
+            .catch(() => setUserRouteProfile(null));
+    }, []);
 
     // ── 권한 판정 ────────────────────────────────────────────
     const canEdit = post
@@ -113,6 +154,57 @@ export default function GroupDetailPage() {
         });
     }, []);
 
+    const handleOpenKakaoMapRoute = useCallback(async () => {
+        if (!post?.location) return;
+
+        if (!routeTarget) {
+            window.open(`https://map.kakao.com/link/search/${encodeURIComponent(post.location)}`, '_blank');
+            return;
+        }
+
+        const startAddress = (userRouteProfile?.baseAddress || userRouteProfile?.address || '').trim();
+        const startLat = toValidNumber(userRouteProfile?.latitude);
+        const startLng = toValidNumber(userRouteProfile?.longitude);
+        let startTarget = startLat && startLng
+            ? {
+                lat: startLat,
+                lng: startLng,
+                name: userRouteProfile?.nickname ? `${userRouteProfile.nickname} 주소` : '내 주소',
+            }
+            : null;
+
+        if (!startTarget && startAddress) {
+            try {
+                await loadKakaoSdk();
+                const geocoder = new window.kakao.maps.services.Geocoder();
+                startTarget = await new Promise<{ lat: number; lng: number; name: string } | null>((resolve) => {
+                    geocoder.addressSearch(startAddress, (result: any, status: any) => {
+                        if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
+                            resolve({
+                                lat: Number(result[0].y),
+                                lng: Number(result[0].x),
+                                name: '내 주소',
+                            });
+                            return;
+                        }
+                        resolve(null);
+                    });
+                });
+            } catch {
+                startTarget = null;
+            }
+        }
+
+        if (!startTarget) {
+            alert('마이페이지에 저장된 주소를 찾을 수 없어 목적지만 길찾기로 열게요.');
+            window.open(`https://map.kakao.com/link/to/${encodeURIComponent(routeTarget.name)},${routeTarget.lat},${routeTarget.lng}`, '_blank');
+            return;
+        }
+
+        const url = `https://map.kakao.com/link/from/${encodeURIComponent(startTarget.name)},${startTarget.lat},${startTarget.lng}/to/${encodeURIComponent(routeTarget.name)},${routeTarget.lat},${routeTarget.lng}`;
+        window.open(url, '_blank');
+    }, [loadKakaoSdk, post?.location, routeTarget, userRouteProfile]);
+
     useEffect(() => {
         if (!showMap || !post?.location || !mapContainerRef.current) return;
         let cancelled = false;
@@ -120,6 +212,7 @@ export default function GroupDetailPage() {
         const render = async () => {
             setMapLoading(true);
             setMapError('');
+            setRouteTarget(null);
             try {
                 await loadKakaoSdk();
                 if (cancelled || !mapContainerRef.current) return;
@@ -139,6 +232,14 @@ export default function GroupDetailPage() {
                         });
                     });
                 });
+
+                if (!cancelled) {
+                    setRouteTarget({
+                        lat: pos.getLat(),
+                        lng: pos.getLng(),
+                        name: post.title || loc,
+                    });
+                }
 
                 if (cancelled || !mapContainerRef.current) return;
                 const map = new window.kakao.maps.Map(mapContainerRef.current, { center: pos, level: 3 });
@@ -172,15 +273,61 @@ export default function GroupDetailPage() {
 
     const current  = post.currentCapacity ?? 0;
     const max      = post.maxCapacity ?? 4;
-    const isFull   = current >= max;
-    const isClosed = post.status === 'CLOSED' || isFull;
+    const isFull    = current >= max;
+    const isPassed  = isDatePassed(post.meetingDate);
+    const isClosed  = post.status === 'CLOSED' || isFull || isPassed;
     const pct      = Math.min(100, Math.round((current / max) * 100));
+    const actionButtons = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {!canEdit && (
+                isJoined ? (
+                    <button
+                        onClick={() => navigate(`/chat/${post.id}`)}
+                        style={{ width: '100%', padding: '17px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '800', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                        채팅방 입장하기
+                    </button>
+                ) : (
+                    <button
+                        onClick={handleJoin}
+                        disabled={isClosed || isJoining}
+                        style={{ width: '100%', padding: '17px', borderRadius: '14px', border: 'none', background: isClosed || isJoining ? '#e2e8f0' : 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: isClosed || isJoining ? '#94a3b8' : 'white', fontWeight: '800', fontSize: '16px', cursor: isClosed || isJoining ? 'default' : 'pointer' }}
+                    >
+                        {isJoining ? '신청 중...' : isClosed ? '모집이 마감되었습니다' : '참여 신청하기'}
+                    </button>
+                )
+            )}
+
+            {canEdit && (
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                        onClick={() => navigate(`/chat/${post.id}`)}
+                        style={{ flex: 1, padding: '16px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '800', fontSize: '15px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                    >
+                        채팅방
+                    </button>
+                    <button
+                        onClick={() => navigate(`/groups/edit/${post.id}`)}
+                        style={{ flex: 1, padding: '16px', borderRadius: '14px', border: 'none', backgroundColor: '#f1f5f9', color: '#64748b', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}
+                    >
+                        수정
+                    </button>
+                    <button
+                        onClick={handleDelete}
+                        style={{ flex: 1, padding: '16px', borderRadius: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#ef4444', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}
+                    >
+                        삭제
+                    </button>
+                </div>
+            )}
+        </div>
+    );
 
     // ── 렌더 ─────────────────────────────────────────────────
     return (
         <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '80px', marginTop: '-64px' }}>
 
-            {/* ── 히어로 헤더 ── */}
+            {/* ── :히어로 헤더 ── */}
             <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '80px 20px 88px', position: 'relative' }}>
                 <div style={{ maxWidth: '760px', margin: '0 auto' }}>
                     {/* 뒤로 가기 */}
@@ -305,6 +452,26 @@ export default function GroupDetailPage() {
                                 {mapError}
                             </div>
                         )}
+                        <div style={{ padding: '14px' }}>
+                            <button
+                                type="button"
+                                onClick={handleOpenKakaoMapRoute}
+                                disabled={mapLoading || !!mapError}
+                                style={{
+                                    width: '100%',
+                                    padding: '14px',
+                                    borderRadius: '14px',
+                                    border: 'none',
+                                    backgroundColor: mapLoading || mapError ? '#e2e8f0' : '#111827',
+                                    color: mapLoading || mapError ? '#94a3b8' : 'white',
+                                    fontWeight: '800',
+                                    fontSize: '14px',
+                                    cursor: mapLoading || mapError ? 'default' : 'pointer',
+                                }}
+                            >
+                                카카오맵으로 실시간 길찾기 및 이동 경로 보기
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -319,54 +486,11 @@ export default function GroupDetailPage() {
                 )}
 
                 {/* 액션 버튼 */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-                    {/* 참여하기 or 채팅방 (비작성자) */}
-                    {!canEdit && (
-                        isJoined ? (
-                            <button
-                                onClick={() => navigate(`/chat/${post.id}`)}
-                                style={{ width: '100%', padding: '17px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '800', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                            >
-                                💬 채팅방 입장하기
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleJoin}
-                                disabled={isClosed || isJoining}
-                                style={{ width: '100%', padding: '17px', borderRadius: '14px', border: 'none', background: isClosed || isJoining ? '#e2e8f0' : 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: isClosed || isJoining ? '#94a3b8' : 'white', fontWeight: '800', fontSize: '16px', cursor: isClosed || isJoining ? 'default' : 'pointer' }}
-                            >
-                                {isJoining ? '신청 중...' : isClosed ? '모집이 마감되었습니다' : '👋 참여 신청하기'}
-                            </button>
-                        )
-                    )}
-
-                    {/* 수정 / 삭제 / 채팅 (작성자) */}
-                    {canEdit && (
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button
-                                onClick={() => navigate(`/chat/${post.id}`)}
-                                style={{ flex: 1, padding: '16px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '800', fontSize: '15px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                            >
-                                💬 채팅방
-                            </button>
-                            <button
-                                onClick={() => navigate(`/groups/edit/${post.id}`)}
-                                style={{ flex: 1, padding: '16px', borderRadius: '14px', border: 'none', backgroundColor: '#f1f5f9', color: '#64748b', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}
-                            >
-                                ✏️ 수정
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                style={{ flex: 1, padding: '16px', borderRadius: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#ef4444', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}
-                            >
-                                🗑️ 삭제
-                            </button>
-                        </div>
-                    )}
-                </div>
             </div>
-            <GroupPublicChatSection groupId={post.id} />
+            <GroupPublicChatSection groupId={post.id} isClosed={isClosed} />
+            <div style={{ maxWidth: '760px', margin: '16px auto 0', padding: '0 20px', position: 'relative', zIndex: 1 }}>
+                {actionButtons}
+            </div>
         </div>
     );
 }
