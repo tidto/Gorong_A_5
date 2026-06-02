@@ -1,10 +1,17 @@
 package com.gorong.backend.domain.event.entity;
 
 import com.gorong.backend.domain.event.dto.TourItemDto;
-import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
 @Table(name = "events")
@@ -14,7 +21,6 @@ import java.time.OffsetDateTime;
 @Builder
 public class Event {
 
-    // TourAPI의 contentId와 1:1 매칭이므로 @GeneratedValue를 쓰지 않습니다! (직접 삽입)
     @Id
     @Column(name = "event_id", nullable = false)
     private Long id;
@@ -79,11 +85,17 @@ public class Event {
 
     public void updateFromDto(TourItemDto dto) {
         this.title = dto.getTitle();
-        this.addr = dto.getAddr1(); // DTO의 addr1 -> Entity의 addr
-        this.mapX = dto.getMapx();  // DTO의 mapx -> Entity의 mapX
-        this.mapY = dto.getMapy();  // DTO의 mapy -> Entity의 mapY
+        this.eventStartDate = dto.getEventstartdate();
+        this.eventEndDate = dto.getEventenddate();
+        this.addr = dto.getAddr1();
+        this.tel = dto.getTel();
+        this.mapX = dto.getMapx();
+        this.mapY = dto.getMapy();
         this.firstImage = dto.getFirstimage();
-
+        this.firstImage2 = dto.getFirstimage2();
+        this.areaCode = dto.getAreacode();
+        this.sigunguCode = dto.getSigungucode();
+        this.modifiedTime = dto.getModifiedtime();
         this.parking = dto.getParking();
         this.elevator = dto.getElevator();
         this.restroom = dto.getRestroom();
@@ -92,18 +104,18 @@ public class Event {
         String apiCat = dto.getCat1();
         if (apiCat != null) {
             switch (apiCat) {
-                case "A01": this.tourCategoryCode = "NA"; break; // 자연관광
-                case "A02": this.tourCategoryCode = "VE"; break; // 문화/역사
-                case "A03": this.tourCategoryCode = "LS"; break; // 레포츠
-                case "A04": this.tourCategoryCode = "SH"; break; // 쇼핑
-                case "A05": this.tourCategoryCode = "FD"; break; // 음식
-                case "C01": this.tourCategoryCode = "C01"; break; // 추천코스
-                default: this.tourCategoryCode = "ETC";
+                case "A01" -> this.tourCategoryCode = "NA";
+                case "A02" -> this.tourCategoryCode = "VE";
+                case "A03" -> this.tourCategoryCode = "LS";
+                case "A04" -> this.tourCategoryCode = "SH";
+                case "A05" -> this.tourCategoryCode = "FD";
+                case "C01" -> this.tourCategoryCode = "C01";
+                default -> this.tourCategoryCode = "ETC";
             }
         }
 
         if (dto.getOverview() != null) {
-            this.description = dto  .getOverview();
+            this.description = dto.getOverview();
         }
     }
 }

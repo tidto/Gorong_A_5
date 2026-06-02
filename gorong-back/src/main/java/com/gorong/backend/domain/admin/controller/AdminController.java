@@ -1,13 +1,18 @@
 package com.gorong.backend.domain.admin.controller;
 
 import com.google.firebase.auth.FirebaseToken;
-import com.gorong.backend.domain.admin.dto.*;
+import com.gorong.backend.domain.admin.dto.BanSummaryDto;
+import com.gorong.backend.domain.admin.dto.BanUserRequestDto;
+import com.gorong.backend.domain.admin.dto.ReportSummaryDto;
 import com.gorong.backend.domain.admin.entity.Report;
 import com.gorong.backend.domain.admin.entity.UserBan;
 import com.gorong.backend.domain.admin.service.AdminService;
+import com.gorong.backend.domain.event.service.TourApiService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.repository.UserRepository;
 import jakarta.validation.Valid;
+import java.time.OffsetDateTime;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,10 +21,15 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
-
-import java.time.OffsetDateTime;
-import java.util.Map;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -29,6 +39,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final UserRepository userRepository;
+    private final TourApiService tourApiService;
 
     @PostMapping("/users/{userId}/ban")
     public ResponseEntity<BanSummaryDto> banUser(
@@ -89,6 +100,15 @@ public class AdminController {
                 "userId", user.getId(),
                 "email", user.getEmail(),
                 "roleType", user.getRoleType().name()
+        ));
+    }
+
+    @PostMapping("/events/sync/missing-regions")
+    public ResponseEntity<Map<String, Object>> addMissingRegionEvents() {
+        int addedCount = tourApiService.addMissingDaeguGyeongbukEvents();
+        return ResponseEntity.ok(Map.of(
+                "message", "기존 데이터는 유지하고 누락 행사만 추가했습니다.",
+                "addedCount", addedCount
         ));
     }
 }
