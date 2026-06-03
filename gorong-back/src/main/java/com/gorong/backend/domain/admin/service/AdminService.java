@@ -166,19 +166,12 @@ public class AdminService {
         OffsetDateTime now = OffsetDateTime.now();
         var expiredPermanent = userBanRepository.findByBanStatusAndPermanentDeleteAtBefore(UserBan.BanStatus.ACTIVE, now);
 
-        int[] deactivatedCount = {0};
         for (UserBan ban : expiredPermanent) {
-            userRepository.findById(ban.getUserId()).ifPresent(user -> {
-                if (user.getAccountStatus() != User.AccountStatus.INACTIVE) {
-                    user.deactivate();
-                    deactivatedCount[0]++;
-                }
-            });
             ban.expire();
         }
 
-        if (deactivatedCount[0] > 0) {
-            log.info("영구정지 유저 14일 경과 비활성화 완료: {}건", deactivatedCount[0]);
+        if (!expiredPermanent.isEmpty()) {
+            log.info("영구정지 14일 경과 처리 완료: {}건", expiredPermanent.size());
         }
     }
 

@@ -89,7 +89,6 @@ public class UserService {
                 .roleType(User.RoleType.USER)
                 .barrierFreeType(barrierFreeType)
                 .isForeigner(requestDto.getIsForeigner() != null ? requestDto.getIsForeigner() : false)
-                .accountStatus(User.AccountStatus.ACTIVE)
                 .build();
         User savedUser = userRepository.save(newUser);
 

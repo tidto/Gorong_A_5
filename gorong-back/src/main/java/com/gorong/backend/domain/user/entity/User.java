@@ -14,11 +14,6 @@ import java.time.OffsetDateTime;
 @Builder
 public class User {
 
-    public enum AccountStatus {
-        ACTIVE,
-        INACTIVE
-    }
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
@@ -43,11 +38,6 @@ public class User {
     @Builder.Default
     private Boolean isForeigner = false;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "account_status", nullable = false, columnDefinition = "TEXT")
-    @Builder.Default
-    private AccountStatus accountStatus = AccountStatus.ACTIVE;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -59,18 +49,6 @@ public class User {
     public void updateProfile(BarrierFreeType barrierFreeType, Boolean isForeigner) {
         if (barrierFreeType != null) this.barrierFreeType = barrierFreeType;
         if (isForeigner != null) this.isForeigner = isForeigner;
-    }
-
-    public void deactivate() {
-        this.accountStatus = AccountStatus.INACTIVE;
-    }
-
-    public void activate() {
-        this.accountStatus = AccountStatus.ACTIVE;
-    }
-
-    public AccountStatus getResolvedAccountStatus() {
-        return accountStatus == null ? AccountStatus.ACTIVE : accountStatus;
     }
 
     // --- Enums ---

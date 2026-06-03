@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -37,7 +36,6 @@ public class UserController {
         String uid = decodedToken.getUid();
 
         Optional<User> userOpt = userService.findByUid(uid);
-        UserBan latestBan = adminService.getLatestBanByFirebaseUid(uid);
 
         if (userOpt.isPresent()) {
             User user = userOpt.get();
@@ -46,59 +44,16 @@ public class UserController {
                     .map(UserProfile::getNickname)
                     .orElse("");
 
-            if (user.getAccountStatus() == User.AccountStatus.INACTIVE) {
-                Map<String, Object> banInfo = new HashMap<>();
-                if (latestBan != null) {
-                    banInfo.put("banId", latestBan.getBanId());
-                    banInfo.put("banDays", latestBan.getBanDays());
-                    banInfo.put("banStatus", latestBan.getBanStatus().name());
-                    banInfo.put("appealStatus", latestBan.getAppealStatus().name());
-                    banInfo.put("banReason", latestBan.getBanReason());
-                }
-
-                return ResponseEntity.ok(Map.of(
-                        "isRegistered", true,
-                        "accessRestricted", true,
-                        "accountStatus", user.getAccountStatus().name(),
-                        "message", buildRestrictionMessage(latestBan),
-                        "ban", banInfo,
-                        "user", Map.of(
-                                "nickname", nickname,
-                                "email", user.getEmail(),
-                                "roleType", user.getRoleType().name(),
-                                "accountStatus", user.getAccountStatus().name()
-                        )
-                ));
-            }
-
             // 프론트가 기대하는 { isRegistered: true, user: { nickname, email } } 구조
             return ResponseEntity.ok(Map.of(
                     "isRegistered", true,
                     "user", Map.of(
                             "nickname", nickname,
                             "email", user.getEmail(),
-                            "roleType", user.getRoleType().name(),
-                            "accountStatus", user.getAccountStatus().name()
+                            "roleType", user.getRoleType().name()
                     )
             ));
         } else {
-            if (latestBan != null) {
-                Map<String, Object> banInfo = new HashMap<>();
-                banInfo.put("banId", latestBan.getBanId());
-                banInfo.put("banDays", latestBan.getBanDays());
-                banInfo.put("banStatus", latestBan.getBanStatus().name());
-                banInfo.put("appealStatus", latestBan.getAppealStatus().name());
-                banInfo.put("banReason", latestBan.getBanReason());
-
-                return ResponseEntity.ok(Map.of(
-                        "isRegistered", false,
-                        "accessRestricted", true,
-                        "accountStatus", "INACTIVE",
-                        "message", buildRestrictionMessage(latestBan),
-                        "ban", banInfo
-                ));
-            }
-
             // 신규 유저: isRegistered: false 반환 (404 아닌 200으로 통일 - 에러가 아니므로)
             return ResponseEntity.ok(Map.of("isRegistered", false));
         }
@@ -159,16 +114,4 @@ public class UserController {
         return ResponseEntity.ok(adminService.submitAppeal(user.getId(), requestDto.getAppealText()));
     }
 
-    private String buildRestrictionMessage(UserBan latestBan) {
-        if (latestBan == null) {
-            return "계정 이용이 제한되었습니다.";
-        }
-        if (latestBan.getBanDays() != null && latestBan.getBanDays() == 0) {
-            return "영구정지된 계정입니다.";
-        }
-        if (latestBan.getBanStatus() == UserBan.BanStatus.EXPIRED) {
-            return "비활성화된 계정입니다.";
-        }
-        return "계정 이용이 제한되었습니다.";
-    }
 }
