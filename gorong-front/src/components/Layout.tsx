@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Calendar, Home, Heart, MessageSquare, ChevronDown, User, LogOut } from 'lucide-react'
+import { Calendar, Home, Heart, MessageSquare, User, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface LayoutProps {
@@ -48,34 +48,18 @@ function DropdownNav({
   isActive: (path: string) => boolean
   onNavigate: (path: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
+    <div className="group relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-          open
-            ? 'bg-emerald-50 text-emerald-700'
-            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-        }`}
-        aria-expanded={open}
+        className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+        aria-haspopup="menu"
       >
         <Icon className="h-4 w-4" />
         <span>{label}</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      <div
-        className={`absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl transition-all duration-150 ${
-          open ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'
-        }`}
-      >
+      <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white opacity-0 shadow-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
         {items.map((item, index) => {
           const active = isActive(item.path)
           return (
@@ -83,7 +67,6 @@ function DropdownNav({
               key={item.path}
               type="button"
               onClick={() => {
-                setOpen(false)
                 onNavigate(item.path)
               }}
               className={`flex w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors ${
@@ -152,7 +135,7 @@ function Header() {
           </div>
         </Link>
 
-        <nav className="mx-auto flex min-w-0 items-center justify-center gap-1 overflow-x-auto whitespace-nowrap">
+        <nav className="mx-auto flex min-w-0 items-center justify-center gap-1 overflow-visible whitespace-nowrap">
           <DropdownNav
             label="Event"
             icon={Calendar}
@@ -164,21 +147,22 @@ function Header() {
           {CENTER_LINKS.map(({ label, path, description }) => {
             const active = isActive(path)
             return (
-              <Link
-                key={path}
-                to={path}
-                title={description}
-                className={`group relative inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                  active
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                }`}
-              >
-                <span>{label}</span>
+              <div key={path} className="group relative">
+                <Link
+                  to={path}
+                  title={description}
+                  className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                    active
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                  }`}
+                >
+                  <span>{label}</span>
+                </Link>
                 <span className="pointer-events-none absolute left-1/2 top-full mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all group-hover:block group-hover:opacity-100">
                   {description}
                 </span>
-              </Link>
+              </div>
             )
           })}
 
