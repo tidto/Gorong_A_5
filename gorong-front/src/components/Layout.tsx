@@ -126,13 +126,10 @@ function Header() {
     >
       <div className="mx-auto flex h-[78px] max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex shrink-0 items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent">
             <img src="/gorong_logo.png" alt="고롱 로고" className="h-9 w-9 object-contain" />
           </div>
-          <div className="leading-tight">
-            <div className="text-[15px] font-black tracking-[-0.03em] text-slate-900">고롱</div>
-            <div className="text-[11px] text-slate-500">문화와 일상을 연결하는 공간</div>
-          </div>
+          <div className="text-[15px] font-black tracking-[-0.03em] text-slate-900">고롱</div>
         </Link>
 
         <nav className="mx-auto flex min-w-0 items-center justify-center gap-1 overflow-visible whitespace-nowrap">
