@@ -1,19 +1,41 @@
-import { useEffect, useState } from "react";
-import { motion, useSpring, useTransform } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { Users } from "lucide-react";
 import { MOCK_TODAY_VISITORS, MOCK_VISITOR_COUNT } from "../../../data/minihome/catTowerDashboardMock";
 
 function AnimatedCount({ value }: { value: number }) {
-  const spring = useSpring(0, { stiffness: 60, damping: 18 });
-  const display = useTransform(spring, (v) => Math.round(v));
-  const [text, setText] = useState("0");
+  const [display, setDisplay] = useState(0);
+  const rafRef = useRef<number | null>(null);
+  const displayRef = useRef(0);
 
   useEffect(() => {
-    spring.set(value);
-    return display.on("change", (v) => setText(String(v)));
-  }, [value, spring, display]);
+    displayRef.current = display;
+  }, [display]);
 
-  return <span>{text}</span>;
+  useEffect(() => {
+    const from = displayRef.current;
+    const to = value;
+    if (from === to) return;
+
+    const durationMs = 700;
+    const startedAt = performance.now();
+
+    const tick = (now: number) => {
+      const t = Math.min((now - startedAt) / durationMs, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setDisplay(Math.round(from + (to - from) * eased));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [value]);
+
+  return <span>{display}</span>;
 }
 
 /** 방문자 수 mock — 카운트업 애니메이션 */
