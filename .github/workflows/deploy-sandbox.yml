@@ -98,7 +98,10 @@ jobs:
             echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
             echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
 
+            docker compose down --remove-orphans || true
+            docker system prune -af || true
+            docker builder prune -af || true
+            docker image prune -af || true
+
             docker compose pull
             docker compose up -d
-
-            docker image prune -f
