@@ -94,6 +94,7 @@ export default function SignupScreen({ navigation }: Props) {
         email: email.trim(),
         nickname: nickname.trim(),
         roleType: 'USER',
+        accountStatus: 'ACTIVE',
       }
       await completeSignup(newUser)
       // completeSignup → needsSignup = false, user 세팅

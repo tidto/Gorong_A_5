@@ -106,11 +106,13 @@ export default function AppRouter() {
 
                     <Route path="/error/:code" element={<ErrorPage />} />
                     <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
+                    <Route path="/posting" element={<Navigate to="/reviews" replace />} />
                     <Route path="/events/:id" element={<EventDetail />} />
                     <Route path="/events/:id/review" element={<ProtectedRoute><Review /></ProtectedRoute>} />
                     <Route path="/reviews" element={<ProtectedRoute><ReviewPage /></ProtectedRoute>} />
                     <Route path="/group" element={<ProtectedRoute><GroupListPage /></ProtectedRoute>} />
                     <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+                    <Route path="/minihompy" element={<Navigate to="/cattower" replace />} />
                     <Route path="/cattower/user/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
                     <Route path="/cattower/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
                     <Route path="/cattower" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />

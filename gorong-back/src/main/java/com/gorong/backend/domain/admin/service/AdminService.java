@@ -166,21 +166,40 @@ public class AdminService {
         OffsetDateTime now = OffsetDateTime.now();
         var expiredPermanent = userBanRepository.findByBanStatusAndPermanentDeleteAtBefore(UserBan.BanStatus.ACTIVE, now);
 
-        int deletedCount = 0;
+        int[] deactivatedCount = {0};
         for (UserBan ban : expiredPermanent) {
-            userRepository.findById(ban.getUserId()).ifPresent(userRepository::delete);
+            userRepository.findById(ban.getUserId()).ifPresent(user -> {
+                if (user.getAccountStatus() != User.AccountStatus.INACTIVE) {
+                    user.deactivate();
+                    deactivatedCount[0]++;
+                }
+            });
             ban.expire();
-            deletedCount++;
         }
 
-        if (deletedCount > 0) {
-            log.info("영구정지 유저 14일 경과 삭제 완료: {}건", deletedCount);
+        if (deactivatedCount[0] > 0) {
+            log.info("영구정지 유저 14일 경과 비활성화 완료: {}건", deactivatedCount[0]);
         }
     }
 
     @Transactional(readOnly = true)
     public UserBan getActiveBanByFirebaseUid(String firebaseUid) {
         return userBanRepository.findTopByFirebaseUidAndBanStatusOrderByBannedAtDesc(firebaseUid, UserBan.BanStatus.ACTIVE)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public UserBan getLatestBanByFirebaseUid(String firebaseUid) {
+        return userBanRepository.findTopByFirebaseUidOrderByBannedAtDesc(firebaseUid)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public UserBan getLatestBanByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        return userBanRepository.findTopByEmailOrderByBannedAtDesc(email)
                 .orElse(null);
     }
 

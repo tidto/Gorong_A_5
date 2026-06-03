@@ -41,9 +41,27 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
 
                 userRepository.findByFirebaseUid(decodedToken.getUid()).ifPresent(user -> {
-                    authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRoleType().name()));
-                    authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                    if (user.getAccountStatus() == com.gorong.backend.domain.user.entity.User.AccountStatus.ACTIVE) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRoleType().name()));
+                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                    }
                 });
+
+                var user = userRepository.findByFirebaseUid(decodedToken.getUid()).orElse(null);
+                if (user != null
+                        && user.getAccountStatus() == com.gorong.backend.domain.user.entity.User.AccountStatus.INACTIVE
+                        && shouldBlockByBan(request)) {
+                    UserBan latestBan = adminService.getLatestBanByFirebaseUid(decodedToken.getUid());
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write(String.format(
+                            "{\"message\":\"%s\",\"banReason\":\"%s\",\"appealStatus\":\"%s\"}",
+                            escapeJson(buildRestrictionMessage(latestBan)),
+                            escapeJson(latestBan == null ? "" : latestBan.getBanReason()),
+                            latestBan == null ? "" : latestBan.getAppealStatus().name()
+                    ));
+                    return;
+                }
 
                 UserBan activeBan = adminService.getActiveBanByFirebaseUid(decodedToken.getUid());
                 if (activeBan != null && shouldBlockByBan(request)) {
@@ -83,6 +101,16 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
         return !path.startsWith("/api/v1/users/me/ban")
                 && !path.startsWith("/api/v1/users/me/appeal")
                 && !path.startsWith("/api/v1/users/login");
+    }
+
+    private String buildRestrictionMessage(UserBan latestBan) {
+        if (latestBan == null) {
+            return "계정 이용이 제한되었습니다.";
+        }
+        if (latestBan.getBanDays() != null && latestBan.getBanDays() == 0) {
+            return "영구정지된 계정입니다.";
+        }
+        return "계정 이용이 제한되었습니다.";
     }
 
     private String escapeJson(String value) {

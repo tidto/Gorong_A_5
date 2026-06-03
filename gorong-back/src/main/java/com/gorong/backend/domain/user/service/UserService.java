@@ -4,6 +4,7 @@ import com.gorong.backend.domain.interest.entity.Interests;
 import com.gorong.backend.domain.interest.entity.UserInterests;
 import com.gorong.backend.domain.interest.repository.InterestsRepository;
 import com.gorong.backend.domain.interest.repository.UserInterestsRepository;
+import com.gorong.backend.domain.admin.repository.UserBanRepository;
 import com.gorong.backend.domain.user.dto.MyPageResponseDto;
 import com.gorong.backend.domain.user.dto.SignUpRequestDto;
 import com.gorong.backend.domain.user.dto.UserProfileUpdateRequestDto;
@@ -31,6 +32,7 @@ public class UserService {
     private final UserProfileRepository userProfileRepository;
     private final InterestsRepository interestsRepository;
     private final UserInterestsRepository userInterestsRepository;
+    private final UserBanRepository userBanRepository;
 
     // ✅ GeometryFactory를 빈으로 재사용 (SRID 4326 = WGS84)
     private static final GeometryFactory GEO_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
@@ -62,6 +64,12 @@ public class UserService {
         if (userRepository.existsByFirebaseUid(firebaseUid)) {
             throw new IllegalArgumentException("이미 가입된 계정입니다.");
         }
+        if (requestDto.getEmail() != null && userRepository.findByEmail(requestDto.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+        }
+        if (requestDto.getEmail() != null && userBanRepository.existsByFirebaseUidOrEmail(firebaseUid, requestDto.getEmail())) {
+            throw new IllegalArgumentException("이 계정은 이용이 제한되어 재가입할 수 없습니다.");
+        }
 
         // ✅ 수정: 0,0 좌표(변환 실패)는 null로 처리
         Point baseLocation = buildPoint(requestDto.getLatitude(), requestDto.getLongitude());
@@ -81,6 +89,7 @@ public class UserService {
                 .roleType(User.RoleType.USER)
                 .barrierFreeType(barrierFreeType)
                 .isForeigner(requestDto.getIsForeigner() != null ? requestDto.getIsForeigner() : false)
+                .accountStatus(User.AccountStatus.ACTIVE)
                 .build();
         User savedUser = userRepository.save(newUser);
 

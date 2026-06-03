@@ -178,6 +178,8 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
     const colors   = CAT_COLOR_MAP[colorKey] ?? CAT_COLOR_MAP.CREAM
     const stage    = STAGE_MAP[stageKey]     ?? STAGE_MAP.BASIC
     const faceSrc  = STAGE_TO_FACE[stageKey] ?? STAGE_TO_FACE.BASIC
+    const isMasked = !!msg.masked
+    const messageText = isMasked ? (msg.maskedLabel || '이용이 제한된 유저입니다.') : msg.text
 
     return (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: isMe ? 'row-reverse' : 'row', marginBottom: '10px' }}>
@@ -207,16 +209,20 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
                 </div>
                 <div style={{
                     fontSize: '13px',
-                    color: isMe ? 'white' : '#1e293b',
+                    color: isMasked ? '#64748b' : (isMe ? 'white' : '#1e293b'),
                     lineHeight: '1.55',
-                    background: isMe ? 'linear-gradient(135deg, #1a5c9c, #1565c0)' : 'white',
+                    background: isMasked
+                        ? 'linear-gradient(135deg, #f1f5f9, #e2e8f0)'
+                        : (isMe ? 'linear-gradient(135deg, #1a5c9c, #1565c0)' : 'white'),
                     padding: '8px 12px',
                     borderRadius: isMe ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
                     boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
                     wordBreak: 'break-word',
                     maxWidth: '80%',
+                    border: isMasked ? '1px dashed #cbd5e1' : 'none',
+                    fontStyle: isMasked ? 'italic' : 'normal',
                 }}>
-                    {msg.text}
+                    {messageText}
                 </div>
             </div>
         </div>

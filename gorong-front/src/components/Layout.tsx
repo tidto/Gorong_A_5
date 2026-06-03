@@ -1,133 +1,232 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Calendar, User, Heart, ShieldCheck, Users, MessageCircle, Bot, MessageSquare } from 'lucide-react'
+import { Calendar, Home, Heart, MessageSquare, ChevronDown, User, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface LayoutProps {
   children: React.ReactNode
 }
 
+type NavDropdownItem = {
+  label: string
+  path: string
+  description: string
+}
+
+type NavLinkItem = {
+  label: string
+  path: string
+  description: string
+}
+
+const EVENT_ITEMS: NavDropdownItem[] = [
+  { label: '홈', path: '/', description: '첫 화면에서 핵심 정보를 빠르게 확인' },
+  { label: '이벤트', path: '/events', description: '문화 행사와 상세 정보를 탐색' },
+]
+
+const CHAT_ITEMS: NavDropdownItem[] = [
+  { label: 'AI Chat', path: '/chatbot', description: '행사 추천과 질문을 빠르게 상담' },
+  { label: '채팅', path: '/chat/1', description: '그룹 채팅방에서 실시간 소통' },
+]
+
+const CENTER_LINKS: NavLinkItem[] = [
+  { label: 'Group', path: '/group', description: '모임을 만들고 참여자를 확인' },
+  { label: 'Posting', path: '/posting', description: '리뷰와 후기를 남기고 확인' },
+  { label: 'Minihompy', path: '/minihompy', description: '내 미니홈과 고양이 공간 관리' },
+]
+
+function DropdownNav({
+  label,
+  icon: Icon,
+  items,
+  isActive,
+  onNavigate,
+}: {
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  items: NavDropdownItem[]
+  isActive: (path: string) => boolean
+  onNavigate: (path: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+          open
+            ? 'bg-emerald-50 text-emerald-700'
+            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+        }`}
+        aria-expanded={open}
+      >
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      <div
+        className={`absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl transition-all duration-150 ${
+          open ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'
+        }`}
+      >
+        {items.map((item, index) => {
+          const active = isActive(item.path)
+          return (
+            <button
+              key={item.path}
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onNavigate(item.path)
+              }}
+              className={`flex w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors ${
+                index !== items.length - 1 ? 'border-b border-slate-100' : ''
+              } ${active ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+            >
+              <span className={`text-sm font-semibold ${active ? 'text-emerald-700' : 'text-slate-800'}`}>
+                {item.label}
+              </span>
+              <span className="text-xs leading-5 text-slate-500">{item.description}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function Header() {
   const location = useLocation()
   const navigate = useNavigate()
   const auth = useAuth()
+  const [visible, setVisible] = useState(true)
+  const lastScrollY = useRef(0)
 
-  const menuItems = [
-    { path: '/', label: 'Home', icon: Home },
-    { path: '/events', label: 'Events', icon: Calendar },
-    { path: '/group', label: 'Group', icon: Users },
-    { path: '/reviews', label: 'Reviews', icon: MessageCircle },
-    { path: '/cattower', label: 'CatTower', icon: Heart },
-    { path: '/chatbot', label: 'AI Chat', icon: Bot },
-  ]
-  const isAdmin = auth.user?.roleType === 'ADMIN'
-  const isAdminPage = location.pathname.startsWith('/admin')
+  const isActive = (path: string) =>
+    path === '/' ? location.pathname === path : location.pathname.startsWith(path)
 
-  const isActive = (path: string) => location.pathname === path
+  const resolvePath = (path: string) => path
 
-  const handleChatClick = () => {
-    if (auth.loggedIn) {
-      navigate('/chat/1')
-    } else {
-      navigate('/login')
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY || 0
+      const delta = currentY - lastScrollY.current
+
+      if (currentY < 24) {
+        setVisible(true)
+      } else if (delta > 10) {
+        setVisible(false)
+      } else if (delta < -8) {
+        setVisible(true)
+      }
+
+      lastScrollY.current = currentY
     }
-  }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   return (
-    <header className={`sticky top-0 z-50 border-b shadow-sm ${
-      isAdminPage
-        ? 'border-rose-900/70 bg-gradient-to-r from-zinc-950 via-zinc-900 to-rose-950 text-rose-50'
-        : 'border-gray-200 bg-white'
-    }`}>
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
-          <Link to="/" className={`flex items-center gap-2 text-2xl font-bold ${isAdminPage ? 'text-rose-200' : 'text-primary-600'}`}>
-            <span className="text-3xl">😺</span>
-            <span>고롱</span>
-          </Link>
-          <div className={`flex items-center gap-3 text-sm ${isAdminPage ? 'text-rose-200/80' : 'text-gray-500'}`}>
-            <ShieldCheck className={`w-5 h-5 ${isAdminPage ? 'text-rose-300' : 'text-primary-500'}`} />
+    <header
+      className={`fixed left-0 top-0 z-50 w-full border-b border-slate-200/70 bg-white/95 shadow-sm backdrop-blur-xl transition-transform duration-300 ${
+        visible ? 'translate-y-0' : '-translate-y-full'
+      }`}
+    >
+      <div className="mx-auto flex h-[78px] max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="flex shrink-0 items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <img src="/gorong_logo.png" alt="고롱 로고" className="h-9 w-9 object-contain" />
           </div>
-        </div>
+          <div className="leading-tight">
+            <div className="text-[15px] font-black tracking-[-0.03em] text-slate-900">고롱</div>
+            <div className="text-[11px] text-slate-500">문화와 일상을 연결하는 공간</div>
+          </div>
+        </Link>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <nav className="flex gap-1 overflow-x-auto">
-            {menuItems.map(({ path, label, icon: Icon }) => (
+        <nav className="mx-auto flex min-w-0 items-center justify-center gap-1 overflow-x-auto whitespace-nowrap">
+          <DropdownNav
+            label="Event"
+            icon={Calendar}
+            items={EVENT_ITEMS}
+            isActive={isActive}
+            onNavigate={(path) => navigate(resolvePath(path))}
+          />
+
+          {CENTER_LINKS.map(({ label, path, description }) => {
+            const active = isActive(path)
+            return (
               <Link
                 key={path}
                 to={path}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                  isAdminPage
-                    ? (isActive(path)
-                      ? 'bg-rose-500/20 text-rose-100'
-                      : 'text-rose-100/75 hover:bg-rose-400/15')
-                    : (isActive(path)
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-100')
+                title={description}
+                className={`group relative inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  active
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
                 }`}
               >
-                <Icon className="w-5 h-5" />
-                <span className="hidden sm:inline">{label}</span>
+                <span>{label}</span>
+                <span className="pointer-events-none absolute left-1/2 top-full mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all group-hover:block group-hover:opacity-100">
+                  {description}
+                </span>
               </Link>
-            ))}
-            {/* 채팅 버튼 추가 */}
-            <button
-              onClick={handleChatClick}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                isAdminPage
-                  ? (location.pathname.startsWith('/chat')
-                    ? 'bg-rose-500/20 text-rose-100'
-                    : 'text-rose-100/75 hover:bg-rose-400/15')
-                  : (location.pathname.startsWith('/chat')
-                    ? 'bg-primary-100 text-primary-700'
-                    : 'text-gray-600 hover:bg-gray-100')
-              }`}
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span className="hidden sm:inline">채팅</span>
-            </button>
-          </nav>
+            )
+          })}
 
-          <div className="flex items-center gap-3">
-            {auth.loggedIn ? (
-              <>
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
-                  >
-                    Admin
-                  </Link>
-                )}
+          <DropdownNav
+            label="Chat"
+            icon={MessageSquare}
+            items={CHAT_ITEMS}
+            isActive={isActive}
+            onNavigate={(path) => navigate(resolvePath(path))}
+          />
+        </nav>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {auth.loggedIn ? (
+            <>
+              {auth.user?.roleType === 'ADMIN' && (
                 <Link
-                  to="/mypage"
-                  className={isAdminPage ? 'font-medium text-rose-100 hover:text-white' : 'text-gray-600 hover:text-gray-900 font-medium'}
+                  to="/admin"
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
                 >
-                  마이페이지
+                  Admin
                 </Link>
-                <button
-                  type="button"
-                  onClick={auth.logout}
-                  className={isAdminPage
-                    ? 'rounded-lg border border-rose-700/60 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-500/15'
-                    : 'rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100'}
-                >
-                  로그아웃
-                </button>
-              </>
-            ) : (
-              <div className="flex gap-2">
-                <Link
-                  to="/login"
-                  className={isAdminPage
-                    ? 'rounded-lg border border-rose-700/60 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-500/15'
-                    : 'rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100'}
-                >
-                  join us
-                </Link>
-              </div>
-            )}
-          </div>
+              )}
+              <Link
+                to="/mypage"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+              >
+                <User className="h-4 w-4" />
+                마이페이지
+              </Link>
+              <button
+                type="button"
+                onClick={auth.logout}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+              >
+                <LogOut className="h-4 w-4" />
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              state={{ from: location }}
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+            >
+              Join Us
+            </Link>
+          )}
         </div>
       </div>
     </header>
@@ -139,7 +238,7 @@ function BottomNavigation() {
   const navigate = useNavigate()
   const auth = useAuth()
 
-  const isActive = (path: string) => location.pathname === path
+  const isActive = (path: string) => (path === '/' ? location.pathname === path : location.pathname.startsWith(path))
 
   const handleChatClick = () => {
     if (auth.loggedIn) {
@@ -150,56 +249,31 @@ function BottomNavigation() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
       <div className="flex items-center justify-around py-2">
-        <Link
-          to="/"
-          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-            isActive('/') ? 'text-primary-600' : 'text-gray-600'
-          }`}
-        >
-          <Home className="w-6 h-6" />
-          <span className="text-xs">홈</span>
+        <Link to="/" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/') ? 'text-emerald-600' : 'text-slate-600'}`}>
+          <Home className="h-5 w-5" />
+          <span className="text-xs font-medium">홈</span>
         </Link>
-
-        <Link
-          to="/events"
-          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-            isActive('/events') ? 'text-primary-600' : 'text-gray-600'
-          }`}
-        >
-          <Calendar className="w-6 h-6" />
-          <span className="text-xs">행사</span>
+        <Link to="/events" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/events') ? 'text-emerald-600' : 'text-slate-600'}`}>
+          <Calendar className="h-5 w-5" />
+          <span className="text-xs font-medium">이벤트</span>
         </Link>
-
         <button
+          type="button"
           onClick={handleChatClick}
-          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-            location.pathname.startsWith('/chat') ? 'text-primary-600' : 'text-gray-600'
-          }`}
+          className={`flex flex-col items-center gap-1 p-2 transition-colors ${location.pathname.startsWith('/chat') ? 'text-emerald-600' : 'text-slate-600'}`}
         >
-          <MessageSquare className="w-6 h-6" />
-          <span className="text-xs">채팅</span>
+          <MessageSquare className="h-5 w-5" />
+          <span className="text-xs font-medium">채팅</span>
         </button>
-
-        <Link
-          to="/cattower"
-          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-            isActive('/cattower') ? 'text-primary-600' : 'text-gray-600'
-          }`}
-        >
-          <Heart className="w-6 h-6" />
-          <span className="text-xs">CatTower</span>
+        <Link to="/cattower" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/cattower') ? 'text-emerald-600' : 'text-slate-600'}`}>
+          <Heart className="h-5 w-5" />
+          <span className="text-xs font-medium">미니홈피</span>
         </Link>
-
-        <Link
-          to="/mypage"
-          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-            isActive('/mypage') ? 'text-primary-600' : 'text-gray-600'
-          }`}
-        >
-          <User className="w-6 h-6" />
-          <span className="text-xs">마이</span>
+        <Link to="/mypage" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/mypage') ? 'text-emerald-600' : 'text-slate-600'}`}>
+          <User className="h-5 w-5" />
+          <span className="text-xs font-medium">마이</span>
         </Link>
       </div>
     </nav>
@@ -207,24 +281,13 @@ function BottomNavigation() {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const isAdminPage = location.pathname.startsWith('/admin')
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#fafafa] text-slate-900">
       <Header />
-      <main className={`${isAdminPage ? '' : 'pt-16'} pb-16 md:pb-0`}>
+      <main className="pt-[88px] pb-16 md:pb-0">
         {children}
       </main>
       <BottomNavigation />
-      <button
-        type="button"
-        onClick={() => navigate('/chatbot')}
-        className="fixed left-4 bottom-24 z-50 rounded-full bg-primary-500 p-4 shadow-2xl text-white hover:bg-primary-600 transition-colors"
-      >
-        <Bot className="w-6 h-6" />
-      </button>
     </div>
   )
 }

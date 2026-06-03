@@ -24,6 +24,8 @@ export interface PublicChatMsg {
     catColor?: string
     text: string
     sentAt?: string
+    masked?: boolean
+    maskedLabel?: string
     type?: 'CHAT' | 'JOIN' | 'LEAVE'
 }
 
