@@ -28,16 +28,16 @@ const EVENT_ITEMS = [
 
 const CHAT_ITEMS = [
   {
-    label: 'AI Chat',
-    path: '/chatbot',
-    icon: Bot,
-    desc: '고롱의 AI 집사가 행사 추천부터 이동 경로, 배리어프리 정보까지 자연스럽게 안내해드립니다. 궁금한 건 뭐든 물어보세요.',
-  },
-  {
     label: '채팅',
     path: '/chat/1',
     icon: MessageSquare,
     desc: '그룹 채팅방에서 같은 관심사를 가진 고양이 집사들과 실시간으로 이야기를 나눠보세요.',
+  },
+  {
+    label: '챗봇',
+    path: '/chatbot',
+    icon: Bot,
+    desc: '고롱의 AI 집사가 행사 추천부터 이동 경로, 배리어프리 정보까지 자연스럽게 안내해드립니다. 궁금한 건 뭐든 물어보세요.',
   },
 ]
 
