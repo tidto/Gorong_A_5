@@ -20,19 +20,19 @@ type NavLinkItem = {
 }
 
 const EVENT_ITEMS: NavDropdownItem[] = [
-  { label: '홈', path: '/', description: '첫 화면에서 핵심 정보를 빠르게 확인' },
-  { label: '이벤트', path: '/events', description: '문화 행사와 상세 정보를 탐색' },
+  { label: '홈', path: '/', description: '처음 방문한 유저가 전체 흐름을 빠르게 익히는 시작점입니다.' },
+  { label: '이벤트', path: '/events', description: '문화 행사와 전시, 체험 정보를 한눈에 둘러보고 참여할 수 있습니다.' },
 ]
 
 const CHAT_ITEMS: NavDropdownItem[] = [
-  { label: 'AI Chat', path: '/chatbot', description: '행사 추천과 질문을 빠르게 상담' },
-  { label: '채팅', path: '/chat/1', description: '그룹 채팅방에서 실시간 소통' },
+  { label: 'AI Chat', path: '/chatbot', description: '고롱의 AI가 행사 추천, 이동, 이용 방법까지 자연스럽게 안내합니다.' },
+  { label: '채팅', path: '/chat/1', description: '그룹 채팅방에서 같은 관심사를 가진 사람들과 실시간으로 이야기할 수 있습니다.' },
 ]
 
 const CENTER_LINKS: NavLinkItem[] = [
-  { label: 'Group', path: '/group', description: '모임을 만들고 참여자를 확인' },
-  { label: 'Posting', path: '/posting', description: '리뷰와 후기를 남기고 확인' },
-  { label: 'Minihompy', path: '/minihompy', description: '내 미니홈과 고양이 공간 관리' },
+  { label: 'Group', path: '/group', description: '관심 있는 행사 기준으로 모임을 만들고 함께 움직일 사람을 찾습니다.' },
+  { label: 'Posting', path: '/posting', description: '방문 후 느낌과 리뷰를 남기며 다른 유저의 후기도 함께 볼 수 있습니다.' },
+  { label: 'Minihompy', path: '/minihompy', description: '고롱의 미니홈피에서 내 고양이와 공간을 꾸미고 관리합니다.' },
 ]
 
 function DropdownNav({
@@ -49,17 +49,17 @@ function DropdownNav({
   onNavigate: (path: string) => void
 }) {
   return (
-    <div className="group relative">
+    <div className="group relative pb-3">
       <button
         type="button"
-        className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+        className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-[15px] font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
         aria-haspopup="menu"
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-4.5 w-4.5" />
         <span>{label}</span>
       </button>
 
-      <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white opacity-0 shadow-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+      <div className="pointer-events-none absolute left-0 top-full z-50 mt-1 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white opacity-0 shadow-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
         {items.map((item, index) => {
           const active = isActive(item.path)
           return (
@@ -73,10 +73,10 @@ function DropdownNav({
                 index !== items.length - 1 ? 'border-b border-slate-100' : ''
               } ${active ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
             >
-              <span className={`text-sm font-semibold ${active ? 'text-emerald-700' : 'text-slate-800'}`}>
+              <span className={`text-[15px] font-semibold ${active ? 'text-emerald-700' : 'text-slate-800'}`}>
                 {item.label}
               </span>
-              <span className="text-xs leading-5 text-slate-500">{item.description}</span>
+              <span className="text-[13px] leading-6 text-slate-500">{item.description}</span>
             </button>
           )
         })}
@@ -124,15 +124,15 @@ function Header() {
         visible ? 'translate-y-0' : '-translate-y-full'
       }`}
     >
-      <div className="mx-auto flex h-[78px] max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-[88px] max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex shrink-0 items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent">
-            <img src="/gorong_logo.png" alt="고롱 로고" className="h-9 w-9 object-contain" />
+          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-transparent">
+            <img src="/gorong_logo.png" alt="고롱 로고" className="h-11 w-11 object-contain" />
           </div>
-          <div className="text-[15px] font-black tracking-[-0.03em] text-slate-900">고롱</div>
+          <div className="text-[20px] font-black tracking-[-0.04em] text-slate-900">고롱</div>
         </Link>
 
-        <nav className="mx-auto flex min-w-0 items-center justify-center gap-1 overflow-visible whitespace-nowrap">
+        <nav className="mx-auto flex min-w-0 items-center justify-center gap-2 overflow-visible whitespace-nowrap">
           <DropdownNav
             label="Event"
             icon={Calendar}
@@ -148,7 +148,7 @@ function Header() {
                 <Link
                   to={path}
                   title={description}
-                  className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  className={`inline-flex items-center rounded-full px-5 py-3 text-[15px] font-semibold transition-colors ${
                     active
                       ? 'bg-emerald-50 text-emerald-700'
                       : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
@@ -156,7 +156,7 @@ function Header() {
                 >
                   <span>{label}</span>
                 </Link>
-                <span className="pointer-events-none absolute left-1/2 top-full mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all group-hover:block group-hover:opacity-100">
+                <span className="pointer-events-none absolute left-1/2 top-full mt-1 hidden -translate-x-1/2 max-w-[280px] whitespace-normal rounded-2xl bg-slate-900 px-4 py-2 text-[12px] font-medium leading-5 text-white opacity-0 shadow-lg transition-all group-hover:block group-hover:opacity-100">
                   {description}
                 </span>
               </div>
