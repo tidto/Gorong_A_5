@@ -79,31 +79,39 @@ public class Event {
 
     public void updateFromDto(TourItemDto dto) {
         this.title = dto.getTitle();
-        this.addr = dto.getAddr1(); // DTO의 addr1 -> Entity의 addr
-        this.mapX = dto.getMapx();  // DTO의 mapx -> Entity의 mapX
-        this.mapY = dto.getMapy();  // DTO의 mapy -> Entity의 mapY
+        this.addr = dto.getAddr1();
+        this.mapX = dto.getMapx();
+        this.mapY = dto.getMapy();
         this.firstImage = dto.getFirstimage();
+        if (dto.getFirstimage2() != null) this.firstImage2 = dto.getFirstimage2();
 
         this.parking = dto.getParking();
         this.elevator = dto.getElevator();
         this.restroom = dto.getRestroom();
         this.route = dto.getRoute();
 
+        // 행사 기간
+        if (dto.getEventStartDate() != null) this.eventStartDate = dto.getEventStartDate();
+        if (dto.getEventEndDate() != null)   this.eventEndDate   = dto.getEventEndDate();
+
+        // 문의 전화
+        if (dto.getTel() != null) this.tel = dto.getTel();
+
         String apiCat = dto.getCat1();
         if (apiCat != null) {
             switch (apiCat) {
-                case "A01": this.tourCategoryCode = "NA"; break; // 자연관광
-                case "A02": this.tourCategoryCode = "VE"; break; // 문화/역사
-                case "A03": this.tourCategoryCode = "LS"; break; // 레포츠
-                case "A04": this.tourCategoryCode = "SH"; break; // 쇼핑
-                case "A05": this.tourCategoryCode = "FD"; break; // 음식
-                case "C01": this.tourCategoryCode = "C01"; break; // 추천코스
-                default: this.tourCategoryCode = "ETC";
+                case "A01": this.tourCategoryCode = "NA";  break;
+                case "A02": this.tourCategoryCode = "VE";  break;
+                case "A03": this.tourCategoryCode = "LS";  break;
+                case "A04": this.tourCategoryCode = "SH";  break;
+                case "A05": this.tourCategoryCode = "FD";  break;
+                case "C01": this.tourCategoryCode = "C01"; break;
+                default:    this.tourCategoryCode = "ETC";
             }
         }
 
         if (dto.getOverview() != null) {
-            this.description = dto  .getOverview();
+            this.description = dto.getOverview();
         }
     }
 }
