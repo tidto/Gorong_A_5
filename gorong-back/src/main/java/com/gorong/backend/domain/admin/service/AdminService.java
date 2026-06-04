@@ -166,21 +166,33 @@ public class AdminService {
         OffsetDateTime now = OffsetDateTime.now();
         var expiredPermanent = userBanRepository.findByBanStatusAndPermanentDeleteAtBefore(UserBan.BanStatus.ACTIVE, now);
 
-        int deletedCount = 0;
         for (UserBan ban : expiredPermanent) {
-            userRepository.findById(ban.getUserId()).ifPresent(userRepository::delete);
             ban.expire();
-            deletedCount++;
         }
 
-        if (deletedCount > 0) {
-            log.info("영구정지 유저 14일 경과 삭제 완료: {}건", deletedCount);
+        if (!expiredPermanent.isEmpty()) {
+            log.info("영구정지 14일 경과 처리 완료: {}건", expiredPermanent.size());
         }
     }
 
     @Transactional(readOnly = true)
     public UserBan getActiveBanByFirebaseUid(String firebaseUid) {
         return userBanRepository.findTopByFirebaseUidAndBanStatusOrderByBannedAtDesc(firebaseUid, UserBan.BanStatus.ACTIVE)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public UserBan getLatestBanByFirebaseUid(String firebaseUid) {
+        return userBanRepository.findTopByFirebaseUidOrderByBannedAtDesc(firebaseUid)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public UserBan getLatestBanByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        return userBanRepository.findTopByEmailOrderByBannedAtDesc(email)
                 .orElse(null);
     }
 

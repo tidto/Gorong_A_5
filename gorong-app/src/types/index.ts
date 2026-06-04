@@ -10,6 +10,7 @@ export interface User {
   email: string
   nickname: string
   roleType: 'USER' | 'ADMIN' // 백엔드 RoleType
+  accountStatus?: 'ACTIVE' | 'INACTIVE'
 }
 
 // ─── 행사·문화장소 ────────────────────────────

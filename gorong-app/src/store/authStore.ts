@@ -26,6 +26,8 @@ interface AuthStore {
   isHydrated: boolean              // AsyncStorage 로드 완료 여부 (스플래시 제어)
   isCheckingAuth: boolean          // 백엔드 로그인 확인 중 (로딩 표시)
   needsSignup: boolean             // Firebase OK, 백엔드 미등록 → 회원가입 필요
+  accessRestricted: boolean        // 밴/비활성 계정으로 앱 이용 제한
+  accessRestrictedMessage: string | null
   insideVenueId: string | null     // 현재 진입한 지오펜스 행사장 ID
 
   // ─── 액션 ─────────────────────────────────────
@@ -57,6 +59,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
   isHydrated: false,
   isCheckingAuth: false,
   needsSignup: false,
+  accessRestricted: false,
+  accessRestrictedMessage: null,
   insideVenueId: null,
 
   // ─── loadFromStorage ──────────────────────────
@@ -85,8 +89,24 @@ export const useAuthStore = create<AuthStore>((set) => ({
       // 백엔드 로그인 API 호출 (인터셉터가 Firebase 토큰 자동 첨부)
       const res = await api.post<{
         isRegistered: boolean
+        accessRestricted?: boolean
+        accountStatus?: 'ACTIVE' | 'INACTIVE'
+        message?: string
         user?: { nickname: string; email: string; roleType: string }
       }>('/users/login')
+
+      if (res.data.accessRestricted) {
+        set({
+          user: null,
+          needsSignup: false,
+          accessRestricted: true,
+          accessRestrictedMessage: res.data.message ?? '계정 이용이 제한되었습니다.',
+        })
+        await signOut(auth).catch((e) => {
+          console.warn('[authStore] 제한 계정 로그아웃 실패:', e)
+        })
+        return
+      }
 
       if (res.data.isRegistered && res.data.user) {
         // 백엔드 DB에 등록된 유저 → 메인탭 진입
@@ -96,12 +116,23 @@ export const useAuthStore = create<AuthStore>((set) => ({
           email: res.data.user.email,
           nickname: res.data.user.nickname,
           roleType: res.data.user.roleType as 'USER' | 'ADMIN',
+          accountStatus: res.data.accountStatus ?? 'ACTIVE',
         }
-        set({ user, needsSignup: false })
+        set({
+          user,
+          needsSignup: false,
+          accessRestricted: false,
+          accessRestrictedMessage: null,
+        })
         await AsyncStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user))
       } else {
         // Firebase UID는 있지만 백엔드 미등록 → 회원가입 화면으로
-        set({ needsSignup: true, user: null })
+        set({
+          needsSignup: true,
+          user: null,
+          accessRestricted: false,
+          accessRestrictedMessage: null,
+        })
       }
     } catch (e) {
       console.warn('[authStore] 백엔드 로그인 확인 실패:', e)
@@ -114,7 +145,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
   // ─── completeSignup ───────────────────────────
   // 회원가입 완료 후 user 세팅 & needsSignup 해제
   completeSignup: async (user: User) => {
-    set({ user, needsSignup: false })
+    set({
+      user,
+      needsSignup: false,
+      accessRestricted: false,
+      accessRestrictedMessage: null,
+    })
     try {
       await AsyncStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user))
     } catch (e) {
@@ -129,7 +165,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
     } catch (e) {
       console.warn('[authStore] Firebase 로그아웃 실패:', e)
     }
-    set({ user: null, needsSignup: false })
+    set({
+      user: null,
+      needsSignup: false,
+      accessRestricted: false,
+      accessRestrictedMessage: null,
+    })
     try {
       await AsyncStorage.removeItem(STORAGE_KEY_USER)
     } catch (e) {

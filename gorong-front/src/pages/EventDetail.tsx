@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import axiosInstance from '../api/axiosInstance';
 import MapView from '../components/MapView';
 import IconLabel from '../components/IconLabel';
 import AccessibilityBadge from '../components/AccessibilityBadge';
@@ -58,6 +59,10 @@ export default function EventDetail() {
   const [event, setEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [soloApplied, setSoloApplied] = useState(false);
+  const [soloLoading, setSoloLoading] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
 
   const DEFAULT_IMAGE = '/images/default-event.png';
 
@@ -78,6 +83,16 @@ export default function EventDetail() {
 
         const response = await axios.get(`/api/public/map/${id}`, { headers });
         setEvent(response.data);
+
+        // 혼자 참여 신청 여부 확인
+        try {
+          const checkRes = await axiosInstance.get(`/event-participation/solo/check`, {
+            params: { eventContentId: id },
+          });
+          setSoloApplied(checkRes.data.applied);
+        } catch {
+          // 미로그인 상태 등은 false 유지
+        }
       } catch (error) {
         console.error("상세 데이터 로드 실패:", error);
       } finally {
@@ -107,14 +122,58 @@ export default function EventDetail() {
     }
   }, []);
 
-  const handleGoToGroup = () => {
-    navigate('/group', {
-      state: {
-        eventId: id,
-        eventTitle: event?.title,
-        eventImage: event?.firstimage || DEFAULT_IMAGE
-      }
-    });
+  // 혼자 참여 취소
+  const handleSoloCancel = async () => {
+    if (!window.confirm('혼자 참여 신청을 취소하시겠습니까?')) return;
+    try {
+      await axiosInstance.delete('/event-participation/solo', {
+        params: { eventContentId: id },
+      });
+      setSoloApplied(false);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401) alert('로그인이 필요합니다.');
+      else alert('참여 취소 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 혼자 참여 버튼 클릭 → 날짜 선택 팝업 오픈
+  const handleSoloApplyClick = () => {
+    if (soloApplied) return;
+    setSelectedDate('');
+    setShowDateModal(true);
+  };
+
+  // 팝업에서 날짜 확정 후 API 호출
+  const handleSoloApplyConfirm = async () => {
+    if (!selectedDate) { alert('방문 예정 날짜를 선택해주세요.'); return; }
+    setShowDateModal(false);
+    setSoloLoading(true);
+    try {
+      await axiosInstance.post('/event-participation/solo', {
+        eventContentId: id,
+        eventTitle: event?.title ?? '',
+        visitDate: selectedDate,
+      });
+      setSoloApplied(true);
+      alert('혼자 참여 신청이 완료되었습니다! 🎉');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401) alert('로그인이 필요합니다.');
+      else if (status === 409) alert('이미 이 행사에 혼자 참여 신청하셨습니다.');
+      else alert('참여 신청 중 오류가 발생했습니다.');
+    } finally {
+      setSoloLoading(false);
+    }
+  };
+
+  const handleGoToGroup = () => {    navigate('/group', {
+    state: {
+      eventId: id,
+      eventTitle: event?.title,
+      eventImage: event?.firstimage || DEFAULT_IMAGE
+    }
+  });
   };
 
   // 3. 카카오 맵 외부 길찾기 링크 열기 함수
@@ -188,6 +247,42 @@ export default function EventDetail() {
 
   return (
       <div className="max-w-6xl mx-auto px-4 py-8">
+
+        {/* ── 날짜 선택 팝업 모달 ── */}
+        {showDateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 flex flex-col gap-5">
+                <h2 className="text-xl font-bold text-gray-900 text-center">📅 방문 예정일을 알려주세요</h2>
+                <p className="text-sm text-gray-500 text-center -mt-2">언제 이 행사에 방문하실 예정인가요?</p>
+                <input
+                    type="date"
+                    value={selectedDate}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-full border-2 border-gray-200 focus:border-orange-400 rounded-xl px-4 py-3 text-base outline-none transition-colors"
+                />
+                <div className="flex gap-3">
+                  <button
+                      onClick={() => setShowDateModal(false)}
+                      className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-500 font-bold hover:bg-gray-50 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                      onClick={handleSoloApplyConfirm}
+                      disabled={!selectedDate}
+                      className={`flex-1 py-3 rounded-xl font-bold transition-colors
+                        ${selectedDate
+                          ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                          : 'bg-gray-100 text-gray-400 cursor-default'
+                      }`}
+                  >
+                    참여 신청
+                  </button>
+                </div>
+              </div>
+            </div>
+        )}
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-6 font-medium">
           <ArrowLeft className="w-5 h-5" /> 뒤로가기
         </button>
@@ -278,12 +373,37 @@ export default function EventDetail() {
           </div>
         </div>
 
-        <div className="mt-10 flex justify-center pb-8">
+        <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4 pb-8">
+          {/* 혼자 참여 버튼 */}
+          {soloApplied ? (
+              <button
+                  onClick={handleSoloCancel}
+                  className="flex items-center justify-center gap-2 w-full sm:w-1/2 lg:w-1/3 py-4 text-lg font-bold rounded-xl shadow-md transition-all duration-200 bg-white border-2 border-red-300 text-red-400 hover:bg-red-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                혼자 참여 신청 취소
+              </button>
+          ) : (
+              <button
+                  onClick={handleSoloApplyClick}
+                  disabled={soloLoading}
+                  className="flex items-center justify-center gap-2 w-full sm:w-1/2 lg:w-1/3 py-4 text-lg font-bold rounded-xl shadow-md transition-all duration-200 bg-white border-2 border-orange-500 text-orange-500 hover:bg-orange-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                {soloLoading ? '신청 중...' : '혼자 참여 신청하기'}
+              </button>
+          )}
+
+          {/* 동행 구하기 버튼 */}
           <button
               onClick={handleGoToGroup}
-              className="flex items-center justify-center gap-2 w-full md:w-2/3 lg:w-1/2 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-bold rounded-xl shadow-md transition-all duration-200"
+              className="flex items-center justify-center gap-2 w-full sm:w-1/2 lg:w-1/3 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-bold rounded-xl shadow-md transition-all duration-200"
           >
-            <svg xmlns="http://www.w3.org/2000/xl" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             이 행사 함께 갈 동행 구하기

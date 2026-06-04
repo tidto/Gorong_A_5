@@ -1,6 +1,8 @@
 // 경로: domain/group/controller/PublicChatController.java
 package com.gorong.backend.domain.group.controller;
 
+import com.gorong.backend.domain.admin.entity.UserBan;
+import com.gorong.backend.domain.admin.service.AdminService;
 import com.gorong.backend.domain.group.dto.PublicChatMessage;
 import com.gorong.backend.domain.group.entity.PublicChatMessageEntity;
 import com.gorong.backend.domain.group.repository.PublicChatMessageRepository;
@@ -34,6 +36,7 @@ public class PublicChatController {
 
     private final SimpMessagingTemplate       messagingTemplate;
     private final PublicChatMessageRepository publicChatMessageRepository;
+    private final AdminService                adminService;
     private final UserRepository              userRepository;
     private final UserProfileRepository       userProfileRepository;
     private final GoCatRepository             goCatRepository;
@@ -92,6 +95,29 @@ public class PublicChatController {
         return "BASIC";
     }
 
+    private UserBan resolveLatestBan(String email) {
+        return adminService.getLatestBanByEmail(email);
+    }
+
+    private String buildMaskedLabel(UserBan latestBan) {
+        if (latestBan == null) {
+            return null;
+        }
+        if (latestBan.getBanDays() != null && latestBan.getBanDays() == 0) {
+            return "영구정지된 유저입니다.";
+        }
+        return "임시차단된 유저입니다.";
+    }
+
+    private void applyMaskIfNeeded(PublicChatMessage message, UserBan latestBan) {
+        if (latestBan == null || message == null || message.getType() != PublicChatMessage.MessageType.CHAT) {
+            return;
+        }
+        message.setMasked(true);
+        message.setMaskedLabel(buildMaskedLabel(latestBan));
+        message.setText(message.getMaskedLabel());
+    }
+
     // ── WebSocket: 공개 메시지 수신 ──────────────────────────────────
     @MessageMapping("/public.send/{groupId}")
     public void sendPublicMessage(
@@ -103,6 +129,7 @@ public class PublicChatController {
         String displayName = resolveNickname(email);
         String koreaTime   = ZonedDateTime.now(ZoneId.of("Asia/Seoul"))
                 .format(DateTimeFormatter.ofPattern("HH:mm"));
+        UserBan latestBan  = resolveLatestBan(email);
 
         // ── senderId: 항상 DB에서 조회해서 신뢰할 수 있는 값으로 덮어씀 ──
         Long senderId = resolveUserId(email);
@@ -136,6 +163,7 @@ public class PublicChatController {
         msg.setCharacterType(characterType);
         msg.setCatColor(catColor);
         msg.setType(PublicChatMessage.MessageType.CHAT);
+        applyMaskIfNeeded(msg, latestBan);
 
         // ── DB 저장 (senderId 포함) ──
         publicChatMessageRepository.save(
@@ -177,6 +205,7 @@ public class PublicChatController {
                             .withZoneSameInstant(ZoneId.of("Asia/Seoul"))
                             .format(DateTimeFormatter.ofPattern("HH:mm")));
                     m.setType(PublicChatMessage.MessageType.CHAT);
+                    applyMaskIfNeeded(m, resolveLatestBan(entity.getSenderEmail()));
                     return m;
                 })
                 .collect(Collectors.toList());

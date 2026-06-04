@@ -40,6 +40,12 @@ public class PublicChatMessage {
     /** 전송 시각 HH:mm (KST) */
     private String sentAt;
 
+    /** 제재 이력 기준 마스킹 여부 */
+    private boolean masked;
+
+    /** 마스킹 안내 문구 */
+    private String maskedLabel;
+
     private MessageType type;
 
     public enum MessageType {

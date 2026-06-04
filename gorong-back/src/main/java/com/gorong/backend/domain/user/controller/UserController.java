@@ -3,6 +3,7 @@ package com.gorong.backend.domain.user.controller;
 import com.google.firebase.auth.FirebaseToken;
 import com.gorong.backend.domain.admin.dto.AppealRequestDto;
 import com.gorong.backend.domain.admin.dto.BanSummaryDto;
+import com.gorong.backend.domain.admin.entity.UserBan;
 import com.gorong.backend.domain.admin.service.AdminService;
 import com.gorong.backend.domain.user.dto.MyPageResponseDto;
 import com.gorong.backend.domain.user.dto.SignUpRequestDto;
@@ -112,4 +113,5 @@ public class UserController {
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
         return ResponseEntity.ok(adminService.submitAppeal(user.getId(), requestDto.getAppealText()));
     }
+
 }

@@ -13,7 +13,7 @@
 // ──────────────────────────────────────────────────────────────
 
 import React, { useEffect } from 'react'
-import { View, ActivityIndicator } from 'react-native'
+import { View, ActivityIndicator, Alert } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -32,6 +32,8 @@ function AppContent() {
     isHydrated,
     isCheckingAuth,
     needsSignup,
+    accessRestricted,
+    accessRestrictedMessage,
     loadFromStorage,
     checkBackendLogin,
   } = useAuthStore()
@@ -52,6 +54,12 @@ function AppContent() {
 
     return () => unsubscribe()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (accessRestricted && accessRestrictedMessage) {
+      Alert.alert('이용 제한', accessRestrictedMessage)
+    }
+  }, [accessRestricted, accessRestrictedMessage])
 
   // AsyncStorage 로드 전이거나 백엔드 확인 중이면 로딩 스피너
   if (!isHydrated || isCheckingAuth) {
