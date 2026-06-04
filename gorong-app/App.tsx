@@ -12,7 +12,7 @@
 //   각 화면에서 paddingTop 으로 노치 직접 처리 중.
 // ──────────────────────────────────────────────────────────────
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, ActivityIndicator, Alert } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
@@ -27,15 +27,16 @@ import { AuthNavigator, MainNavigator } from './src/navigation/AppNavigator'
 const queryClient = new QueryClient()
 
 function AppContent() {
+  const [authBootstrapped, setAuthBootstrapped] = useState(false)
   const {
     user,
     isHydrated,
-    isCheckingAuth,
     needsSignup,
     accessRestricted,
     accessRestrictedMessage,
     loadFromStorage,
     checkBackendLogin,
+    resetLocalSession,
   } = useAuthStore()
 
   useEffect(() => {
@@ -43,16 +44,38 @@ function AppContent() {
     loadFromStorage()
 
     // Step 2: Firebase 인증 상태 구독
+    let settled = false
+    const bootstrapTimer = setTimeout(() => {
+      // 인증 응답이 지연되면 로그인 화면으로 먼저 진입시킨다.
+      if (!settled) setAuthBootstrapped(true)
+    }, 5000)
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      settled = true
+      clearTimeout(bootstrapTimer)
+
       if (firebaseUser) {
         // Firebase 로그인 확인 → 백엔드 DB 등록 여부 체크
         checkBackendLogin().catch((e) => {
           console.warn('[App] checkBackendLogin 실패:', e)
+        }).finally(() => {
+          setAuthBootstrapped(true)
         })
+        return
       }
+
+      // Firebase 미로그인 상태면 바로 로그인/회원가입 화면으로 보낸다.
+      resetLocalSession().catch((e) => {
+        console.warn('[App] 로컬 세션 초기화 실패:', e)
+      })
+      setAuthBootstrapped(true)
     })
 
-    return () => unsubscribe()
+    return () => {
+      settled = true
+      clearTimeout(bootstrapTimer)
+      unsubscribe()
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -62,7 +85,7 @@ function AppContent() {
   }, [accessRestricted, accessRestrictedMessage])
 
   // AsyncStorage 로드 전이거나 백엔드 확인 중이면 로딩 스피너
-  if (!isHydrated || isCheckingAuth) {
+  if (!isHydrated || !authBootstrapped) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#FF6B35" />

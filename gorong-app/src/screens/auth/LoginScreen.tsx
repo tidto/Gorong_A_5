@@ -5,7 +5,7 @@
 // 흐름: 이메일/비밀번호 입력 → Firebase 로그인 → 백엔드 체크 (authStore)
 // ─────────────────────────────────────────────────────────────────
 
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -18,24 +18,74 @@ import {
   Alert,
   ScrollView,
 } from 'react-native'
-import { signInWithEmailAndPassword } from 'firebase/auth'
+import * as WebBrowser from 'expo-web-browser'
+import * as AuthSession from 'expo-auth-session'
+import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google'
+import { useAuthRequest } from 'expo-auth-session'
+import {
+  GoogleAuthProvider,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+  signInWithCustomToken,
+} from 'firebase/auth'
 import { auth } from '../../config/firebaseConfig'
 import { useAuthStore } from '../../store/authStore'
+import api from '../../services/api'
 import { StackNavigationProp } from '@react-navigation/stack'
 import { AuthStackParamList } from '../../navigation/AppNavigator'
+
+WebBrowser.maybeCompleteAuthSession()
 
 // 네비게이션 타입 (AuthStack 내 화면)
 type Props = {
   navigation: StackNavigationProp<AuthStackParamList, 'Login'>
 }
 
+const GOOGLE_ANDROID_CLIENT_ID = '922347757040-mpn42qp4epab6l94gdhq9tvtieeq2dbd.apps.googleusercontent.com'
+const GOOGLE_IOS_CLIENT_ID = '922347757040-m26h57lbp4eqbuc5d25r6d8v35hmi89k.apps.googleusercontent.com'
+const GITHUB_CLIENT_ID = process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID?.trim() ?? ''
+const GITHUB_DISCOVERY = {
+  authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+  tokenEndpoint: 'https://github.com/login/oauth/access_token',
+}
+
+function buildRedirectUri() {
+  try {
+    return AuthSession.getRedirectUrl('oauthredirect')
+  } catch {
+    // Expo Go에서 originalFullName을 못 찾는 경우에도
+    // GitHub OAuth callback은 고정 proxy URL로 유지한다.
+    return 'https://auth.expo.io/@anonymous/gorong-app/oauthredirect'
+  }
+}
+
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loadingProvider, setLoadingProvider] = useState<'email' | 'google' | 'github' | null>(null)
 
   // 백엔드 로그인 확인 함수
-  const { checkBackendLogin } = useAuthStore()
+  const { checkBackendLogin, setPendingSignupEmail } = useAuthStore()
+
+  const redirectUri = useMemo(() => buildRedirectUri(), [])
+
+  const [googleRequest, , promptGoogleAsync] = useIdTokenAuthRequest({
+    clientId: GOOGLE_ANDROID_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    scopes: ['openid', 'profile', 'email'],
+    selectAccount: true,
+  })
+
+  const [githubRequest, , promptGithubAsync] = useAuthRequest({
+    clientId: GITHUB_CLIENT_ID || 'missing-github-client-id',
+    scopes: ['read:user', 'user:email'],
+    redirectUri,
+    usePKCE: true,
+    extraParams: {
+      allow_signup: 'true',
+    },
+  }, GITHUB_DISCOVERY)
 
   // ─── 로그인 처리 ──────────────────────────────
   const handleLogin = async () => {
@@ -49,7 +99,7 @@ export default function LoginScreen({ navigation }: Props) {
       return
     }
 
-    setLoading(true)
+    setLoadingProvider('email')
     try {
       // 1. Firebase 이메일/비밀번호 로그인
       await signInWithEmailAndPassword(auth, email.trim(), password)
@@ -63,7 +113,74 @@ export default function LoginScreen({ navigation }: Props) {
       const msg = parseFirebaseError(error.code)
       Alert.alert('로그인 실패', msg)
     } finally {
-      setLoading(false)
+      setLoadingProvider(null)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setLoadingProvider('google')
+    try {
+      const result = await promptGoogleAsync()
+      if (result.type !== 'success') return
+
+      const idToken = result.authentication?.idToken ?? result.params?.id_token
+      const accessToken = result.authentication?.accessToken ?? result.params?.access_token
+      if (!idToken) {
+        throw new Error('Google ID 토큰을 받지 못했습니다.')
+      }
+
+      const credential = GoogleAuthProvider.credential(idToken, accessToken)
+      await signInWithCredential(auth, credential)
+      await checkBackendLogin()
+    } catch (error: any) {
+      if (error?.message?.includes('cancel')) return
+      console.error('[LoginScreen] Google 로그인 실패:', error)
+      Alert.alert('Google 로그인 실패', '구글 로그인 중 문제가 발생했습니다.')
+    } finally {
+      setLoadingProvider(null)
+    }
+  }
+
+  const handleGithubLogin = async () => {
+    if (!GITHUB_CLIENT_ID) {
+      Alert.alert(
+        'GitHub 설정 필요',
+        'EXPO_PUBLIC_GITHUB_CLIENT_ID가 설정되어 있어야 GitHub 로그인이 동작합니다.'
+      )
+      return
+    }
+
+    setLoadingProvider('github')
+    try {
+      const result = await promptGithubAsync()
+      if (result.type !== 'success') return
+
+      const code = result.params?.code
+      if (!code) {
+        throw new Error('GitHub authorization code를 받지 못했습니다.')
+      }
+
+      const backendResponse = await api.post('/auth/github/login', {
+        code,
+        redirectUri,
+        codeVerifier: githubRequest?.codeVerifier ?? null,
+      })
+
+      const customToken = backendResponse.data?.customToken
+      if (!customToken) {
+        throw new Error('GitHub custom token을 받지 못했습니다.')
+      }
+
+      setPendingSignupEmail(backendResponse.data?.isRegistered ? null : backendResponse.data?.email ?? null)
+
+      await signInWithCustomToken(auth, customToken)
+      await checkBackendLogin()
+    } catch (error: any) {
+      if (error?.message?.includes('cancel')) return
+      console.error('[LoginScreen] GitHub 로그인 실패:', error)
+      Alert.alert('GitHub 로그인 실패', '깃허브 로그인 중 문제가 발생했습니다.')
+    } finally {
+      setLoadingProvider(null)
     }
   }
 
@@ -84,6 +201,38 @@ export default function LoginScreen({ navigation }: Props) {
 
         {/* 입력 폼 */}
         <View style={styles.form}>
+          <TouchableOpacity
+            style={[styles.socialBtn, styles.googleBtn, loadingProvider && styles.btnDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={loadingProvider !== null || !googleRequest}
+            activeOpacity={0.85}
+          >
+            {loadingProvider === 'google' ? (
+              <ActivityIndicator color="#1f2937" />
+            ) : (
+              <Text style={styles.socialBtnText}>Google로 계속</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.socialBtn, styles.githubBtn, loadingProvider && styles.btnDisabled]}
+            onPress={handleGithubLogin}
+            disabled={loadingProvider !== null || !githubRequest || !GITHUB_CLIENT_ID}
+            activeOpacity={0.85}
+          >
+            {loadingProvider === 'github' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.socialBtnTextGithub}>GitHub로 계속</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>또는</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <Text style={styles.label}>이메일</Text>
           <TextInput
             style={styles.input}
@@ -111,12 +260,12 @@ export default function LoginScreen({ navigation }: Props) {
 
           {/* 로그인 버튼 */}
           <TouchableOpacity
-            style={[styles.loginBtn, loading && styles.btnDisabled]}
+            style={[styles.loginBtn, loadingProvider && styles.btnDisabled]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loadingProvider !== null}
             activeOpacity={0.8}
           >
-            {loading ? (
+            {loadingProvider === 'email' ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.loginBtnText}>로그인</Text>
@@ -188,6 +337,47 @@ const styles = StyleSheet.create({
   // ─── 폼 ───
   form: {
     marginBottom: 24,
+  },
+  socialBtn: {
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  googleBtn: {
+    backgroundColor: '#fff',
+    borderColor: '#d0d7de',
+  },
+  githubBtn: {
+    backgroundColor: '#24292f',
+    borderColor: '#24292f',
+  },
+  socialBtnText: {
+    color: '#1f2937',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  socialBtnTextGithub: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 12,
+    color: '#9ca3af',
   },
   label: {
     fontSize: 13,

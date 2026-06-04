@@ -38,3 +38,8 @@ aws:
   credentials:
     access-key: ${AWS_ACCESS_KEY_ID} # 깃허브 시크릿 및 EC2 환경변수로 주입!
     secret-key: ${AWS_SECRET_ACCESS_KEY}
+
+github:
+  oauth:
+    client-id: ${GITHUB_CLIENT_ID}
+    client-secret: ${GITHUB_CLIENT_SECRET}
