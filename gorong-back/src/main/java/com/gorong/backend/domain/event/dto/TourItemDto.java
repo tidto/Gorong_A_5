@@ -19,7 +19,8 @@ public class TourItemDto {
     @JsonProperty("mapy")
     private String mapy;       // 위도
 
-    private String firstimage; // 대표 이미지
+    private String firstimage;  // 대표 이미지 1
+    private String firstimage2; // 대표 이미지 2
     private String contentid;  // 고유 ID
 
     // 무장애 정보 및 상세 내용
@@ -29,7 +30,14 @@ public class TourItemDto {
     private String restroom;
     private String route;
 
-    // 추가
-    private String areacode;    // [필수] getAreacode() 대응 (대구/경북 필터링용)
-    private String cat1;        // [필수] getCat1() 대응 (A01 -> NA 매핑용)
+    // 카테고리/지역
+    private String areacode;
+    private String cat1;
+
+    // 행사 기간 (TourAPI 필드명: eventstartdate / eventenddate)
+    private String eventStartDate;
+    private String eventEndDate;
+
+    // 문의 전화
+    private String tel;
 }

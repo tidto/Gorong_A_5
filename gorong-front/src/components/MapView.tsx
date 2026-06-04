@@ -21,15 +21,17 @@ interface MapViewProps {
     onDetailClick: (id: string) => void;
     userLocation?: { lat: number; lng: number } | null;
     mapCenter?: { lat: number; lng: number } | null;
+    showMarkerCount?: boolean;
 }
 
-export default function MapView({ data, onDetailClick, userLocation, mapCenter }: MapViewProps) {
+export default function MapView({ data, onDetailClick, userLocation, mapCenter, showMarkerCount = true }: MapViewProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
     const markersRef = useRef<any[]>([]);
     const activeOverlay = useRef<any>(null);
     const userMarkerRef = useRef<any>(null);
     const [markerCount, setMarkerCount] = useState(0);
+
 
     const YJU_LAT = 35.8956224;
     const YJU_LNG = 128.6224266;
@@ -89,9 +91,9 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter }
             `;
 
             content.innerHTML = `
-                <div style="width: 100%; height: 110px; position: relative; background: #f3f4f6;">
+                <div style="width: 100%; height: 110px; position: relative; background: #f3f4f6; border-radius: 16px 16px 0 0; overflow: hidden;">
                     <img src="${eventImage}" 
-                         style="width: 100%; height: 100%; object-fit: cover; display: block;" 
+                         style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 16px 16px 0 0;" 
                          onerror="this.src='${DEFAULT_IMAGE}';"
                          alt="${event.title}" />
                 </div>
@@ -103,7 +105,7 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter }
                         📅 ${formatPeriod()}
                     </div>
                     <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        📍 ${event.addr1 || '주소 정보 없음'}
+                         ${event.addr1 || '주소 정보 없음'}
                     </div>
                     <button id="btn-detail-${id}" style="width: 100%; background: #f97316; color: white; border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s;">
                         상세보기
@@ -257,7 +259,7 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter }
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'visible' }}>
             <div ref={mapContainer} style={{ width: '100%', height: '100%', minHeight: '100%', overflow: 'visible' }} />
-            {markerCount > 0 && (
+            {showMarkerCount && markerCount > 0 && (
                 <div style={{
                     position: 'absolute', bottom: 12, left: 12, zIndex: 10,
                     background: 'rgba(255,255,255,0.95)', borderRadius: 8,
@@ -265,7 +267,7 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter }
                     color: '#ea580c', boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
                     border: '1px solid #fed7aa'
                 }}>
-                    📍 {markerCount}개 행사 발견
+                     {markerCount}개 행사 발견
                 </div>
             )}
         </div>
