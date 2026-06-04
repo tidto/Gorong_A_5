@@ -6,6 +6,9 @@ export const GOCAT_ROOM_BACKGROUND_STORAGE_KEY = "gocat_room_background";
 
 export type RoomBackgroundTheme = "sakura" | "forest" | "night";
 
+import type { GrowthStage } from "../growth/growth";
+import { formatGrowthStageLabel, isItemUnlockedByStage } from "../growth/growth";
+
 export type RoomBackgroundOption = {
   id: RoomBackgroundId;
   label: string;
@@ -18,6 +21,8 @@ export type RoomBackgroundOption = {
   headerClass: string;
   headerBgClass: string;
   isDark?: boolean;
+  requiredGrowthStage?: GrowthStage;
+  unlockHint?: string;
 };
 
 export const ROOM_BACKGROUND_OPTIONS: RoomBackgroundOption[] = [
@@ -38,6 +43,8 @@ export const ROOM_BACKGROUND_OPTIONS: RoomBackgroundOption[] = [
     id: "FOREST_ROOM",
     label: "숲속 방",
     emoji: "🌲",
+    requiredGrowthStage: "TEEN",
+    unlockHint: "TEEN 단계(활동 10회) 달성 시 해금",
     theme: "forest",
     previewClass: "bg-gradient-to-br from-emerald-200 via-green-100 to-lime-50",
     stageClass:
@@ -51,6 +58,8 @@ export const ROOM_BACKGROUND_OPTIONS: RoomBackgroundOption[] = [
     id: "NIGHT_ROOM",
     label: "별밤 방",
     emoji: "🌙",
+    requiredGrowthStage: "ADULT",
+    unlockHint: "ADULT 단계(활동 30회) 달성 시 해금",
     theme: "night",
     previewClass: "bg-gradient-to-br from-indigo-950 via-indigo-900 to-purple-950",
     stageClass:
@@ -117,4 +126,30 @@ export function resolveRoomBackground(
     parseRoomBackgroundFromAppearance(appearanceState) ??
     DEFAULT_ROOM_BACKGROUND
   );
+}
+
+export function isRoomBackgroundUnlocked(
+  id: RoomBackgroundId,
+  growthStage: GrowthStage
+): boolean {
+  const option = ROOM_BACKGROUND_BY_ID[id];
+  if (!option.requiredGrowthStage) return true;
+  return isItemUnlockedByStage(option.requiredGrowthStage, growthStage);
+}
+
+export function roomBackgroundUnlockLabel(id: RoomBackgroundId): string | null {
+  const option = ROOM_BACKGROUND_BY_ID[id];
+  if (!option.requiredGrowthStage) return null;
+  return (
+    option.unlockHint ??
+    `${formatGrowthStageLabel(option.requiredGrowthStage)} 단계에서 해금`
+  );
+}
+
+export function sanitizeRoomBackgroundForStage(
+  id: RoomBackgroundId,
+  growthStage: GrowthStage
+): RoomBackgroundId {
+  if (isRoomBackgroundUnlocked(id, growthStage)) return id;
+  return DEFAULT_ROOM_BACKGROUND;
 }

@@ -8,24 +8,21 @@ import {
   equipPreviewFromDraft,
   normalizeEquipPreview,
 } from "../../utils/minihome/gocat/items";
+import { ownerEquipPreviewFromPage } from "../../utils/minihome/gocat/gocatEquippedStorage";
 import {
-  loadEquippedDecorDraft,
-  ownerEquipPreviewFromPage,
-} from "../../utils/minihome/gocat/gocatEquippedStorage";
+  loadNormalizedEquipDraft,
+  persistMigratedEquipDraft,
+} from "../../utils/minihome/gocat/gocatEquipMigration";
+import { getMyUserItems } from "../../api/minihome/itemApi";
+import { filterOwnedUserItems } from "../../utils/minihome/gocat/gocatItemCatalog";
+import {
+  logGoCatLockAudit,
+  readLocalStorageEquippedRaw,
+} from "../../utils/minihome/gocat/gocatLockDebug";
 import { emptyDraft } from "../../utils/minihome/gocat/items";
 import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
-import {
-  completeMyCatSetup,
-  createMyMiniHome,
-} from "../../api/minihome/miniHomeApi";
 import { computeGrowthState } from "../../utils/minihome/growth/growth";
-import {
-  isCatAppearanceConfigured,
-  parseCatAppearance,
-  toAppearanceApiPayload,
-} from "../../utils/minihome/gocat/catAppearance";
-import { mapMiniHomeApiError } from "../../utils/minihome/core/minihomeApiError";
-import GoCatOnboarding, { type GoCatOnboardingSubmit } from "../../components/minihome/onboarding/GoCatOnboarding";
+import { needsGoCatSetup } from "../../utils/minihome/gocat/goCatSetup";
 import CatTowerDecorationLayer from "./CatTowerDecorationLayer";
 
 export default function CatTower() {
@@ -51,23 +48,15 @@ export default function CatTower() {
   const pageReady = Boolean(roomOwnerId) && !loading && !resolvingOwner;
 
   const [decorateOpen, setDecorateOpen] = useState(false);
-  const [onboardingSaving, setOnboardingSaving] = useState(false);
-  const [onboardingErr, setOnboardingErr] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [equippedDraft, setEquippedDraft] = useState<Record<SlotType, DecorItem | null>>(() =>
     emptyDraft()
   );
 
   const growth = useMemo(() => computeGrowthState(page), [page]);
+  const needsSetup = useMemo(() => needsGoCatSetup(page), [page]);
+  const isOwnTower = routeUserId == null || routeUserId.trim() === "";
 
-  const needsOnboarding = useMemo(() => {
-    if (!page?.miniHome?.cat) return true;
-    const cat = page.miniHome.cat;
-    return !isCatAppearanceConfigured(cat.appearanceState, cat.appearanceConfigured);
-  }, [page]);
-
-  const showOnboarding =
-    canEdit && !loadingUserId && isReady && Boolean(firebaseUser) && !loading && needsOnboarding;
   const cat = page?.miniHome?.cat ?? null;
 
   const handleEquippedSaved = useCallback((draft: Record<SlotType, DecorItem | null>) => {
@@ -76,12 +65,45 @@ export default function CatTower() {
   }, [setPage]);
 
   useEffect(() => {
-    setEquippedDraft(
-      loadEquippedDecorDraft(page?.activeEquips, cat?.appearanceState, {
-        useLocalStorage: canEdit,
+    if (!pageReady) return;
+    let cancelled = false;
+    void getMyUserItems()
+      .then((items) => {
+        if (cancelled) return;
+        const filtered = filterOwnedUserItems(items);
+        const raw = loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
+          useLocalStorage: canEdit,
+          growthStage: growth.stage,
+          ownedItems: filtered,
+        });
+        const normalized = canEdit
+          ? persistMigratedEquipDraft(raw, filtered, growth.stage)
+          : raw;
+        setEquippedDraft(normalized);
+        logGoCatLockAudit({
+          source: "CatTower page load",
+          growthStage: growth.stage,
+          rawUserItems: items,
+          pageEquips: page?.activeEquips,
+          appearanceState: cat?.appearanceState ?? null,
+          equipDraft: normalized,
+          localStorageEquipped: readLocalStorageEquippedRaw(),
+        });
       })
-    );
-  }, [page?.activeEquips, cat?.appearanceState, canEdit]);
+      .catch(() => {
+        if (cancelled) return;
+        setEquippedDraft(
+          loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
+            useLocalStorage: canEdit,
+            growthStage: growth.stage,
+            ownedItems: [],
+          })
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canEdit, pageReady, page?.activeEquips, cat?.appearanceState, growth.stage]);
 
   const myEquippedPreview = useMemo(
     () => normalizeEquipPreview(equipPreviewFromDraft(equippedDraft)),
@@ -89,8 +111,8 @@ export default function CatTower() {
   );
 
   const ownerEquippedPreview = useMemo(
-    () => ownerEquipPreviewFromPage(page?.activeEquips, cat?.appearanceState),
-    [page?.activeEquips, cat?.appearanceState]
+    () => ownerEquipPreviewFromPage(page?.activeEquips, cat?.appearanceState, growth.stage),
+    [page?.activeEquips, cat?.appearanceState, growth.stage]
   );
 
   const displayEquipped = canEdit ? myEquippedPreview : ownerEquippedPreview;
@@ -110,32 +132,16 @@ export default function CatTower() {
     setRefreshToken((t) => t + 1);
   }, [loadPage]);
 
-  const busy = loading || onboardingSaving;
+  const gateReady =
+    !loadingUserId && isReady && Boolean(firebaseUser) && !loading && Boolean(page);
 
-  const activityCount = page?.stats?.activityCount ?? growth.activityCount;
-  const galleryCount = page?.stats?.galleryCount ?? page?.galleries?.length ?? 0;
-
-  async function handleOnboardingSubmit(payload: GoCatOnboardingSubmit) {
-    setOnboardingSaving(true);
-    setOnboardingErr(null);
-    try {
-      const body = {
-        ...toAppearanceApiPayload(payload.appearance),
-        catName: payload.catName,
-      };
-      if (!canEdit) return;
-      if (!page?.miniHome?.cat) {
-        await createMyMiniHome(body);
-      } else {
-        await completeMyCatSetup(body);
-      }
-      await loadPage();
-    } catch (e: unknown) {
-      setOnboardingErr(mapMiniHomeApiError(e, "Go냥이 저장에 실패했습니다."));
-    } finally {
-      setOnboardingSaving(false);
+  /** 본인 /cattower — 미설정 시 생성 페이지로 (온보딩 UI는 캣타워에 표시하지 않음) */
+  useEffect(() => {
+    if (!gateReady || !canEdit || !isOwnTower) return;
+    if (needsSetup) {
+      navigate("/cattower/create", { replace: true });
     }
-  }
+  }, [gateReady, canEdit, isOwnTower, needsSetup, navigate]);
 
   useEffect(() => {
     if (loadingUserId || !isReady) return;
@@ -153,6 +159,17 @@ export default function CatTower() {
   const catName = page?.miniHome?.cat?.catName ?? "고냥이";
   const ownerLabel = page?.ownerNickname ?? (isOwner ? displayName : "사용자");
 
+  const showMain =
+    gateReady && (!canEdit || !isOwnTower || !needsSetup);
+
+  if (!showMain) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
       <div className="pointer-events-none absolute inset-0" aria-hidden>
@@ -162,66 +179,51 @@ export default function CatTower() {
       </div>
 
       <div className="relative mx-auto max-w-6xl px-4 py-4 sm:py-6">
-        {showOnboarding ? (
-          <GoCatOnboarding
-            growthStage={growth.stage}
-            initialCatName={cat?.catName}
-            initialAppearance={cat ? parseCatAppearance(cat.appearanceState) : undefined}
-            saving={onboardingSaving}
-            error={onboardingErr ?? err}
-            onSubmit={handleOnboardingSubmit}
-          />
+        <CatTowerDashboard
+          nickname={ownerLabel}
+          catName={catName}
+          growth={growth}
+          isPublic={Boolean(page?.miniHome?.isPublic)}
+          equipped={displayEquipped}
+          appearanceState={cat?.appearanceState}
+          activities={page?.activities ?? []}
+          galleries={page?.galleries ?? []}
+          activityCount={page?.stats?.activityCount ?? growth.activityCount}
+          galleryCount={page?.stats?.galleryCount ?? page?.galleries?.length ?? 0}
+          loading={loading && !page}
+          busy={loading}
+          canEdit={canEdit}
+          isReadOnly={isReadOnly}
+          resolvingOwner={resolvingOwner}
+          roomOwnerId={roomOwnerId}
+          myUserId={myUserId}
+          isOwner={isOwner}
+          pageReady={pageReady}
+          refreshToken={refreshToken}
+          onDecorate={handleDecorate}
+          onBack={handleBack}
+          onEvents={handleEvents}
+          onRefresh={handleRefresh}
+          onReport={isReadOnly ? handleReport : undefined}
+        />
+
+        {err ? (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {err}
+          </div>
         ) : null}
 
-        {!showOnboarding ? (
-          <>
-            <CatTowerDashboard
-              nickname={ownerLabel}
-              catName={catName}
-              growth={growth}
-              isPublic={Boolean(page?.miniHome?.isPublic)}
-              equipped={displayEquipped}
-              appearanceState={cat?.appearanceState}
-              activities={page?.activities ?? []}
-              galleries={page?.galleries ?? []}
-              activityCount={activityCount}
-              galleryCount={galleryCount}
-              loading={loading && !page}
-              busy={busy}
-              canEdit={canEdit}
-              isReadOnly={isReadOnly}
-              resolvingOwner={resolvingOwner}
-              roomOwnerId={roomOwnerId}
-              myUserId={myUserId}
-              isOwner={isOwner}
-              pageReady={pageReady}
-              refreshToken={refreshToken}
-              onDecorate={handleDecorate}
-              onBack={handleBack}
-              onEvents={handleEvents}
-              onRefresh={handleRefresh}
-              onReport={isReadOnly ? handleReport : undefined}
-            />
-
-            {err ? (
-              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                {err}
-              </div>
-            ) : null}
-
-            <CatTowerDecorationLayer
-              open={decorateOpen}
-              growthStage={growth.stage}
-              activityCount={growth.activityCount}
-              page={page}
-              canEdit={canEdit}
-              onClose={handleCloseDecorate}
-              onEquippedSaved={handleEquippedSaved}
-              onPageUpdate={setPage}
-              onReloadPage={loadPage}
-            />
-          </>
-        ) : null}
+        <CatTowerDecorationLayer
+          open={decorateOpen}
+          growthStage={growth.stage}
+          activityCount={growth.activityCount}
+          page={page}
+          canEdit={canEdit}
+          onClose={handleCloseDecorate}
+          onEquippedSaved={handleEquippedSaved}
+          onPageUpdate={setPage}
+          onReloadPage={loadPage}
+        />
       </div>
     </div>
   );

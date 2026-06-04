@@ -1,8 +1,15 @@
-import type { DecorItem, SlotType } from "../../../components/minihome/mini-home/DecorationModal";
+import type { DecorItem } from "../../../components/minihome/mini-home/DecorationModal";
 import type { Equipment, UserItem } from "../../../types/minihome/item";
 import type { EquipItem, MiniHomePage } from "../../../types/minihome/minihome";
 import { findCatalogItem } from "./decorItemCatalog";
+import { normalizeEquipDraft } from "./gocatEquipMigration";
 import { sanitizeEquipDraft } from "./gocatMvp";
+import type { GrowthStage } from "../growth/growth";
+import type { SlotType } from "./gocatSlots";
+import { GOCAT_SLOTS, emptySlotRecord, resolveItemSlot } from "./gocatSlots";
+
+export type { SlotType };
+export { GOCAT_SLOTS, emptySlotRecord };
 
 export type EquipPreviewItem = {
   itemId?: number | null;
@@ -14,35 +21,20 @@ export type EquipPreviewItem = {
 
 export type EquipPreview = Record<SlotType, EquipPreviewItem | null>;
 
-const SLOTS: SlotType[] = ["HEAD", "BODY", "ACCESSORY"];
-
 export function emptyEquipBySlot(): Record<SlotType, Equipment | null> {
-  return { HEAD: null, BODY: null, ACCESSORY: null };
+  return emptySlotRecord<Equipment>();
 }
 
 export function emptyDraft(): Record<SlotType, DecorItem | null> {
-  return { HEAD: null, BODY: null, ACCESSORY: null };
-}
-
-function normalizeSlot(slotType?: string | null): SlotType | null {
-  const s = (slotType ?? "").trim().toUpperCase();
-  if (s === "HEAD" || s === "BODY" || s === "ACCESSORY") return s;
-  return null;
-}
-
-function inferSlotFromItemType(itemType?: string | null): SlotType | undefined {
-  const t = (itemType ?? "").trim().toUpperCase();
-  if (t.includes("HEAD") || t === "HAT") return "HEAD";
-  if (t.includes("BODY") || t === "OUTFIT") return "BODY";
-  if (t.includes("ACCESSORY") || t.includes("ACC")) return "ACCESSORY";
-  return undefined;
+  return emptySlotRecord<DecorItem>();
 }
 
 export function equipItemToEquipment(e: EquipItem): Equipment {
+  const slot = resolveItemSlot(e.itemCode, e.slotType) ?? normalizeSlot(e.slotType);
   return enrichEquipmentFields({
     catEquipId: e.catEquipId,
     goCatId: 0,
-    slotType: e.slotType,
+    slotType: slot ?? e.slotType,
     itemId: e.itemId,
     itemCode: e.itemCode,
     itemName: e.itemName,
@@ -53,7 +45,6 @@ export function equipItemToEquipment(e: EquipItem): Equipment {
   });
 }
 
-/** 카탈로그·imageUrl 맵으로 API 장착 정보 보강 */
 export function enrichEquipmentFields<T extends EquipPreviewItem>(item: T): T {
   const catalog = findCatalogItem(item.itemId, item.itemCode);
   const code = item.itemCode?.trim().toUpperCase();
@@ -74,7 +65,7 @@ export function equipItemsFromDraft(draft: Record<SlotType, DecorItem | null>): 
   const safe = sanitizeEquipDraft(draft);
   const out: EquipItem[] = [];
   let seq = 1;
-  for (const slot of SLOTS) {
+  for (const slot of GOCAT_SLOTS) {
     const item = safe[slot];
     if (!item) continue;
     const enriched = enrichEquipmentFields(item);
@@ -85,7 +76,7 @@ export function equipItemsFromDraft(draft: Record<SlotType, DecorItem | null>): 
       itemId: enriched.itemId ?? item.itemId,
       itemCode: enriched.itemCode ?? item.itemCode,
       itemName: enriched.itemName ?? item.itemName,
-      itemType: enriched.itemType ?? item.itemType,
+      itemType: enriched.itemType ?? item.itemType ?? slot,
       imageUrl: enriched.imageUrl ?? item.imageUrl,
     });
   }
@@ -99,7 +90,6 @@ export function applyEquipDraftToPage(
   return { ...page, activeEquips: equipItemsFromDraft(draft) };
 }
 
-/** 카드 슬롯 라벨 — 미장착 시 "-" */
 export function resolveEquipSlotLabel(
   slot: SlotType,
   equipBySlot: Record<SlotType, Equipment | null>
@@ -123,26 +113,29 @@ export function resolveSaveItemId(
   return decor.itemId;
 }
 
+function normalizeSlot(slotType?: string | null): SlotType | null {
+  return resolveItemSlot(undefined, slotType);
+}
+
 export function buildEquipBySlot(pageEquips?: EquipItem[] | null): Record<SlotType, Equipment | null> {
   const map = emptyEquipBySlot();
   for (const e of enrichEquipItems(pageEquips ?? [])) {
-    const slot = normalizeSlot(e.slotType);
-    if (slot) map[slot] = equipItemToEquipment(e);
+    const slot = resolveItemSlot(e.itemCode, e.slotType) ?? normalizeSlot(e.slotType);
+    if (!slot) continue;
+    map[slot] = equipItemToEquipment({ ...e, slotType: slot });
   }
   return map;
 }
 
 export function userItemToDecorItem(item: UserItem): DecorItem {
-  return {
-    ...item,
-    slotType: inferSlotFromItemType(item.itemType) ?? normalizeSlot(item.itemType) ?? undefined,
-  };
+  const slot = resolveItemSlot(item.itemCode, item.itemType);
+  return { ...item, slotType: slot ?? undefined };
 }
 
 export function draftFromEquips(pageEquips?: EquipItem[] | null): Record<SlotType, DecorItem | null> {
   const draft = emptyDraft();
   for (const e of pageEquips ?? []) {
-    const slot = normalizeSlot(e.slotType);
+    const slot = resolveItemSlot(e.itemCode, e.slotType) ?? normalizeSlot(e.slotType);
     if (!slot) continue;
     draft[slot] = {
       userItemId: e.itemId,
@@ -158,15 +151,14 @@ export function draftFromEquips(pageEquips?: EquipItem[] | null): Record<SlotTyp
   return draft;
 }
 
-/** 스타터·로컬 placeholder — imageUrl 없을 때 미리보기용 */
 export const STARTER_ITEM_IMAGE_URLS: Record<string, string> = {
   STARTER_HAT: "/assets/cat/items/starter-hat.svg",
   STARTER_BODY: "/assets/cat/items/starter-body.svg",
   STARTER_ACC: "/assets/cat/items/starter-acc.svg",
-  CHERRY_HAT: "/assets/cat/items/cherry-hat.svg",
-  NEON_GLASSES: "/assets/cat/items/neon-glasses.svg",
   HANBOK: "/assets/cat/items/hanbok.svg",
   SHELL_ACCESSORY: "/assets/cat/items/shell-accessory.svg",
+  VISITOR_RIBBON: "/assets/cat/items/starter-acc.svg",
+  REVIEW_STAR: "/assets/cat/items/yellow-star-pendant.svg",
 };
 
 export function resolveEquipImageUrl(item: EquipPreviewItem): string | null {
@@ -181,7 +173,6 @@ export function resolveEquipImageUrl(item: EquipPreviewItem): string | null {
 
 function previewFromDecor(item: DecorItem | null): EquipPreviewItem | null {
   if (!item) return null;
-  const catalog = findCatalogItem(item.itemId, item.itemCode);
   const preview: EquipPreviewItem = enrichEquipmentFields({
     itemName: item.itemName,
     imageUrl: item.imageUrl ?? null,
@@ -206,40 +197,41 @@ function previewFromEquipment(item: Equipment | null): EquipPreviewItem | null {
   return resolved ? { ...preview, imageUrl: resolved } : preview;
 }
 
-/** 꾸미기 미리보기 — aligned overlay 슬롯 전체 */
-export function equipPreviewFromDraft(draft: Record<SlotType, DecorItem | null>): EquipPreview {
-  const safe = sanitizeEquipDraft(draft);
+/** 꾸미기 미리보기 — 기본 아이템은 owned 없어도 항상 표시 */
+export function equipPreviewFromDraft(
+  draft: Record<SlotType, DecorItem | null>,
+  ownedItems: UserItem[] = [],
+  growthStage: GrowthStage = "BASIC"
+): EquipPreview {
+  const safe = normalizeEquipDraft(draft, ownedItems, growthStage);
   return {
     HEAD: previewFromDecor(safe.HEAD),
-    BODY: previewFromDecor(safe.BODY),
-    ACCESSORY: previewFromDecor(safe.ACCESSORY),
+    FACE: previewFromDecor(safe.FACE),
+    NECK: previewFromDecor(safe.NECK),
   };
 }
 
 export function hasEquippedPreview(preview: EquipPreview): boolean {
-  return SLOTS.some((s) => preview[s]);
+  return GOCAT_SLOTS.some((s) => preview[s]);
 }
 
 export function equipPreviewFromEquipBySlot(
   equipBySlot: Record<SlotType, Equipment | null>
 ): EquipPreview | null {
-  const hasAny = SLOTS.some((s) => equipBySlot[s]);
+  const hasAny = GOCAT_SLOTS.some((s) => equipBySlot[s]);
   if (!hasAny) return null;
   return normalizeEquipPreview({
     HEAD: previewFromEquipment(equipBySlot.HEAD),
-    BODY: previewFromEquipment(equipBySlot.BODY),
-    ACCESSORY: previewFromEquipment(equipBySlot.ACCESSORY),
+    FACE: previewFromEquipment(equipBySlot.FACE),
+    NECK: previewFromEquipment(equipBySlot.NECK),
   });
 }
 
-/** undefined/null·불완전 객체를 슬롯 3개 구조로 정규화 */
-export function normalizeEquipPreview(
-  preview?: EquipPreview | null
-): EquipPreview {
+export function normalizeEquipPreview(preview?: EquipPreview | null): EquipPreview {
   return {
     HEAD: preview?.HEAD ?? null,
-    BODY: preview?.BODY ?? null,
-    ACCESSORY: preview?.ACCESSORY ?? null,
+    FACE: preview?.FACE ?? null,
+    NECK: preview?.NECK ?? null,
   };
 }
 
@@ -253,10 +245,14 @@ export function buildEquipBySlotFromDraft(
 export function getItemDisplayEmoji(item: {
   itemType?: string | null;
   itemCode?: string | null;
+  slotType?: string | null;
 }): string {
+  const slot = resolveItemSlot(item.itemCode, item.slotType ?? item.itemType);
+  if (slot === "HEAD") return "🎩";
+  if (slot === "FACE") return "👓";
+  if (slot === "NECK") return "🎀";
   const t = (item.itemType ?? item.itemCode ?? "").toUpperCase();
-  if (t.includes("HEAD") || t.includes("HAT")) return "🎩";
-  if (t.includes("BODY") || t.includes("OUTFIT")) return "👕";
-  if (t.includes("ACCESSORY") || t.includes("ACC")) return "✨";
+  if (t.includes("HAT")) return "🎩";
+  if (t.includes("GLASS")) return "👓";
   return "🎁";
 }

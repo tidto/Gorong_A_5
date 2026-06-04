@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import CatTowerRoomBackgroundPanel from "./CatTowerRoomBackgroundPanel";
 import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 
 type CatTowerRoomDecorateModalProps = {
   open: boolean;
@@ -9,6 +10,7 @@ type CatTowerRoomDecorateModalProps = {
   isDirty: boolean;
   saving?: boolean;
   error?: string | null;
+  growthStage?: GrowthStage;
   onSelect: (id: RoomBackgroundId) => void;
   onSave: () => void;
   onCatDecorate: () => void;
@@ -23,6 +25,7 @@ export default function CatTowerRoomDecorateModal({
   isDirty,
   saving,
   error,
+  growthStage,
   onSelect,
   onSave,
   onCatDecorate,
@@ -68,6 +71,7 @@ export default function CatTowerRoomDecorateModal({
             isDirty={isDirty}
             saving={saving}
             error={error}
+            growthStage={growthStage}
             onSelect={onSelect}
             onSave={onSave}
             onCatDecorate={() => {

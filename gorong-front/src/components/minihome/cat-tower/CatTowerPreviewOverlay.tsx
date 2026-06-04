@@ -9,7 +9,7 @@ import { ownerEquipPreviewFromPage } from "../../../utils/minihome/gocat/gocatEq
 import { mapMiniHomeApiError } from "../../../utils/minihome/core/minihomeApiError";
 import { parseRoomBackgroundFromAppearance } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
-import CatTowerRoomStage from "./CatTowerRoomStage";
+import CatTowerPreviewStage from "./CatTowerPreviewStage";
 import CatTowerRecentActivityCards from "./CatTowerRecentActivityCards";
 
 type CatTowerPreviewOverlayProps = {
@@ -69,9 +69,13 @@ export default function CatTowerPreviewOverlay({
   const equipped = useMemo(
     () =>
       normalizeEquipPreview(
-        ownerEquipPreviewFromPage(page?.activeEquips, cat?.appearanceState)
+        ownerEquipPreviewFromPage(
+          page?.activeEquips,
+          cat?.appearanceState,
+          growth?.stage ?? "BASIC"
+        )
       ),
-    [page?.activeEquips, cat?.appearanceState]
+    [page?.activeEquips, cat?.appearanceState, growth?.stage]
   );
   const roomBackground =
     parseRoomBackgroundFromAppearance(cat?.appearanceState) ?? "BASIC_ROOM";
@@ -99,7 +103,7 @@ export default function CatTowerPreviewOverlay({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 32 }}
           transition={{ type: "spring", stiffness: 340, damping: 32 }}
-          className="flex max-h-[min(52vh,560px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl border border-orange-200/70 bg-gradient-to-b from-[#fffaf5] via-white to-[#f0faf2] shadow-[0_-8px_40px_rgba(15,23,42,0.18)] sm:max-h-[min(58vh,620px)] sm:rounded-3xl"
+          className="flex max-h-[min(78vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl border border-orange-200/70 bg-gradient-to-b from-[#fffaf5] via-white to-[#f0faf2] shadow-[0_-8px_40px_rgba(15,23,42,0.18)] sm:max-h-[min(82vh,760px)] sm:rounded-3xl"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -130,47 +134,50 @@ export default function CatTowerPreviewOverlay({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {loading ? (
-              <div className="flex min-h-[220px] items-center justify-center">
+              <div className="flex flex-1 items-center justify-center px-4">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
               </div>
             ) : err ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm font-semibold text-red-700">
-                {err}
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm font-semibold text-red-700">
+                  {err}
+                </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  {growth ? (
-                    <GrowthStageBadge
-                      stage={growth.stage}
-                      activityCount={growth.activityCount}
-                      compact
-                      glow
-                    />
-                  ) : null}
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                    활동 {activityCount}회
-                  </span>
-                  <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-[10px] font-bold text-orange-700">
-                    갤러리 {page?.stats?.galleryCount ?? page?.galleries?.length ?? 0}개
-                  </span>
+              <>
+                <div className="shrink-0 space-y-2 px-4 pt-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {growth ? (
+                      <GrowthStageBadge
+                        stage={growth.stage}
+                        activityCount={growth.activityCount}
+                        compact
+                        glow
+                      />
+                    ) : null}
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                      활동 {activityCount}회
+                    </span>
+                    <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-[10px] font-bold text-orange-700">
+                      갤러리 {page?.stats?.galleryCount ?? page?.galleries?.length ?? 0}개
+                    </span>
+                  </div>
+
+                  <CatTowerPreviewStage
+                    growthStage={growth?.stage ?? "BASIC"}
+                    activityCount={activityCount}
+                    equipped={equipped}
+                    roomBackground={roomBackground}
+                    catName={catName}
+                  />
                 </div>
 
-                <CatTowerRoomStage
-                  growthStage={growth?.stage ?? "BASIC"}
-                  activityCount={activityCount}
-                  equipped={equipped}
-                  roomBackground={roomBackground}
-                  catName={catName}
-                  interactive={false}
-                  readOnly
-                  compact
-                />
-
-                <CatTowerRecentActivityCards activities={recentActivities} />
-              </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
+                  <CatTowerRecentActivityCards activities={recentActivities} />
+                </div>
+              </>
             )}
           </div>
 

@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Lock } from "lucide-react";
 import {
   ROOM_BACKGROUND_OPTIONS,
+  isRoomBackgroundUnlocked,
+  roomBackgroundUnlockLabel,
   type RoomBackgroundId,
 } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import { useNotification } from "../../../contexts/NotificationContext";
 
 type DecorateTab = "background" | "cat";
 
@@ -13,23 +18,25 @@ type CatTowerRoomBackgroundPanelProps = {
   isDirty: boolean;
   saving?: boolean;
   error?: string | null;
+  growthStage?: GrowthStage;
   onSelect: (id: RoomBackgroundId) => void;
   onSave: () => void;
   onCatDecorate?: () => void;
 };
 
-/** 내 공간 — 배경 선택 + category tab */
 export default function CatTowerRoomBackgroundPanel({
   selected,
   saved,
   isDirty,
   saving,
   error,
+  growthStage = "BASIC",
   onSelect,
   onSave,
   onCatDecorate,
 }: CatTowerRoomBackgroundPanelProps) {
   const [tab, setTab] = useState<DecorateTab>("background");
+  const { toast } = useNotification();
 
   return (
     <motion.div
@@ -40,10 +47,11 @@ export default function CatTowerRoomBackgroundPanel({
     >
       <div className="border-b border-emerald-100/80 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 px-3 py-3 text-center">
         <p className="text-[11px] font-extrabold text-white">🏡 내 공간 꾸미기</p>
-        <p className="mt-0.5 text-[9px] font-medium text-white/80">배경·Go냥이를 꾸며 나만의 방을 완성해요</p>
+        <p className="mt-0.5 text-[9px] font-medium text-white/80">
+          성장 단계에 따라 배경·슬롯이 열려요
+        </p>
       </div>
 
-      {/* category tabs */}
       <div className="flex gap-1 border-b border-emerald-50/80 bg-white/70 p-2">
         {(
           [
@@ -84,21 +92,35 @@ export default function CatTowerRoomBackgroundPanel({
                 {ROOM_BACKGROUND_OPTIONS.map((option) => {
                   const active = selected === option.id;
                   const savedMark = saved === option.id;
+                  const unlocked = isRoomBackgroundUnlocked(option.id, growthStage);
+
                   return (
                     <motion.button
                       key={option.id}
                       type="button"
-                      onClick={() => onSelect(option.id)}
-                      whileHover={{ y: -3 }}
-                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        if (!unlocked) {
+                          toast(roomBackgroundUnlockLabel(option.id) ?? "아직 해금되지 않았어요.", "info");
+                          return;
+                        }
+                        onSelect(option.id);
+                      }}
+                      whileHover={unlocked ? { y: -3 } : undefined}
+                      whileTap={unlocked ? { scale: 0.98 } : undefined}
                       className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 transition-shadow duration-300 ${
-                        active
-                          ? "border-orange-300 shadow-[0_0_28px_rgba(251,146,60,0.45),0_6px_18px_rgba(251,146,60,0.18)] ring-2 ring-orange-200/90"
-                          : "border-emerald-100/90 hover:border-emerald-200/90 hover:shadow-lg"
+                        !unlocked
+                          ? "cursor-not-allowed border-dashed border-slate-200 opacity-60"
+                          : active
+                            ? "border-orange-300 shadow-[0_0_28px_rgba(251,146,60,0.45),0_6px_18px_rgba(251,146,60,0.18)] ring-2 ring-orange-200/90"
+                            : "border-emerald-100/90 hover:border-emerald-200/90 hover:shadow-lg"
                       }`}
-                      title={option.label}
+                      title={unlocked ? option.label : roomBackgroundUnlockLabel(option.id) ?? option.label}
                     >
-                      {active ? (
+                      {!unlocked ? (
+                        <span className="absolute right-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-slate-500 text-white">
+                          <Lock className="h-3 w-3" />
+                        </span>
+                      ) : active ? (
                         <span className="absolute right-1.5 top-1.5 z-10 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 px-2 py-0.5 text-[7px] font-extrabold text-white shadow-sm">
                           ✓ 선택
                         </span>
@@ -131,7 +153,11 @@ export default function CatTowerRoomBackgroundPanel({
                         >
                           {option.label}
                         </span>
-                        {savedMark ? (
+                        {!unlocked ? (
+                          <span className="mt-1 line-clamp-2 text-center text-[7px] font-medium text-slate-400">
+                            {roomBackgroundUnlockLabel(option.id)}
+                          </span>
+                        ) : savedMark ? (
                           <span className="mt-1 rounded-full bg-emerald-100 px-2 py-px text-[8px] font-bold text-emerald-700">
                             ✓ 저장됨
                           </span>
@@ -173,7 +199,7 @@ export default function CatTowerRoomBackgroundPanel({
               <span className="text-4xl">👕</span>
               <p className="mt-2 text-xs font-extrabold text-orange-900/85">Go냥이 꾸미기</p>
               <p className="mt-1 max-w-[200px] text-[10px] leading-relaxed text-slate-500">
-                모자·안경 등 아이템을 장착하고 Go냥이를 꾸며 보세요
+                모자·의상·악세를 장착하고 Go냥이를 꾸며 보세요. 획득한 아이템만 장착할 수 있어요.
               </p>
               {onCatDecorate ? (
                 <button

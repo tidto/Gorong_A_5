@@ -9,4 +9,6 @@ public interface GuestbookRepository extends JpaRepository<Guestbook, Long> {
 
     /** 최상위 방명록 — 최신순 (답글 기능 확장 시 parentGuestbookId IS NULL 유지) */
     List<Guestbook> findByRoomOwnerUserIdAndParentGuestbookIdIsNullOrderByCreateAtDesc(Long roomOwnerUserId);
+
+    long countByRoomOwnerUserId(Long roomOwnerUserId);
 }

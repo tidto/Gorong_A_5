@@ -22,6 +22,7 @@ public class CatTowerVisitService {
 
     private final CatTowerVisitRepository catTowerVisitRepository;
     private final MiniHomeRepository miniHomeRepository;
+    private final EventCategoryItemRewardService eventCategoryItemRewardService;
 
     public CatTowerVisitorStatsDto getStats(Long roomOwnerId) {
         requireUserId(roomOwnerId);
@@ -44,6 +45,8 @@ public class CatTowerVisitService {
                 .roomOwnerUserId(roomOwnerId)
                 .visitorUserId(visitorUserId)
                 .build());
+
+        eventCategoryItemRewardService.tryGrantVisitorReward(visitorUserId);
 
         return buildStats(roomOwnerId);
     }

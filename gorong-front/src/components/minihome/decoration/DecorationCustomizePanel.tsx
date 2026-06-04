@@ -1,33 +1,37 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { motion } from "framer-motion";
 import { Lock } from "lucide-react";
 import type { DecorItem, SlotType } from "../mini-home/DecorationModal";
 import type { DecorItemWithOwnership } from "../../../utils/minihome/gocat/decorItemCatalog";
 import { getItemDisplayEmoji } from "../../../utils/minihome/gocat/items";
-import LockedItemsShowcase from "./LockedItemsShowcase";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import { isSlotUnlockedByStage, slotUnlockHint } from "../../../utils/minihome/growth/growth";
+import { GOCAT_SLOTS, SLOT_UI } from "../../../utils/minihome/gocat/gocatSlots";
+import GoCatItemCodexPanel from "./GoCatItemCodexPanel";
+import type { UserItem } from "../../../types/minihome/item";
 
-const SLOT_SECTIONS: { id: SlotType; label: string; emoji: string }[] = [
-  { id: "HEAD", label: "머리", emoji: "🎩" },
-  { id: "ACCESSORY", label: "액세", emoji: "✨" },
-];
+type DecorateTab = "equip" | "codex";
 
 type DecorationCustomizePanelProps = {
   selectedHeadItem: DecorItem | null;
-  selectedBodyItem: DecorItem | null;
-  selectedAccessoryItem: DecorItem | null;
+  selectedFaceItem: DecorItem | null;
+  selectedNeckItem: DecorItem | null;
   setEquipDraft: Dispatch<SetStateAction<Record<SlotType, DecorItem | null>>>;
   itemsBySlot?: {
     HEAD: DecorItemWithOwnership[];
-    BODY: DecorItemWithOwnership[];
-    ACCESSORY: DecorItemWithOwnership[];
+    FACE: DecorItemWithOwnership[];
+    NECK: DecorItemWithOwnership[];
   };
   itemsLoading?: boolean;
   itemsLoadError?: string | null;
   disabled?: boolean;
   growthStage?: GrowthStage;
   activityCount?: number;
+  ownedItems?: UserItem[];
+  onLogLockState?: () => void;
+  onResetLockTest?: () => void | Promise<void>;
+  onToggleSlotItem?: (slot: SlotType, item: DecorItemWithOwnership) => void;
 };
 
 function SlotItemRow(props: {
@@ -36,10 +40,20 @@ function SlotItemRow(props: {
   selected: DecorItem | null;
   itemsLoading?: boolean;
   disabled?: boolean;
+  growthStage?: GrowthStage;
   onToggle: (item: DecorItemWithOwnership) => void;
   onClear: () => void;
 }) {
-  const { items, selected, itemsLoading, disabled, onToggle, onClear } = props;
+  const { slot, items, selected, itemsLoading, disabled, growthStage, onToggle, onClear } = props;
+  const slotLocked = growthStage ? !isSlotUnlockedByStage(slot, growthStage) : false;
+
+  if (slotLocked && growthStage) {
+    return (
+      <p className="rounded-xl border border-dashed border-amber-200/80 bg-amber-50/50 px-3 py-2 text-[10px] font-semibold text-amber-800/70">
+        🔒 {slotUnlockHint(slot, growthStage)}
+      </p>
+    );
+  }
 
   if (itemsLoading) {
     return (
@@ -49,8 +63,12 @@ function SlotItemRow(props: {
     );
   }
 
-  const ownedItems = items.filter((it) => it.owned && !it.locked);
-  const lockedItems = items.filter((it) => it.locked);
+  const equippableItems = items.filter(
+    (it) => it.owned && it.isUnlocked && !it.locked && !it.slotLocked
+  );
+  const lockedItems = items.filter(
+    (it) => !it.owned || !it.isUnlocked || it.locked || it.slotLocked
+  );
 
   if (items.length === 0) {
     return (
@@ -62,9 +80,9 @@ function SlotItemRow(props: {
 
   return (
     <div className="space-y-2">
-      {ownedItems.length > 0 ? (
+      {equippableItems.length > 0 ? (
         <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {ownedItems.map((it) => {
+          {equippableItems.map((it) => {
             const active =
               selected?.itemCode === it.itemCode ||
               (selected?.itemId != null && selected.itemId === it.itemId);
@@ -113,8 +131,9 @@ function SlotItemRow(props: {
             <button
               key={`locked-${it.itemCode}`}
               type="button"
-              disabled
-              title={it.unlockHint ?? "행사 참여 보상"}
+              disabled={disabled}
+              onClick={() => onToggle(it)}
+              title={it.unlockHint ?? "획득 조건 미달성"}
               className="relative flex h-10 w-10 shrink-0 cursor-not-allowed items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 opacity-60"
             >
               {it.imageUrl ? (
@@ -135,8 +154,8 @@ function SlotItemRow(props: {
 
 export default function DecorationCustomizePanel({
   selectedHeadItem,
-  selectedBodyItem,
-  selectedAccessoryItem,
+  selectedFaceItem,
+  selectedNeckItem,
   setEquipDraft,
   itemsBySlot,
   itemsLoading,
@@ -144,15 +163,26 @@ export default function DecorationCustomizePanel({
   disabled,
   growthStage,
   activityCount,
+  ownedItems,
+  onLogLockState,
+  onResetLockTest,
+  onToggleSlotItem,
 }: DecorationCustomizePanelProps) {
+  const showDevTools = import.meta.env.DEV;
+  const [tab, setTab] = useState<DecorateTab>("equip");
+
   const equipBySlot: Record<SlotType, DecorItem | null> = {
     HEAD: selectedHeadItem,
-    BODY: selectedBodyItem,
-    ACCESSORY: selectedAccessoryItem,
+    FACE: selectedFaceItem,
+    NECK: selectedNeckItem,
   };
 
   function toggleItem(slot: SlotType, item: DecorItemWithOwnership) {
-    if (item.locked) return;
+    if (onToggleSlotItem) {
+      onToggleSlotItem(slot, item);
+      return;
+    }
+    if (item.slotLocked || item.locked || !item.owned || !item.isUnlocked) return;
     setEquipDraft((d) => ({
       ...d,
       [slot]:
@@ -168,40 +198,99 @@ export default function DecorationCustomizePanel({
         </div>
       ) : null}
 
-      <p className="rounded-xl bg-amber-50/80 px-3 py-2 text-[10px] leading-relaxed text-amber-800/70">
-        기본 모자·악세는 언제든 사용할 수 있어요. 행사 보상 아이템은 참여 후 획득하면 장착할 수 있습니다.
-      </p>
+      <div className="flex gap-1 rounded-xl bg-amber-50/60 p-1">
+        {(
+          [
+            { id: "equip" as const, label: "장착" },
+            { id: "codex" as const, label: "도감" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`flex-1 rounded-lg py-1.5 text-[10px] font-extrabold transition ${
+              tab === t.id
+                ? "bg-white text-amber-900 shadow-sm"
+                : "text-amber-800/50 hover:text-amber-900/70"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {itemsLoadError ? (
-        <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">{itemsLoadError}</p>
-      ) : null}
+      {tab === "codex" && growthStage ? (
+        <GoCatItemCodexPanel growthStage={growthStage} ownedItems={ownedItems} />
+      ) : (
+        <>
+          <p className="rounded-xl bg-amber-50/80 px-3 py-2 text-[10px] leading-relaxed text-amber-800/70">
+            기본 <strong>마녀 모자</strong>·<strong>목 리본</strong>은 처음부터 보유해요.{" "}
+            <strong>벗기기</strong>로 슬롯을 비울 수 있고, 저장 후에도 유지됩니다. 왕관(행사 3회),
+            파란 모자(행사 1회), 안경(리뷰 3개)은 조건 달성 시 해금됩니다.
+          </p>
 
-      {SLOT_SECTIONS.map((section) => {
-        const slotItems = itemsBySlot?.[section.id] ?? [];
-
-        return (
-          <section key={section.id}>
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-amber-900/45">
-              <span>{section.emoji}</span>
-              {section.label}
-              {equipBySlot[section.id] ? (
-                <span className="rounded-full bg-teal-100 px-1.5 py-px text-[9px] font-bold text-teal-700">
-                  ON
-                </span>
+          {showDevTools && (onLogLockState || onResetLockTest) ? (
+            <div className="flex flex-wrap gap-2 rounded-xl border border-dashed border-violet-300 bg-violet-50/60 p-2">
+              <span className="w-full text-[9px] font-bold text-violet-800/70">DEV 잠금 디버그</span>
+              {onLogLockState ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={onLogLockState}
+                  className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-violet-800 shadow-sm hover:bg-violet-100"
+                >
+                  콘솔에 상태 출력
+                </button>
               ) : null}
-            </p>
-            <SlotItemRow
-              slot={section.id}
-              items={slotItems}
-              selected={equipBySlot[section.id]}
-              itemsLoading={itemsLoading}
-              disabled={disabled}
-              onToggle={(it) => toggleItem(section.id, it)}
-              onClear={() => setEquipDraft((d) => ({ ...d, [section.id]: null }))}
-            />
-          </section>
-        );
-      })}
+              {onResetLockTest ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => void onResetLockTest()}
+                  className="rounded-lg bg-violet-600 px-2 py-1 text-[10px] font-bold text-white shadow-sm hover:bg-violet-700"
+                >
+                  꾸미기 초기화 (전부 벗기기)
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {itemsLoadError ? (
+            <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">{itemsLoadError}</p>
+          ) : null}
+
+          {GOCAT_SLOTS.map((slot) => {
+            const meta = SLOT_UI[slot];
+            const slotItems = itemsBySlot?.[slot] ?? [];
+
+            return (
+              <section key={slot}>
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-amber-900/45">
+                  <span>{meta.emoji}</span>
+                  {meta.label}
+                  <span className="text-[9px] font-medium text-amber-700/40">({meta.hint})</span>
+                  {equipBySlot[slot] ? (
+                    <span className="rounded-full bg-teal-100 px-1.5 py-px text-[9px] font-bold text-teal-700">
+                      ON
+                    </span>
+                  ) : null}
+                </p>
+                <SlotItemRow
+                  slot={slot}
+                  items={slotItems}
+                  selected={equipBySlot[slot]}
+                  itemsLoading={itemsLoading}
+                  disabled={disabled}
+                  growthStage={growthStage}
+                  onToggle={(it) => toggleItem(slot, it)}
+                  onClear={() => setEquipDraft((d) => ({ ...d, [slot]: null }))}
+                />
+              </section>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

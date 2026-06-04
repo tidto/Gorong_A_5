@@ -8,17 +8,32 @@ import {
   findGoCatItemByCode,
 } from "../../../data/minihome/gocatItems";
 import type { GrowthStage } from "../growth/growth";
-import { isItemSlotCompatible, isItemUnlockedByStage } from "../growth/growth";
+import { isSlotUnlockedByStage, slotUnlockHint } from "../growth/growth";
 import type { UserItem } from "../../../types/minihome/item";
+import type { ItemRarity } from "./itemRarity";
+import {
+  GOCAT_DEBUG_UNLOCK_ALL,
+  GOCAT_ITEM_CATALOG,
+  filterOwnedUserItems,
+  findCatalogItemById,
+  isItemEquippableInUI,
+  type GoCatCatalogItem,
+  type UnlockType,
+} from "./gocatItemCatalog";
+import { resolveItemSlot } from "./gocatSlots";
 
 export type { GoCatItem, GoCatItemCategory };
 export { GOCAT_ITEMS, getGoCatItemsByCategory, findGoCatItem, findGoCatItemByCode };
 
 export type DecorItemWithOwnership = DecorItem & {
   owned: boolean;
-  /** 행사 보상 미획득 시에만 true */
+  isDefault?: boolean;
+  isUnlocked?: boolean;
   locked?: boolean;
+  slotLocked?: boolean;
   unlockHint?: string;
+  unlockType?: UnlockType;
+  rarity?: ItemRarity;
 };
 
 export function normalizeItemCode(code?: string | null): string {
@@ -29,7 +44,6 @@ export function itemCodesMatch(a?: string | null, b?: string | null): boolean {
   return normalizeItemCode(a) === normalizeItemCode(b);
 }
 
-/** DB 장착 저장용 — USER_ITEM 보유 시에만 itemId 반환 (MVP 기본 아이템은 appearance 저장) */
 export function resolveOwnedItemId(
   decor: DecorItem | null,
   ownedItems: UserItem[]
@@ -38,25 +52,43 @@ export function resolveOwnedItemId(
   const code = decor.itemCode?.trim();
   if (!code) return null;
   const owned = ownedItems.find((o) => itemCodesMatch(o.itemCode, code));
-  return owned?.itemId ?? null;
+  if (owned?.itemId) return owned.itemId;
+  if (GOCAT_DEBUG_UNLOCK_ALL && decor.itemId && decor.itemId > 0) return decor.itemId;
+  return null;
 }
 
-/** @deprecated GoCatItem 사용 */
 export type DecorCatalogItem = {
   id: number;
   name: string;
   type: SlotType;
   imageUrl: string;
   itemCode?: string;
-  requiredGrowthStage?: GrowthStage;
 };
 
-function goCatItemIndex(item: GoCatItem): number {
-  return GOCAT_ITEMS.findIndex((i) => i.id === item.id);
+export function catalogEntryToDecorItem(entry: GoCatCatalogItem): DecorItem {
+  const index = GOCAT_ITEM_CATALOG.findIndex((e) => e.id === entry.id);
+  const itemId = index >= 0 ? index + 1 : 0;
+  return {
+    userItemId: itemId,
+    itemId,
+    itemCode: entry.id,
+    itemName: entry.name,
+    itemType: entry.slot,
+    imageUrl: entry.imageUrl,
+    acquiredAt: "",
+    slotType: entry.slot,
+  };
+}
+
+/** @deprecated catalogEntryToDecorItem */
+export function rewardEntryToDecorItem(entry: GoCatCatalogItem): DecorItem {
+  return catalogEntryToDecorItem(entry);
 }
 
 export function goCatItemToDecorItem(item: GoCatItem): DecorItem {
-  const index = goCatItemIndex(item);
+  const entry = findCatalogItemById(item.id);
+  if (entry) return catalogEntryToDecorItem(entry);
+  const index = GOCAT_ITEMS.findIndex((i) => i.id === item.id);
   const itemId = index >= 0 ? index + 1 : 0;
   return {
     userItemId: itemId,
@@ -74,57 +106,66 @@ export function findCatalogItem(
   itemId?: number | null,
   itemCode?: string | null
 ): GoCatItem | undefined {
+  const entry = findCatalogItemById(itemCode);
+  if (entry) {
+    return {
+      id: entry.id,
+      name: entry.name,
+      category: entry.slot,
+      imageUrl: entry.imageUrl,
+    };
+  }
   if (itemCode?.trim()) {
     const byCode = findGoCatItemByCode(itemCode);
     if (byCode) return byCode;
   }
   if (itemId != null && itemId > 0) {
-    return GOCAT_ITEMS[itemId - 1];
+    const byIndex = GOCAT_ITEMS[itemId - 1];
+    if (byIndex) return byIndex;
+    const cat = GOCAT_ITEM_CATALOG[itemId - 1];
+    if (cat) {
+      return { id: cat.id, name: cat.name, category: cat.slot, imageUrl: cat.imageUrl };
+    }
   }
   return undefined;
 }
 
-/** @deprecated goCatItemToDecorItem 사용 */
-export function catalogItemToDecorItem(item: DecorCatalogItem): DecorItem {
-  const goCat = GOCAT_ITEMS.find((i) => i.id === item.itemCode?.toLowerCase()) ?? GOCAT_ITEMS[item.id - 1];
-  if (goCat) return goCatItemToDecorItem(goCat);
+function buildDecorOwnership(
+  decor: DecorItem,
+  entry: GoCatCatalogItem | undefined,
+  growthStage: GrowthStage,
+  ownedItems: UserItem[]
+): DecorItemWithOwnership {
+  const slot = decor.slotType;
+  const slotLocked = slot ? !isSlotUnlockedByStage(slot, growthStage) : false;
+  const filteredOwned = filterOwnedUserItems(ownedItems);
+  const equippable = entry
+    ? isItemEquippableInUI(entry, growthStage, filteredOwned)
+    : filteredOwned.some((o) => itemCodesMatch(o.itemCode, decor.itemCode)) && !slotLocked;
+
+  let unlockHint = entry?.unlockCondition ?? "조건 달성 후 획득";
+  if (slotLocked && slot) {
+    unlockHint = slotUnlockHint(slot, growthStage) ?? unlockHint;
+  }
+
   return {
-    userItemId: item.id,
-    itemId: item.id,
-    itemCode: item.itemCode ?? `CATALOG_${item.id}`,
-    itemName: item.name,
-    itemType: item.type,
-    imageUrl: item.imageUrl,
-    acquiredAt: "",
-    slotType: item.type,
-    requiredGrowthStage: item.requiredGrowthStage,
+    ...decor,
+    owned: equippable,
+    isDefault: entry?.isDefault,
+    isUnlocked: equippable,
+    locked: !equippable,
+    slotLocked,
+    unlockHint,
+    unlockType: entry?.unlockType,
+    rarity: entry?.rarity,
   };
-}
-
-function inferSlotFromItemType(itemType?: string | null): SlotType | undefined {
-  const t = (itemType ?? "").trim().toUpperCase();
-  if (t.includes("HEAD") || t === "HAT") return "HEAD";
-  if (t.includes("BODY") || t === "OUTFIT") return "BODY";
-  if (t.includes("ACCESSORY") || t.includes("ACC")) return "ACCESSORY";
-  return undefined;
-}
-
-function userItemToDecorItem(item: UserItem): DecorItem {
-  const slot =
-    inferSlotFromItemType(item.itemType) ??
-    (item.itemType?.trim().toUpperCase() === "HEAD" ||
-    item.itemType?.trim().toUpperCase() === "BODY" ||
-    item.itemType?.trim().toUpperCase() === "ACCESSORY"
-      ? (item.itemType.trim().toUpperCase() as SlotType)
-      : undefined);
-  return { ...item, slotType: slot };
 }
 
 function dedupeDecorItems(items: DecorItem[]): DecorItem[] {
   const seen = new Set<string>();
   const out: DecorItem[] = [];
   for (const it of items) {
-    const key = it.itemCode ?? String(it.itemId);
+    const key = normalizeItemCode(it.itemCode) || String(it.itemId);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(it);
@@ -132,24 +173,23 @@ function dedupeDecorItems(items: DecorItem[]): DecorItem[] {
   return out;
 }
 
-/** 정적 GOCAT_ITEMS 기반 — MVP 기본 아이템은 항상 선택 가능 */
 export function listDecorItemsForSlot(
   targetSlot: SlotType,
   growthStage: GrowthStage,
-  _ownedItems: UserItem[] = []
+  ownedItems: UserItem[] = []
 ): DecorItemWithOwnership[] {
-  return dedupeDecorItems(
-    getGoCatItemsByCategory(targetSlot)
-      .map(goCatItemToDecorItem)
-      .filter((it) => {
-        const slot = it.slotType;
-        if (!slot || slot !== targetSlot) return false;
-        if (!isItemSlotCompatible(slot, growthStage)) return false;
-        return isItemUnlockedByStage(it.requiredGrowthStage, growthStage);
-      })
-  ).map((it) => ({
-    ...it,
-    owned: true,
-    locked: false,
-  }));
+  const filteredOwned = filterOwnedUserItems(ownedItems);
+  return GOCAT_ITEM_CATALOG.filter((e) => e.slot === targetSlot)
+    .map((entry) => catalogEntryToDecorItem(entry))
+    .map((it) => buildDecorOwnership(it, findCatalogItemById(it.itemCode), growthStage, filteredOwned));
+}
+
+export function listCodexItems(
+  growthStage: GrowthStage,
+  ownedItems: UserItem[] = []
+): DecorItemWithOwnership[] {
+  const filteredOwned = filterOwnedUserItems(ownedItems);
+  return GOCAT_ITEM_CATALOG.map((entry) =>
+    buildDecorOwnership(catalogEntryToDecorItem(entry), entry, growthStage, filteredOwned)
+  );
 }

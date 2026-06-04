@@ -25,6 +25,7 @@ public class GuestbookService {
     private final MiniHomeRepository miniHomeRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final GoCatItemUnlockService goCatItemUnlockService;
 
     public List<GuestbookResponseDto> listByRoomOwner(Long roomOwnerId) {
         requireUserId(roomOwnerId);
@@ -60,6 +61,8 @@ public class GuestbookService {
                 .content(content)
                 .parentGuestbookId(null)
                 .build());
+
+        goCatItemUnlockService.syncUnlocksForUser(roomOwnerId);
 
         return GuestbookResponseDto.from(saved);
     }
