@@ -3,7 +3,7 @@ import {
   limitToLast, onSnapshot, doc, setDoc, deleteDoc, getDoc, updateDoc
 } from 'firebase/firestore'
 import { db } from '../config/firebaseConfig'
-import { ChatMessage } from '../types'
+import { AppGroup, ChatMessage } from '../types'
 
 // ─── 익명 채팅 (지오펜스 기반)
 export const sendAnonymousMessage = (
@@ -74,24 +74,42 @@ export const subscribeGroupLocations = (
   })
 
 type GroupRoom = {
-  venueId: string
-  hostId: string
+  groupId: string
+  title: string
+  event: string
+  location: string
+  meetingDate: string
+  meetingTime: string
   members: string[]
   maxMembers: number
   isGathered: boolean
   createdAt: number
+  source: 'WEB_GROUP' | 'APP_GROUP'
 }
 
-export const createGroupRoom = async (venueId: string, hostId: string, maxMembers = 4) => {
-  const roomRef = await addDoc(collection(db, 'group_rooms'), {
-    venueId,
-    hostId,
-    members: [hostId],
-    maxMembers,
-    isGathered: false,
-    createdAt: Date.now(),
-  } as GroupRoom)
-  return roomRef.id
+export const ensureGroupRoom = async (group: AppGroup, userId: string) => {
+  const roomRef = doc(db, 'group_rooms', String(group.id))
+  const snap = await getDoc(roomRef)
+
+  if (!snap.exists()) {
+    await setDoc(roomRef, {
+      groupId: String(group.id),
+      title: group.title,
+      event: group.event,
+      location: group.location,
+      meetingDate: group.meetingDate ?? '',
+      meetingTime: group.meetingTime ?? '',
+      members: [userId],
+      maxMembers: group.maxMembers,
+      isGathered: group.gathered,
+      createdAt: Date.now(),
+      source: 'WEB_GROUP',
+    } as GroupRoom)
+    return String(group.id)
+  }
+
+  await joinGroupRoom(String(group.id), userId)
+  return String(group.id)
 }
 
 export const joinGroupRoom = async (groupId: string, userId: string) => {

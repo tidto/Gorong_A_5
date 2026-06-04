@@ -10,7 +10,7 @@
 //   → POST /api/v1/users/signup → completeSignup() → 메인탭
 // ─────────────────────────────────────────────────────────────────
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -55,7 +55,18 @@ export default function SignupScreen({ navigation }: Props) {
   const [isForeigner, setIsForeigner] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const { completeSignup, needsSignup } = useAuthStore()
+  const { completeSignup, needsSignup, pendingSignupEmail } = useAuthStore()
+
+  useEffect(() => {
+    if (!needsSignup) return
+    if (pendingSignupEmail) {
+      setEmail(pendingSignupEmail)
+      return
+    }
+    if (auth.currentUser?.email) {
+      setEmail(auth.currentUser.email)
+    }
+  }, [needsSignup, pendingSignupEmail])
 
   // ─── 회원가입 처리 ───────────────────────────
   const handleSignup = async () => {
@@ -77,8 +88,16 @@ export default function SignupScreen({ navigation }: Props) {
       }
 
       // ── Step 2: 백엔드 회원가입 (Firebase 토큰 인터셉터가 자동 첨부) ──
+      const resolvedEmail = needsSignup
+        ? (pendingSignupEmail ?? auth.currentUser?.email)?.trim()
+        : email.trim()
+
+      if (!resolvedEmail) {
+        throw new Error('Firebase 계정 이메일을 확인할 수 없습니다.')
+      }
+
       const payload: SignUpPayload = {
-        email: email.trim(),
+        email: resolvedEmail,
         nickname: nickname.trim(),
         barrierFreeType,
         isForeigner,
@@ -91,7 +110,7 @@ export default function SignupScreen({ navigation }: Props) {
 
       const newUser: User = {
         uid: currentUser.uid,
-        email: email.trim(),
+        email: resolvedEmail,
         nickname: nickname.trim(),
         roleType: 'USER',
         accountStatus: 'ACTIVE',

@@ -56,7 +56,7 @@ export default function GroupScreen() {
   }
 
   return (
-    <ScrollView
+      <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
@@ -68,15 +68,32 @@ export default function GroupScreen() {
     >
       {groups.map((group) => {
         const isFull = group.currentMembers >= group.maxMembers
+        const isSolo = group.maxMembers <= 1 || group.currentMembers < 2
         return (
           <View key={group.id} style={styles.card}>
-            <Text style={styles.title}>{group.title}</Text>
+            <View style={styles.badgeRow}>
+              <Text style={[styles.badge, isSolo && styles.badgeSolo]}>
+                {isSolo ? '혼자참여' : '모임'}
+              </Text>
+              <Text style={styles.statusBadge}>
+                {group.gathered ? '모임 완료' : group.status}
+              </Text>
+            </View>
+
+            <Text style={styles.eventTitle}>{group.event || '이벤트 미정'}</Text>
+            <Text style={styles.groupTitle}>{group.title || '모임 정보'}</Text>
             <Text style={styles.meta}>만나는 장소: {group.location || '미정'}</Text>
-            <Text style={styles.meta}>행사: {group.event || '미정'}</Text>
+            <Text style={styles.meta}>
+              만나는 시간: {(group.meetingDate || '미정')} {group.meetingTime || ''}
+            </Text>
             <Text style={styles.meta}>
               인원: {group.currentMembers}/{group.maxMembers}
             </Text>
-            <Text style={styles.meta}>상태: {group.gathered ? '모임 완료' : group.status}</Text>
+            {isSolo && (
+              <Text style={styles.notice}>
+                혼자참여는 모임 채팅방을 만들지 않습니다.
+              </Text>
+            )}
 
             <View style={styles.row}>
               <TouchableOpacity
@@ -113,15 +130,49 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 18,
+    padding: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  title: { fontSize: 16, fontWeight: '700', marginBottom: 6, color: '#222' },
-  meta: { fontSize: 13, color: '#444', marginBottom: 2 },
+  badgeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  badge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFF1E8',
+    color: '#FF6B35',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: '800',
+    overflow: 'hidden',
+  },
+  badgeSolo: {
+    backgroundColor: '#EDE9FE',
+    color: '#6D28D9',
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F3F4F6',
+    color: '#374151',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
+  eventTitle: { fontSize: 18, fontWeight: '800', marginBottom: 4, color: '#111827' },
+  groupTitle: { fontSize: 13, fontWeight: '700', marginBottom: 8, color: '#FF6B35' },
+  meta: { fontSize: 13, color: '#374151', marginBottom: 3 },
+  notice: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#6d28d9',
+    fontWeight: '700',
+  },
   row: { marginTop: 10, flexDirection: 'row', gap: 8 },
   button: {
     flex: 1,

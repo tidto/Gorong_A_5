@@ -1,15 +1,56 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import * as Location from 'expo-location'
 import MapView, { Circle, Marker, Polyline } from 'react-native-maps'
 import { useGeofence } from '../hooks/useGeofence'
-import { fetchNearbyVenues, uploadFileToS3 } from '../services/api'
+import { fetchNearbyVenues, fetchPublicEvents, uploadFileToS3 } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { useTrailStore } from '../store/trailStore'
-import { Venue } from '../types'
+import { PublicEvent, Venue } from '../types'
+
+function distanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+) {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function formatEventPeriod(start?: string, end?: string) {
+  if (start && end) return `${start} ~ ${end}`
+  if (start) return `${start} 시작`
+  if (end) return `${end} 종료`
+  return '기간 미정'
+}
+
+function mapPublicEventToVenue(item: PublicEvent): Venue {
+  return {
+    id: String(item.contentid),
+    name: item.title,
+    lat: Number(item.mapy),
+    lng: Number(item.mapx),
+    radius: 180,
+    address: item.addr1,
+    category: item.cat1 ?? 'EVENT',
+    imageUrl: item.firstimage,
+    eventStartDate: item.eventStartDate,
+    eventEndDate: item.eventEndDate,
+    overview: item.overview,
+  }
+}
 
 export default function MapScreen() {
   const [venues, setVenues] = useState<Venue[]>([])
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [showPawPrint, setShowPawPrint] = useState(false)
   const [outsideTimer, setOutsideTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
@@ -89,8 +130,20 @@ export default function MapScreen() {
       setUserLocation({ lat: latitude, lng: longitude })
 
       try {
+        const publicResponse = await fetchPublicEvents()
+        const mapped = publicResponse.data
+          .map(mapPublicEventToVenue)
+          .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
+
+        if (mapped.length > 0) {
+          setVenues(mapped)
+          setSelectedVenueId((current) => current ?? mapped[0].id)
+          return
+        }
+
         const response = await fetchNearbyVenues(latitude, longitude)
         setVenues(response.data)
+        setSelectedVenueId((current) => current ?? response.data[0]?.id ?? null)
       } catch (err) {
         console.error('주변 행사 조회 실패:', err)
         Alert.alert('오류', '주변 행사 정보를 불러오지 못했습니다.')
@@ -103,6 +156,17 @@ export default function MapScreen() {
     const venue = venues.find(v => v.id === insideVenueId)
     Alert.alert('도착 인증', `${venue?.name ?? '행사장'}에 도착했습니다.`)
   }, [isVerified, insideVenueId, venues])
+
+  const visibleVenues = useMemo(() => {
+    if (!userLocation) return venues.slice(0, 5)
+    return [...venues]
+      .map((venue) => ({
+        ...venue,
+        distance: distanceMeters(userLocation.lat, userLocation.lng, venue.lat, venue.lng),
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 8)
+  }, [venues, userLocation])
 
   if (!userLocation) {
     return (
@@ -132,12 +196,18 @@ export default function MapScreen() {
               title={venue.name}
               description={venue.address}
               pinColor={insideVenueId === venue.id ? 'green' : 'red'}
+              onPress={() => setSelectedVenueId(venue.id)}
             />
             <Circle
               center={{ latitude: venue.lat, longitude: venue.lng }}
               radius={venue.radius}
-              strokeColor={insideVenueId === venue.id ? 'rgba(0,200,0,0.8)' : 'rgba(0,122,255,0.5)'}
-              fillColor={insideVenueId === venue.id ? 'rgba(0,200,0,0.1)' : 'rgba(0,122,255,0.1)'}
+              strokeWidth={insideVenueId === venue.id ? 4 : 2}
+              strokeColor={insideVenueId === venue.id
+                ? 'rgba(255, 107, 53, 0.95)'
+                : 'rgba(59, 130, 246, 0.75)'}
+              fillColor={insideVenueId === venue.id
+                ? 'rgba(255, 107, 53, 0.30)'
+                : 'rgba(59, 130, 246, 0.16)'}
             />
           </React.Fragment>
         ))}
@@ -157,6 +227,49 @@ export default function MapScreen() {
           ) : null
         ))}
       </MapView>
+
+      <View style={styles.eventSheet}>
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>주변 행사</Text>
+          <Text style={styles.sheetSub}>
+            {selectedVenueId
+              ? '선택된 행사와 지오펜싱 반경을 확인하세요'
+              : '행사 마커를 눌러 상세를 확인하세요'}
+          </Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
+          {visibleVenues.map((venue) => {
+            const isSelected = selectedVenueId === venue.id
+            const isInside = insideVenueId === venue.id
+            return (
+              <TouchableOpacity
+                key={venue.id}
+                style={[
+                  styles.eventCard,
+                  isSelected && styles.eventCardSelected,
+                  isInside && styles.eventCardInside,
+                ]}
+                onPress={() => setSelectedVenueId(venue.id)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.eventCardTitle} numberOfLines={1}>
+                  {venue.name}
+                </Text>
+                <Text style={styles.eventCardPeriod} numberOfLines={1}>
+                  {formatEventPeriod(venue.eventStartDate, venue.eventEndDate)}
+                </Text>
+                <Text style={styles.eventCardAddress} numberOfLines={2}>
+                  {venue.address}
+                </Text>
+                <View style={styles.eventCardFooter}>
+                  <Text style={styles.eventCardRadius}>반경 {venue.radius}m</Text>
+                  {isInside && <Text style={styles.eventCardBadge}>진입 중</Text>}
+                </View>
+              </TouchableOpacity>
+            )
+          })}
+        </ScrollView>
+      </View>
 
       <View style={styles.buttonRow}>
         <TouchableOpacity
@@ -195,7 +308,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   buttonRow: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 154,
     left: 16,
     right: 16,
     flexDirection: 'row',
@@ -228,4 +341,86 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   badgeText: { fontWeight: '700', fontSize: 14 },
+  eventSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 12,
+    paddingBottom: 18,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  sheetHeader: {
+    marginBottom: 10,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  sheetSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  cardRow: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+  eventCard: {
+    width: 180,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  eventCardSelected: {
+    borderColor: '#FF6B35',
+    backgroundColor: '#fff7f2',
+  },
+  eventCardInside: {
+    borderColor: '#FF6B35',
+    backgroundColor: 'rgba(255,107,53,0.12)',
+  },
+  eventCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  eventCardPeriod: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#FF6B35',
+    fontWeight: '700',
+  },
+  eventCardAddress: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#4b5563',
+    lineHeight: 16,
+  },
+  eventCardFooter: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  eventCardRadius: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  eventCardBadge: {
+    fontSize: 11,
+    color: '#FF6B35',
+    fontWeight: '800',
+  },
 })

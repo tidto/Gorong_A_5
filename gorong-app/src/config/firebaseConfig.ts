@@ -8,7 +8,7 @@
 // ──────────────────────────────────────────────────────────────
 
 import { initializeApp, getApps } from 'firebase/app'
-import { getAuth, initializeAuth } from 'firebase/auth'
+import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -23,14 +23,8 @@ const firebaseConfig = {
 // Expo Go 핫리로드 시 "Firebase App already exists" 오류 방지
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 
-// Expo Go/HMR 환경에서 auth 컴포넌트 등록 타이밍 이슈를 줄이기 위한 안전 초기화
-let authInstance
-try {
-  authInstance = initializeAuth(app)
-} catch {
-  authInstance = getAuth(app)
-}
-
-export const auth = authInstance
+// Expo Go에서는 가장 보수적인 기본 Auth 인스턴스를 사용한다.
+// 초기화 꼬임이 생기면 전체 앱이 죽는 문제를 줄이기 위해 단순화한다.
+export const auth = getAuth(app)
 export const db = getFirestore(app)
 export default app

@@ -29,6 +29,7 @@ interface AuthStore {
   accessRestricted: boolean        // 밴/비활성 계정으로 앱 이용 제한
   accessRestrictedMessage: string | null
   insideVenueId: string | null     // 현재 진입한 지오펜스 행사장 ID
+  pendingSignupEmail: string | null
 
   // ─── 액션 ─────────────────────────────────────
   /** 앱 시작 시 AsyncStorage에서 유저 정보 복원 */
@@ -50,6 +51,12 @@ interface AuthStore {
   /** 로그아웃: Firebase + AsyncStorage 초기화 */
   logout: () => Promise<void>
 
+  /** Firebase 세션이 없을 때 로컬 상태만 정리 */
+  resetLocalSession: () => Promise<void>
+
+  /** 소셜 로그인 후 회원가입에서 사용할 이메일 임시 저장 */
+  setPendingSignupEmail: (email: string | null) => void
+
   /** MapScreen/ChatScreen에서 지오펜스 진입 ID 공유 */
   setInsideVenueId: (id: string | null) => void
 }
@@ -62,6 +69,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
   accessRestricted: false,
   accessRestrictedMessage: null,
   insideVenueId: null,
+  pendingSignupEmail: null,
 
   // ─── loadFromStorage ──────────────────────────
   // 앱 재시작 시 이전에 저장된 유저 정보를 불러옴
@@ -101,6 +109,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
           needsSignup: false,
           accessRestricted: true,
           accessRestrictedMessage: res.data.message ?? '계정 이용이 제한되었습니다.',
+          pendingSignupEmail: null,
         })
         await signOut(auth).catch((e) => {
           console.warn('[authStore] 제한 계정 로그아웃 실패:', e)
@@ -123,6 +132,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
           needsSignup: false,
           accessRestricted: false,
           accessRestrictedMessage: null,
+          pendingSignupEmail: null,
         })
         await AsyncStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user))
       } else {
@@ -145,12 +155,13 @@ export const useAuthStore = create<AuthStore>((set) => ({
   // ─── completeSignup ───────────────────────────
   // 회원가입 완료 후 user 세팅 & needsSignup 해제
   completeSignup: async (user: User) => {
-    set({
-      user,
-      needsSignup: false,
-      accessRestricted: false,
-      accessRestrictedMessage: null,
-    })
+      set({
+        user,
+        needsSignup: false,
+        accessRestricted: false,
+        accessRestrictedMessage: null,
+        pendingSignupEmail: null,
+      })
     try {
       await AsyncStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user))
     } catch (e) {
@@ -170,6 +181,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       needsSignup: false,
       accessRestricted: false,
       accessRestrictedMessage: null,
+      pendingSignupEmail: null,
     })
     try {
       await AsyncStorage.removeItem(STORAGE_KEY_USER)
@@ -177,6 +189,25 @@ export const useAuthStore = create<AuthStore>((set) => ({
       console.warn('[authStore] 스토리지 삭제 실패:', e)
     }
   },
+
+  // ─── resetLocalSession ───────────────────────
+  // Firebase 미로그인 상태일 때 캐시된 사용자 정보를 제거한다.
+  resetLocalSession: async () => {
+    set({
+      user: null,
+      needsSignup: false,
+      accessRestricted: false,
+      accessRestrictedMessage: null,
+      pendingSignupEmail: null,
+    })
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY_USER)
+    } catch (e) {
+      console.warn('[authStore] 세션 초기화 실패:', e)
+    }
+  },
+
+  setPendingSignupEmail: (email) => set({ pendingSignupEmail: email }),
 
   // ─── setInsideVenueId ─────────────────────────
   setInsideVenueId: (id) => set({ insideVenueId: id }),

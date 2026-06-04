@@ -19,7 +19,7 @@
     "expo-constants": "~18.0.13",
     "expo-location": "~19.0.8",
     "expo-status-bar": "~3.0.9",
-    "firebase": "^10.14.1",
+    "firebase": "^12.2.1",
     "nativewind": "^4.2.3",
     "react": "19.1.0",
     "react-native": "0.81.5",

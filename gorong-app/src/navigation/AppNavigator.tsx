@@ -14,6 +14,7 @@ import React from 'react'
 import { Text } from 'react-native'
 import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 // ─── 화면 임포트 ──────────────────────────────
 import LoginScreen from '../screens/auth/LoginScreen'
@@ -36,7 +37,7 @@ export type MainTabParamList = {
   지도: undefined
   채팅: undefined
   트레일: undefined
-  그룹: undefined
+  모임: undefined
   신고: undefined
 }
 
@@ -65,15 +66,18 @@ export function AuthNavigator() {
 // MainNavigator — 로그인 후 탭 네비게이션
 // ─────────────────────────────────────────────
 export function MainNavigator() {
+  const insets = useSafeAreaInsets()
+
   return (
-    <MainTab.Navigator
+      <MainTab.Navigator
       screenOptions={{
         tabBarActiveTintColor: '#FF6B35',
         tabBarInactiveTintColor: '#999',
         tabBarStyle: {
           borderTopColor: '#f0f0f0',
           paddingTop: 4,
-          height: 60,
+          paddingBottom: Math.max(insets.bottom, 8),
+          height: 60 + insets.bottom,
         },
         headerShown: false,
       }}
@@ -111,9 +115,9 @@ export function MainNavigator() {
         }}
       />
 
-      {/* 그룹 — 웹에서 생성된 모임 목록 + 참가 */}
+      {/* 모임 — 웹에서 생성된 그룹 목록 + 참가 */}
       <MainTab.Screen
-        name="그룹"
+        name="모임"
         component={GroupScreen}
         options={{
           tabBarIcon: ({ color }) => (

@@ -7,7 +7,7 @@ import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
 import Chat from '../pages/Chat'
 import { lazy, Suspense, useEffect } from 'react'
-const CatTower = lazy(() => import('../pages/minihome/CatTower'))
+const CatTowerPage = lazy(() => import('../pages/minihome/CatTower'))
 import History from '../pages/History'
 import MyPage from '../pages/user/MyPage'
 import Chatbot from '../pages/chatbot/Chatbot'
@@ -101,9 +101,9 @@ export default function AppRouter() {
         <Router>
             <CatTowerPreviewProvider>
                 <ChatNotificationProvider>
-                <NavigationInitializer />
-                <Layout>
-                    <Routes>
+                    <NavigationInitializer />
+                    <Layout>
+                        <Routes>
                         <Route path="/" element={<Home />} />
                         <Route path="/signup" element={<Signup />} />
                         <Route path="/login" element={<Login />} />

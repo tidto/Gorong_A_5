@@ -1,11 +1,19 @@
 // src/services/api.ts
 import axios from 'axios'
 import { auth } from '../config/firebaseConfig'
-import { AppGroup, Venue } from '../types'
+import { AppGroup, PublicEvent, Venue } from '../types'
+
+const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1'
+const rootUrl = baseUrl.replace(/\/api\/v1$/, '')
 
 const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1',
+  baseURL: baseUrl,
   timeout: 10000,  // 10초 타임아웃 추가
+})
+
+const publicApi = axios.create({
+  baseURL: rootUrl,
+  timeout: 10000,
 })
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
@@ -38,25 +46,30 @@ api.interceptors.request.use(async (config) => {
   return config
 })
 
+publicApi.interceptors.request.use(async (config) => {
+  const currentUser = auth.currentUser
+  if (currentUser) {
+    try {
+      const token = await withTimeout(currentUser.getIdToken(), 3000)
+      config.headers.Authorization = `Bearer ${token}`
+    } catch (e) {
+      console.error('Firebase 토큰 갱신 실패:', e)
+    }
+  }
+  return config
+})
+
 // 주변 행사 조회 (TourAPI는 백엔드가 처리)
 export const fetchNearbyVenues = (lat: number, lng: number, radius = 5000) =>
   api.get<Venue[]>('/app/venues/nearby', { params: { lat, lng, radius } })
 
+// DB에 동기화된 행사 목록 조회
+export const fetchPublicEvents = () =>
+  publicApi.get<PublicEvent[]>('/api/public/map')
+
 // 도착 인증 (위경도 포함 → 백엔드 PostGIS 검증)
 export const verifyArrival = (venueId: string, lat: number, lng: number) =>
   api.post<string>('/app/arrivals', { venueId, lat, lng })
-
-// 모임 생성
-export const createGroupChat = (venueId: string, maxMembers = 4) =>
-  api.post('/app/groups', { venueId, maxMembers })
-
-// 모임 참가
-export const joinGroup = (groupId: string) =>
-  api.post(`/app/groups/${groupId}/join`)
-
-// 모임 모였다 인증
-export const confirmGathered = (groupId: string) =>
-  api.post(`/app/groups/${groupId}/gather`)
 
 // 앱 그룹 목록 조회 (웹에서 생성된 그룹 포함)
 export const fetchAppGroups = () =>
