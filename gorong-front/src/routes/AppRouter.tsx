@@ -125,9 +125,9 @@ export default function AppRouter() {
                         <Route path="/group" element={<ProtectedRoute><GroupListPage /></ProtectedRoute>} />
                         <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
                         <Route path="/minihompy" element={<Navigate to="/cattower" replace />} />
-                        <Route path="/cattower/user/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
-                        <Route path="/cattower/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
-                        <Route path="/cattower" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
+                        <Route path="/cattower/user/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
+                        <Route path="/cattower/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
+                        <Route path="/cattower" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
                         {import.meta.env.DEV ? (
                             <Route path="/dev/rive-customizer" element={<ProtectedRoute><RiveCustomizerDevPage /></ProtectedRoute>} />
                         ) : null}
