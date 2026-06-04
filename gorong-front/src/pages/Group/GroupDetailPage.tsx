@@ -104,6 +104,32 @@ export default function GroupDetailPage() {
         ? isMyGroup({ authorEmail: post.author?.email, authorName: post.authorName })
         : false;
 
+    // ── 참여 취소 ────────────────────────────────────────────
+    const handleLeave = useCallback(async () => {
+        if (!window.confirm('정말 참여를 취소하시겠습니까?')) return;
+        try {
+            await axiosInstance.delete(`/groups/${id}/leave`);
+            setIsJoined(false);
+            setPost(prev => prev
+                ? { ...prev, currentCapacity: Math.max(0, (prev.currentCapacity ?? 1) - 1) }
+                : prev
+            );
+
+            // event_participation 이력도 함께 취소
+            if (post?.event) {
+                try {
+                    await axiosInstance.delete(`/event-participation/group/${id}`, {
+                        params: { eventContentId: post.event },
+                    });
+                } catch { /* 이력 취소 실패는 무시 */ }
+            }
+        } catch (err: any) {
+            const status = err?.response?.status;
+            if (status === 401) alert('로그인이 필요합니다.');
+            else alert('참여 취소 중 오류가 발생했습니다.');
+        }
+    }, [id, post]);
+
     // ── 참여 신청 ────────────────────────────────────────────
     const handleJoin = useCallback(async () => {
         try {
@@ -114,6 +140,20 @@ export default function GroupDetailPage() {
                 ? { ...prev, currentCapacity: (prev.currentCapacity ?? 0) + 1 }
                 : prev
             );
+
+            // 행사 참여 이력 기록 (그룹 참여)
+            // post.event 에 eventContentId 가 담겨 있다고 가정 (GroupListPage → GroupPost.event)
+            // eventContentId 가 없으면 기록을 건너뜀
+            if (post?.event) {
+                try {
+                    await axiosInstance.post(`/event-participation/group/${id}`, {
+                        eventContentId: post.event,   // GroupPost.event = TourAPI contentId or title
+                        eventTitle: post.title,
+                    });
+                } catch {
+                    // 이력 저장 실패는 참여 자체를 막지 않음 (silent fail)
+                }
+            }
         } catch (err: any) {
             const status = err?.response?.status;
             if (status === 401) alert('로그인이 필요합니다.');
@@ -121,7 +161,7 @@ export default function GroupDetailPage() {
         } finally {
             setIsJoining(false);
         }
-    }, [id]);
+    }, [id, post]);
 
     // ── 삭제 ─────────────────────────────────────────────────
     const handleDelete = useCallback(async () => {
@@ -281,12 +321,20 @@ export default function GroupDetailPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {!canEdit && (
                 isJoined ? (
-                    <button
-                        onClick={() => navigate(`/chat/${post.id}`)}
-                        style={{ width: '100%', padding: '17px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '800', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                    >
-                        채팅방 입장하기
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                            onClick={() => navigate(`/chat/${post.id}`)}
+                            style={{ flex: 1, padding: '17px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '800', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        >
+                            채팅방 입장하기
+                        </button>
+                        <button
+                            onClick={handleLeave}
+                            style={{ padding: '17px 20px', borderRadius: '14px', border: '2px solid #fee2e2', backgroundColor: 'white', color: '#ef4444', fontWeight: '800', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        >
+                            참여 취소
+                        </button>
+                    </div>
                 ) : (
                     <button
                         onClick={handleJoin}
