@@ -60,6 +60,8 @@ public class SecurityConfig {
                         // 💬 웹소켓(채팅) 엔드포인트 허용
                         // minihome — Spring Security는 통과, /me/** 는 Controller에서 Firebase userId 검증
                         .requestMatchers("/api/minihomes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/guestbook/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/cattower/**").permitAll()
                         .requestMatchers("/api/ws-chat/**","/ws-chat/**" ).permitAll()
                         .requestMatchers("/api/chat/**").permitAll()
                         .requestMatchers("/api/public-chat/**").permitAll()

@@ -1,6 +1,6 @@
 // 경로: src/components/GroupPublicChatSection.tsx
 // 변경사항:
-//  - 슬롯 클릭 시 해당 유저의 캣타워(/cattower/:userId)로 이동
+//  - 슬롯 클릭 시 해당 유저 캣타워 미리보기 오버레이 표시
 //  - 고양이 이미지: matching_cat_faces 정적 이미지 + catColor 필터 유지
 //    (기존 방식 그대로, 슬롯 크기만 확대: 44px → 60px)
 //  - 빈 슬롯 크기도 동일하게 확대
@@ -9,13 +9,13 @@
 //  - [디자인 변경] 기존의 파란색 톤을 왼쪽 모집 UI와 어울리는 웜톤 오렌지/소프트 베이지/카키 톤으로 교체
 
 import { useRef, useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
     usePublicGroupWebSocketChat,
     type ChatParticipant,
     type PublicChatMsg,
 } from '../hooks/usePublicGroupWebSocketChat'
 import { auth } from '../firebase/firebaseConfig'
+import { useCatTowerPreview } from '../contexts/CatTowerPreviewContext'
 
 const MAX_SLOTS = 6
 
@@ -111,7 +111,7 @@ function ParticipantSlot({
                 ? `${participant.catName} · ${stage.label} · ${participant.nickname} — 캣타워 보기`
                 : `${participant.catName} · ${stage.label} · ${participant.nickname}`}
         >
-            {/* 고양이 이미지 영역 */}
+            {/* 익명 프로필 영역 */}
             <div style={{
                 width: '60px', height: '60px', borderRadius: '12px',
                 backgroundColor: colors.bg,
@@ -119,16 +119,11 @@ function ParticipantSlot({
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 overflow: 'hidden', position: 'relative', flexShrink: 0,
             }}>
-                <img
-                    src={faceSrc}
-                    alt={participant.catName}
-                    style={{ width: '44px', height: '44px', objectFit: 'contain', filter: catColorFilter(colorKey) }}
-                    onError={e => {
-                        e.currentTarget.style.display = 'none'
-                        const p = e.currentTarget.parentElement
-                        if (p) p.innerHTML = `<span style="font-size:28px">${stage.emoji}</span>`
-                    }}
-                />
+                {/* 익명 실루엣 아이콘 */}
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="18" cy="13" r="7" fill={colors.border} opacity="0.6"/>
+                    <path d="M4 32c0-7.732 6.268-14 14-14s14 6.268 14 14" fill={colors.border} opacity="0.6"/>
+                </svg>
                 {/* 성장단계 뱃지 */}
                 <div style={{
                     position: 'absolute', bottom: '-3px', right: '-3px',
@@ -172,6 +167,28 @@ function ParticipantSlot({
     )
 }
 
+// ── 입장 알림 행 ────────────────────────────────────────────
+function JoinNoticeRow({ msg, groupTitle }: { msg: PublicChatMsg; groupTitle?: string }) {
+    const nickname = msg.user || msg.senderEmail?.split('@')[0] || '누군가'
+    const roomName = groupTitle ? `${groupTitle} 공개 채팅방` : '공개 채팅방'
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: '10px', gap: '6px',
+        }}>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(212,122,85,0.2)' }} />
+            <span style={{
+                fontSize: '11px', color: '#D47A55', fontWeight: '700',
+                backgroundColor: '#FFF4ED', border: '1px solid rgba(212,122,85,0.3)',
+                borderRadius: '20px', padding: '3px 10px', whiteSpace: 'nowrap',
+            }}>
+                🐾 <strong>{nickname}</strong>님이 {roomName}에 입장하였습니다.
+            </span>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(212,122,85,0.2)' }} />
+        </div>
+    )
+}
+
 // ── 메시지 행 ────────────────────────────────────────────────
 function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
     const colorKey = msg.catColor?.toUpperCase() ?? 'CREAM'
@@ -189,22 +206,16 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
                 backgroundColor: colors.bg, border: `2px solid ${colors.border}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0, overflow: 'hidden',
-            }} title={`${msg.nickname || msg.catName || msg.user} · ${msg.catName}`}>
-                <img
-                    src={faceSrc}
-                    alt=""
-                    style={{ width: '24px', height: '24px', objectFit: 'contain', filter: catColorFilter(colorKey) }}
-                    onError={e => {
-                        e.currentTarget.style.display = 'none'
-                        const p = e.currentTarget.parentElement
-                        if (p) p.innerHTML = `<span style="font-size:18px">${stage.emoji}</span>`
-                    }}
-                />
+            }} title={`${msg.catName || msg.user} · ${msg.catName}`}>
+                <svg width="20" height="20" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="18" cy="13" r="7" fill={colors.border} opacity="0.6"/>
+                    <path d="M4 32c0-7.732 6.268-14 14-14s14 6.268 14 14" fill={colors.border} opacity="0.6"/>
+                </svg>
             </div>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                 <div style={{ display: 'flex', gap: '5px', alignItems: 'baseline', marginBottom: '3px', flexDirection: isMe ? 'row-reverse' : 'row' }}>
                     <span style={{ fontSize: '11px', fontWeight: '700', color: isMe ? '#D47A55' : colors.text }}>
-                        {isMe ? '나' : (msg.nickname || msg.catName || msg.user || '익명')}
+                        {isMe ? '나' : (msg.nickname || msg.user || '익명')}
                     </span>
                     <span style={{ fontSize: '9px', color: '#94a3b8' }}>{msg.sentAt}</span>
                 </div>
@@ -232,16 +243,24 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
 }
 
 // ── 메인 컴포넌트 ────────────────────────────────────────────
-interface Props { groupId: string | number }
+interface Props { groupId: string | number; groupTitle?: string }
 
-export default function GroupPublicChatSection({ groupId }: Props) {
+export default function GroupPublicChatSection({ groupId, groupTitle }: Props) {
     const [input, setInput]         = useState('')
     const [isEntered, setIsEntered] = useState(false)
+    const [historyLoaded, setHistoryLoaded] = useState(false)
     const messageListRef = useRef<HTMLDivElement>(null)
-    const navigate  = useNavigate()
+    const { openCatTower } = useCatTowerPreview()
 
     const { messages, participants, connected, sending, myCat, sendMessage, sendJoin, sendLeave } =
         usePublicGroupWebSocketChat(groupId)
+
+    // 메시지가 처음 세팅되면 이력 로드 완료로 간주
+    useEffect(() => {
+        if (!historyLoaded && (messages.length > 0 || connected)) {
+            setHistoryLoaded(true)
+        }
+    }, [messages, connected, historyLoaded])
 
     const currentUserEmail = auth.currentUser?.email ?? ''
 
@@ -292,9 +311,9 @@ export default function GroupPublicChatSection({ groupId }: Props) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
     }
 
-    // 슬롯 클릭 → 캣타워 이동
+    // 슬롯 클릭 → 캣타워 미리보기
     const handleSlotNavigate = (userId: number) => {
-        navigate(`/cattower/${userId}`)
+        openCatTower(userId)
     }
 
     return (
@@ -343,7 +362,7 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                     ))}
                 </div>
                 <p style={{ margin: 0, fontSize: '10px', color: 'rgba(255,255,255,0.8)', textAlign: 'center', fontWeight: '600' }}>
-                    고냥이를 클릭하면 캣타워로 이동해요
+                    🏠 고냥이를 클릭하면 캣타워를 미리볼 수 있어요
                 </p>
             </div>
 
@@ -359,7 +378,26 @@ export default function GroupPublicChatSection({ groupId }: Props) {
 
             {/* ── 메시지 목록 ── */}
             <div ref={messageListRef} style={{ height: '260px', overflowY: 'auto', backgroundColor: '#FDFBF7', padding: '14px 14px 6px', display: 'flex', flexDirection: 'column', scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb #FDFBF7' }}>
-                {messages.length === 0 ? (
+                {!historyLoaded ? (
+                    /* 스켈레톤 로딩 */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '4px' }}>
+                        {[80, 55, 70, 45].map((w, i) => (
+                            <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: i % 2 === 1 ? 'row-reverse' : 'row' }}>
+                                <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#e5e7eb', flexShrink: 0, animation: 'skeletonPulse 1.4s ease-in-out infinite' }} />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: i % 2 === 1 ? 'flex-end' : 'flex-start' }}>
+                                    <div style={{ width: 48, height: 10, borderRadius: 6, backgroundColor: '#e5e7eb', animation: 'skeletonPulse 1.4s ease-in-out infinite' }} />
+                                    <div style={{ width: `${w}px`, height: 32, borderRadius: 10, backgroundColor: '#ede9e2', animation: 'skeletonPulse 1.4s ease-in-out infinite' }} />
+                                </div>
+                            </div>
+                        ))}
+                        <style>{`
+                            @keyframes skeletonPulse {
+                                0%, 100% { opacity: 1; }
+                                50% { opacity: 0.45; }
+                            }
+                        `}</style>
+                    </div>
+                ) : messages.length === 0 ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px', textAlign: 'center', gap: '8px' }}>
                         <img
                             src="/assets/cat/faces/matching_cat_faces/sad.png"
@@ -370,16 +408,18 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                         <span>아직 대화가 없어요 ㅠ.ㅠ<br />첫 메시지를 남겨보세요!</span>
                     </div>
                 ) : (
-                    messages.map((msg, i) => (
-                        <MessageRow
-                            key={i}
-                            msg={msg}
-                            isMe={
-                                !!currentUserEmail &&
-                                (msg.senderEmail === currentUserEmail || msg.user === currentUserEmail)
-                            }
-                        />
-                    ))
+                    messages.map((msg, i) =>
+                        msg.type === 'JOIN'
+                            ? <JoinNoticeRow key={i} msg={msg} groupTitle={groupTitle} />
+                            : <MessageRow
+                                key={i}
+                                msg={msg}
+                                isMe={
+                                    !!currentUserEmail &&
+                                    (msg.senderEmail === currentUserEmail || msg.user === currentUserEmail)
+                                }
+                            />
+                    )
                 )}
             </div>
 

@@ -17,7 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.gorong.backend.domain.interest.repository.UserInterestsRepository;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -29,6 +31,7 @@ public class UserController {
     private final UserService userService;
     private final UserProfileRepository userProfileRepository;
     private final AdminService adminService;
+    private final UserInterestsRepository userInterestsRepository;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(Authentication authentication) {
@@ -44,13 +47,19 @@ public class UserController {
                     .map(UserProfile::getNickname)
                     .orElse("");
 
+            List<String> interests = userInterestsRepository.findByUserId(user.getId())
+                    .stream()
+                    .map(ui -> ui.getInterest().getTourCategoryCode())  // "NA", "VE" 등
+                    .toList();
+
             // 프론트가 기대하는 { isRegistered: true, user: { nickname, email } } 구조
             return ResponseEntity.ok(Map.of(
                     "isRegistered", true,
                     "user", Map.of(
                             "nickname", nickname,
                             "email", user.getEmail(),
-                            "roleType", user.getRoleType().name()
+                            "roleType", user.getRoleType().name(),
+                            "interests", interests // 관심사 추가
                     )
             ));
         } else {

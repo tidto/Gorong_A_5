@@ -14,6 +14,33 @@ import type { UserItem } from "../../../types/minihome/item";
 export type { GoCatItem, GoCatItemCategory };
 export { GOCAT_ITEMS, getGoCatItemsByCategory, findGoCatItem, findGoCatItemByCode };
 
+export type DecorItemWithOwnership = DecorItem & {
+  owned: boolean;
+  /** 행사 보상 미획득 시에만 true */
+  locked?: boolean;
+  unlockHint?: string;
+};
+
+export function normalizeItemCode(code?: string | null): string {
+  return (code ?? "").trim().toLowerCase().replace(/-/g, "_");
+}
+
+export function itemCodesMatch(a?: string | null, b?: string | null): boolean {
+  return normalizeItemCode(a) === normalizeItemCode(b);
+}
+
+/** DB 장착 저장용 — USER_ITEM 보유 시에만 itemId 반환 (MVP 기본 아이템은 appearance 저장) */
+export function resolveOwnedItemId(
+  decor: DecorItem | null,
+  ownedItems: UserItem[]
+): number | null {
+  if (!decor) return null;
+  const code = decor.itemCode?.trim();
+  if (!code) return null;
+  const owned = ownedItems.find((o) => itemCodesMatch(o.itemCode, code));
+  return owned?.itemId ?? null;
+}
+
 /** @deprecated GoCatItem 사용 */
 export type DecorCatalogItem = {
   id: number;
@@ -105,12 +132,12 @@ function dedupeDecorItems(items: DecorItem[]): DecorItem[] {
   return out;
 }
 
-/** 정적 GOCAT_ITEMS 기반 — DB/API 보유 아이템은 MVP에서 제외 */
+/** 정적 GOCAT_ITEMS 기반 — MVP 기본 아이템은 항상 선택 가능 */
 export function listDecorItemsForSlot(
   targetSlot: SlotType,
   growthStage: GrowthStage,
   _ownedItems: UserItem[] = []
-): DecorItem[] {
+): DecorItemWithOwnership[] {
   return dedupeDecorItems(
     getGoCatItemsByCategory(targetSlot)
       .map(goCatItemToDecorItem)
@@ -120,5 +147,9 @@ export function listDecorItemsForSlot(
         if (!isItemSlotCompatible(slot, growthStage)) return false;
         return isItemUnlockedByStage(it.requiredGrowthStage, growthStage);
       })
-  );
+  ).map((it) => ({
+    ...it,
+    owned: true,
+    locked: false,
+  }));
 }

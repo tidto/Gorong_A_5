@@ -193,6 +193,7 @@ export default function MiniHome() {
       setEquippedDraft(draft);
       setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
       setDecorateOpen(false);
+      await loadPage();
     }
   }
 
@@ -558,6 +559,7 @@ export default function MiniHome() {
                 selectedBodyItem={customize.selectedBodyItem}
                 selectedAccessoryItem={customize.selectedAccessoryItem}
                 setEquipDraft={customize.setEquipDraft}
+                itemsBySlot={customize.itemsBySlot}
                 itemsLoading={customize.itemsLoading}
                 itemsLoadError={customize.itemsLoadError}
                 disabled={customize.saving}

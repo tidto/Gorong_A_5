@@ -416,15 +416,17 @@ export function useChatRoom() {
         setIsConnected(false)
         connectedGroupIdRef.current = gid
 
-        // 과거 채팅 기록 먼저 표시
-        const history = await loadChatHistory(gid)
+        // 채팅 기록 로드와 Firebase 토큰 취득을 동시에 요청 (순차→병렬 최적화)
+        const [history, token] = await Promise.all([
+            loadChatHistory(gid),
+            auth.currentUser?.getIdToken() ?? Promise.resolve(null),
+        ])
+
         setMessages([
             { user: '시스템', text: `[${groupTitle}] 채팅방에 입장했습니다.` },
             ...history,
         ])
 
-        // Firebase 토큰 취득
-        const token = await auth.currentUser?.getIdToken()
         if (!token) {
             debugLog('connect', 'Firebase 토큰 없음, 연결 중단')
             setIsConnecting(false)

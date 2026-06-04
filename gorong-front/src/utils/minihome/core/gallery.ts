@@ -26,3 +26,29 @@ export function getGalleryCoverUrl(gallery: GalleryItem): string | null {
   const first = gallery.images?.[0];
   return first?.imageUrl?.trim() ? first.imageUrl : null;
 }
+
+export type GalleryPhotoPreview = {
+  galleryImageId: number;
+  imageUrl: string;
+  galleryTitle: string;
+  createAt: string;
+};
+
+/** 모든 갤러리에서 최신 사진 N장 (createAt 내림차순) */
+export function getRecentGalleryPhotos(
+  galleries: GalleryItem[],
+  limit = 3
+): GalleryPhotoPreview[] {
+  const flat = (galleries ?? []).flatMap((gallery) => {
+    const title = gallery.title?.trim() || `갤러리 #${gallery.galleryId}`;
+    return (gallery.images ?? []).map((img) => ({
+      galleryImageId: img.galleryImageId,
+      imageUrl: img.imageUrl,
+      galleryTitle: title,
+      createAt: img.createAt,
+    }));
+  });
+
+  flat.sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime());
+  return flat.slice(0, limit);
+}

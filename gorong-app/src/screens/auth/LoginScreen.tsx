@@ -5,7 +5,7 @@
 // 흐름: 이메일/비밀번호 입력 → Firebase 로그인 → 백엔드 체크 (authStore)
 // ─────────────────────────────────────────────────────────────────
 
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import {
   View,
   Text,
@@ -19,18 +19,14 @@ import {
   ScrollView,
 } from 'react-native'
 import * as WebBrowser from 'expo-web-browser'
-import * as AuthSession from 'expo-auth-session'
 import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google'
-import { useAuthRequest } from 'expo-auth-session'
 import {
   GoogleAuthProvider,
   signInWithCredential,
   signInWithEmailAndPassword,
-  signInWithCustomToken,
 } from 'firebase/auth'
 import { auth } from '../../config/firebaseConfig'
 import { useAuthStore } from '../../store/authStore'
-import api from '../../services/api'
 import { StackNavigationProp } from '@react-navigation/stack'
 import { AuthStackParamList } from '../../navigation/AppNavigator'
 
@@ -43,31 +39,14 @@ type Props = {
 
 const GOOGLE_ANDROID_CLIENT_ID = '922347757040-mpn42qp4epab6l94gdhq9tvtieeq2dbd.apps.googleusercontent.com'
 const GOOGLE_IOS_CLIENT_ID = '922347757040-m26h57lbp4eqbuc5d25r6d8v35hmi89k.apps.googleusercontent.com'
-const GITHUB_CLIENT_ID = process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID?.trim() ?? ''
-const GITHUB_DISCOVERY = {
-  authorizationEndpoint: 'https://github.com/login/oauth/authorize',
-  tokenEndpoint: 'https://github.com/login/oauth/access_token',
-}
-
-function buildRedirectUri() {
-  try {
-    return AuthSession.getRedirectUrl('oauthredirect')
-  } catch {
-    // Expo Go에서 originalFullName을 못 찾는 경우에도
-    // GitHub OAuth callback은 고정 proxy URL로 유지한다.
-    return 'https://auth.expo.io/@anonymous/gorong-app/oauthredirect'
-  }
-}
 
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loadingProvider, setLoadingProvider] = useState<'email' | 'google' | 'github' | null>(null)
+  const [loadingProvider, setLoadingProvider] = useState<'email' | 'google' | null>(null)
 
   // 백엔드 로그인 확인 함수
-  const { checkBackendLogin, setPendingSignupEmail } = useAuthStore()
-
-  const redirectUri = useMemo(() => buildRedirectUri(), [])
+  const { checkBackendLogin } = useAuthStore()
 
   const [googleRequest, , promptGoogleAsync] = useIdTokenAuthRequest({
     clientId: GOOGLE_ANDROID_CLIENT_ID,
@@ -76,16 +55,6 @@ export default function LoginScreen({ navigation }: Props) {
     scopes: ['openid', 'profile', 'email'],
     selectAccount: true,
   })
-
-  const [githubRequest, , promptGithubAsync] = useAuthRequest({
-    clientId: GITHUB_CLIENT_ID || 'missing-github-client-id',
-    scopes: ['read:user', 'user:email'],
-    redirectUri,
-    usePKCE: true,
-    extraParams: {
-      allow_signup: 'true',
-    },
-  }, GITHUB_DISCOVERY)
 
   // ─── 로그인 처리 ──────────────────────────────
   const handleLogin = async () => {
@@ -141,49 +110,6 @@ export default function LoginScreen({ navigation }: Props) {
     }
   }
 
-  const handleGithubLogin = async () => {
-    if (!GITHUB_CLIENT_ID) {
-      Alert.alert(
-        'GitHub 설정 필요',
-        'EXPO_PUBLIC_GITHUB_CLIENT_ID가 설정되어 있어야 GitHub 로그인이 동작합니다.'
-      )
-      return
-    }
-
-    setLoadingProvider('github')
-    try {
-      const result = await promptGithubAsync()
-      if (result.type !== 'success') return
-
-      const code = result.params?.code
-      if (!code) {
-        throw new Error('GitHub authorization code를 받지 못했습니다.')
-      }
-
-      const backendResponse = await api.post('/auth/github/login', {
-        code,
-        redirectUri,
-        codeVerifier: githubRequest?.codeVerifier ?? null,
-      })
-
-      const customToken = backendResponse.data?.customToken
-      if (!customToken) {
-        throw new Error('GitHub custom token을 받지 못했습니다.')
-      }
-
-      setPendingSignupEmail(backendResponse.data?.isRegistered ? null : backendResponse.data?.email ?? null)
-
-      await signInWithCustomToken(auth, customToken)
-      await checkBackendLogin()
-    } catch (error: any) {
-      if (error?.message?.includes('cancel')) return
-      console.error('[LoginScreen] GitHub 로그인 실패:', error)
-      Alert.alert('GitHub 로그인 실패', '깃허브 로그인 중 문제가 발생했습니다.')
-    } finally {
-      setLoadingProvider(null)
-    }
-  }
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -211,19 +137,6 @@ export default function LoginScreen({ navigation }: Props) {
               <ActivityIndicator color="#1f2937" />
             ) : (
               <Text style={styles.socialBtnText}>Google로 계속</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.socialBtn, styles.githubBtn, loadingProvider && styles.btnDisabled]}
-            onPress={handleGithubLogin}
-            disabled={loadingProvider !== null || !githubRequest || !GITHUB_CLIENT_ID}
-            activeOpacity={0.85}
-          >
-            {loadingProvider === 'github' ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.socialBtnTextGithub}>GitHub로 계속</Text>
             )}
           </TouchableOpacity>
 
@@ -350,17 +263,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderColor: '#d0d7de',
   },
-  githubBtn: {
-    backgroundColor: '#24292f',
-    borderColor: '#24292f',
-  },
   socialBtnText: {
     color: '#1f2937',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  socialBtnTextGithub: {
-    color: '#fff',
     fontSize: 15,
     fontWeight: '700',
   },
