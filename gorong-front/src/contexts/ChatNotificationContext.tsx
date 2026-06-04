@@ -44,8 +44,10 @@ interface ChatNotificationContextType {
     toastNotification: ChatNotification | null
     /** 모든 알림을 읽음 처리 */
     markAllRead: () => void
-    /** 특정 그룹 알림만 읽음 처리 */
+    /** 특정 그룹 알림만 읽음 처리 (그룹 단위 일괄 삭제) */
     markGroupRead: (groupId: number) => void
+    /** 알림 1개만 읽음 처리 (id 기준 개별 삭제) */
+    markRead: (id: number) => void
 }
 
 const ChatNotificationContext = createContext<ChatNotificationContextType | undefined>(undefined)
@@ -227,6 +229,11 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
         setNotifications(prev => prev.filter(n => n.groupId !== groupId))
     }, [])
 
+    /** 알림 1개만 삭제 (id 기준) */
+    const markRead = useCallback((id: number) => {
+        setNotifications(prev => prev.filter(n => n.id !== id))
+    }, [])
+
     const unreadCount = notifications.length
 
     return (
@@ -236,6 +243,7 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
             toastNotification,
             markAllRead,
             markGroupRead,
+            markRead,
         }}>
             {children}
         </ChatNotificationContext.Provider>

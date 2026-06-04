@@ -19,7 +19,7 @@ interface GroupForPermission { authorEmail?: string; authorName?: string }
 declare global { interface Window { kakao: any } }
 
 type SortOrder = 'createdAt' | 'meetingDate';
-type StatusTab = 'open' | 'inProgress' | 'closed';
+type StatusTab = 'open' | 'inProgress' | 'closed' | 'joined';
 
 // ✅ 날짜 필터 옵션
 type DateFilter = 'ALL' | 'today' | 'thisWeek' | 'thisWeekend' | 'nextWeek';
@@ -208,9 +208,14 @@ const GroupListPage = () => {
     const q = searchTerm.toLowerCase();
     const matchSearch = g.title?.toLowerCase().includes(q) || g.event?.toLowerCase().includes(q) || g.location?.toLowerCase().includes(q);
     const matchEvent  = selectedEventFilter === 'ALL' || g.event?.trim() === selectedEventFilter;
-    const isClosed    = getIsClosed(g);
-    const matchTab    = getDisplayStatus(g) === statusTab;
     const matchDate   = matchesDateFilter(g.meetingDate, dateFilter); // ✅ 날짜 필터 적용
+
+    if (statusTab === 'joined') {
+      const isJoined = joinedGroupIds.includes(g.id);
+      return matchSearch && matchEvent && isJoined && matchDate;
+    }
+
+    const matchTab    = getDisplayStatus(g) === statusTab;
     return matchSearch && matchEvent && matchTab && matchDate;
   });
 
@@ -231,6 +236,7 @@ const GroupListPage = () => {
   const openCount       = groups.filter(g => getDisplayStatus(g) === 'open').length;
   const inProgressCount = groups.filter(g => getDisplayStatus(g) === 'inProgress').length;
   const closedCount     = groups.filter(g => getDisplayStatus(g) === 'closed').length;
+  const joinedCount     = joinedGroupIds.length;
 
   // ✅ 날짜 필터 버튼 목록
   const dateFilterOptions: { key: DateFilter; label: string; emoji: string }[] = [
@@ -294,12 +300,13 @@ const GroupListPage = () => {
             />
           </div>
 
-          {/* ── 모집중 / 진행중 / 마감 탭 ── */}
+          {/* ── 모집중 / 진행중 / 마감 / 참여중 탭 ── */}
           <div style={{ display: 'flex', gap: '0', marginBottom: '16px', backgroundColor: 'white', borderRadius: '14px', padding: '4px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e8edf5' }}>
             {([
               { key: 'open'       as StatusTab, label: '모집중', count: openCount,       activeColor: '#ff8a3d' },
               { key: 'inProgress' as StatusTab, label: '진행중', count: inProgressCount, activeColor: '#3b82f6' },
               { key: 'closed'     as StatusTab, label: '마감',   count: closedCount,     activeColor: '#64748b' },
+              { key: 'joined'     as StatusTab, label: '참여중', count: joinedCount,     activeColor: '#10b981' },
             ]).map(({ key, label, count, activeColor }) => (
                 <button
                     key={key}
@@ -575,16 +582,18 @@ const GroupListPage = () => {
           {sortedGroups.length === 0 && (
               <div style={{ marginTop: '20px', padding: '60px 20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #e8edf5' }}>
                 <div style={{ fontSize: '36px', marginBottom: '12px' }}>
-                  {dateFilter !== 'ALL' ? '📅' : statusTab === 'open' ? '🔍' : '📭'}
+                  {dateFilter !== 'ALL' ? '📅' : statusTab === 'joined' ? '🤝' : statusTab === 'open' ? '🔍' : '📭'}
                 </div>
                 <p style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>
                   {dateFilter !== 'ALL'
                       ? '해당 날짜에 열리는 모임이 없습니다.'
-                      : statusTab === 'open'
-                          ? '현재 모집중인 게시글이 없습니다.'
-                          : statusTab === 'inProgress'
-                              ? '현재 진행중인 모임이 없습니다.'
-                              : '마감된 게시글이 없습니다.'}
+                      : statusTab === 'joined'
+                          ? '현재 참여중인 모임이 없습니다.'
+                          : statusTab === 'open'
+                              ? '현재 모집중인 게시글이 없습니다.'
+                              : statusTab === 'inProgress'
+                                  ? '현재 진행중인 모임이 없습니다.'
+                                  : '마감된 게시글이 없습니다.'}
                 </p>
               </div>
           )}

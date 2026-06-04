@@ -90,13 +90,16 @@ export default function GroupDetailPage() {
 
     useEffect(() => {
         if (!id) return;
-        axiosInstance.get<GroupPost>(`/groups/${id}`)
-            .then(res => setPost(res.data))
+        // 그룹 상세 + 참여 여부를 동시에 요청 (순차→병렬 최적화)
+        Promise.all([
+            axiosInstance.get<GroupPost>(`/groups/${id}`),
+            axiosInstance.get<number[]>('/groups/joined-ids'),
+        ])
+            .then(([postRes, idsRes]) => {
+                setPost(postRes.data);
+                setIsJoined(idsRes.data.includes(Number(id)));
+            })
             .catch(() => navigate('/group', { replace: true }));
-
-        axiosInstance.get<number[]>('/groups/joined-ids')
-            .then(res => setIsJoined(res.data.includes(Number(id))))
-            .catch(() => {});
     }, [id, navigate]);
 
     useEffect(() => {
@@ -598,7 +601,7 @@ export default function GroupDetailPage() {
 
                 {/* ── 오른쪽: 공개 채팅방 ── */}
                 <div style={{ alignSelf: 'start', position: 'sticky', top: '80px' }}>
-                    <GroupPublicChatSection groupId={post.id} isClosed={isClosed} />
+                    <GroupPublicChatSection groupId={post.id} isClosed={isClosed} groupTitle={post.title} />
                 </div>
             </div>
 

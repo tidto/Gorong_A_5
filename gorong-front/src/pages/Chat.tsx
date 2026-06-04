@@ -193,7 +193,6 @@ export default function Chat() {
                   const isActive = activeGroup?.id === group.id
                   const isGroupClosed =
                       group.status === 'CLOSED' ||
-                      group.currentCapacity >= group.maxCapacity ||
                       isDatePassed(group.meetingDate)
                   return (
                       <div
@@ -238,11 +237,19 @@ export default function Chat() {
                       fontSize: '11px',
                       padding: '2px 8px',
                       borderRadius: '20px',
-                      backgroundColor: isGroupClosed ? '#f1f5f9' : '#ecfdf5',
-                      color: isGroupClosed ? '#94a3b8' : '#10b981',
+                      backgroundColor: isGroupClosed
+                          ? '#f1f5f9'
+                          : group.status === 'IN_PROGRESS'
+                              ? '#fefce8'
+                              : '#ecfdf5',
+                      color: isGroupClosed
+                          ? '#94a3b8'
+                          : group.status === 'IN_PROGRESS'
+                              ? '#ca8a04'
+                              : '#10b981',
                       fontWeight: '600',
                     }}>
-                      {isGroupClosed ? '마감' : '모집중'}
+                      {isGroupClosed ? '마감' : group.status === 'IN_PROGRESS' ? '진행중' : '모집중'}
                     </span>
                           <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
                       인원: {group.currentCapacity}/{group.maxCapacity}명
