@@ -339,7 +339,7 @@ export default function GroupDetailPage() {
     const max      = post.maxCapacity ?? 4;
     const isFull    = current >= max;
     const isPassed  = isDatePassed(post.meetingDate);
-    const isClosed  = post.status === 'CLOSED' || isFull || isPassed;
+    const isClosed  = post.status === 'CLOSED' || isPassed;
     const pct      = Math.min(100, Math.round((current / max) * 100));
 
     const actionButtons = (
@@ -363,10 +363,10 @@ export default function GroupDetailPage() {
                 ) : (
                     <button
                         onClick={handleJoin}
-                        disabled={isClosed || isJoining}
+                        disabled={isClosed || isFull || isJoining}
                         style={{ width: '100%', padding: '17px', borderRadius: '14px', border: 'none', background: isClosed || isJoining ? '#e2e8f0' : 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: isClosed || isJoining ? '#94a3b8' : 'white', fontWeight: '800', fontSize: '16px', cursor: isClosed || isJoining ? 'default' : 'pointer' }}
                     >
-                        {isJoining ? '신청 중...' : isClosed ? '모집이 마감되었습니다' : '참여 신청하기'}
+                        {isJoining ? '신청 중...' : isClosed ? '모집이 마감되었습니다' : isFull ? '정원이 모두 찼습니다' : '참여 신청하기'}
                     </button>
                 )
             )}
@@ -416,7 +416,7 @@ export default function GroupDetailPage() {
                             color: isClosed ? 'white' : '#ff8a3d',
                             padding: '4px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '800',
                         }}>
-                            {isClosed ? '모집완료' : '🟢 모집중'}
+                            {isClosed ? '모집완료' : post.status === 'IN_PROGRESS' ? '🟡 진행중' : '🟢 모집중'}
                         </span>
                         {canEdit && (
                             <span style={{ marginLeft: '8px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>

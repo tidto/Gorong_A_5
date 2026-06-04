@@ -47,11 +47,10 @@ export default function Chat() {
 
   const myNickname = user?.nickname || '나'
 
-  // 현재 활성 채팅방의 마감 여부 (날짜 만료 + 정원 초과 + 상태값 모두 체크)
+  // 현재 활성 채팅방의 잠금 여부 — CLOSED(일정 종료/강제 마감)일 때만 잠금
+  // IN_PROGRESS(정원 충족 후 진행 중)는 채팅 가능 상태 유지
   const isClosed = activeGroup
-      ? activeGroup.status === 'CLOSED' ||
-      activeGroup.currentCapacity >= activeGroup.maxCapacity ||
-      isDatePassed(activeGroup.meetingDate)
+      ? activeGroup.status === 'CLOSED' || isDatePassed(activeGroup.meetingDate)
       : false
 
   // 참여중인 그룹 로드

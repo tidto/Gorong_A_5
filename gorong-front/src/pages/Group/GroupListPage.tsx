@@ -19,7 +19,7 @@ interface GroupForPermission { authorEmail?: string; authorName?: string }
 declare global { interface Window { kakao: any } }
 
 type SortOrder = 'createdAt' | 'meetingDate';
-type StatusTab = 'open' | 'closed';
+type StatusTab = 'open' | 'inProgress' | 'closed';
 
 // ✅ 날짜 필터 옵션
 type DateFilter = 'ALL' | 'today' | 'thisWeek' | 'thisWeekend' | 'nextWeek';
@@ -192,18 +192,24 @@ const GroupListPage = () => {
 
   const eventCategories = Array.from(new Set(groups.map(g => g.event?.trim()).filter(Boolean) as string[])).sort((a,b) => a.localeCompare(b,'ko'));
 
-  const getIsClosed = (g: Group) => {
-    const isFull   = (g.currentCapacity ?? 0) >= (g.maxCapacity ?? 999);
+  // 그룹의 실제 표시 상태를 반환: 'open' | 'inProgress' | 'closed'
+  const getDisplayStatus = (g: Group): StatusTab => {
     const isPassed = isDatePassed(g.meetingDate);
-    return g.status === 'CLOSED' || isFull || isPassed;
+    if (g.status === 'CLOSED' || isPassed) return 'closed';
+    if (g.status === 'IN_PROGRESS') return 'inProgress';
+    const isFull = (g.currentCapacity ?? 0) >= (g.maxCapacity ?? 999);
+    if (isFull) return 'inProgress'; // 서버 반영 전 클라이언트 보정
+    return 'open';
   };
+
+  const getIsClosed = (g: Group) => getDisplayStatus(g) === 'closed';
 
   const filteredGroups = groups.filter(g => {
     const q = searchTerm.toLowerCase();
     const matchSearch = g.title?.toLowerCase().includes(q) || g.event?.toLowerCase().includes(q) || g.location?.toLowerCase().includes(q);
     const matchEvent  = selectedEventFilter === 'ALL' || g.event?.trim() === selectedEventFilter;
     const isClosed    = getIsClosed(g);
-    const matchTab    = statusTab === 'open' ? !isClosed : isClosed;
+    const matchTab    = getDisplayStatus(g) === statusTab;
     const matchDate   = matchesDateFilter(g.meetingDate, dateFilter); // ✅ 날짜 필터 적용
     return matchSearch && matchEvent && matchTab && matchDate;
   });
@@ -222,8 +228,9 @@ const GroupListPage = () => {
   const paginatedGroups = sortedGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
-  const openCount   = groups.filter(g => !getIsClosed(g)).length;
-  const closedCount = groups.length - openCount;
+  const openCount       = groups.filter(g => getDisplayStatus(g) === 'open').length;
+  const inProgressCount = groups.filter(g => getDisplayStatus(g) === 'inProgress').length;
+  const closedCount     = groups.filter(g => getDisplayStatus(g) === 'closed').length;
 
   // ✅ 날짜 필터 버튼 목록
   const dateFilterOptions: { key: DateFilter; label: string; emoji: string }[] = [
@@ -250,6 +257,10 @@ const GroupListPage = () => {
                   <div style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: '12px', padding: '8px 14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '18px', fontWeight: '900', color: 'white' }}>{openCount}</div>
                     <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.75)', fontWeight: '700' }}>모집중</div>
+                  </div>
+                  <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '8px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: 'rgba(255,255,255,0.9)' }}>{inProgressCount}</div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>진행중</div>
                   </div>
                   <div style={{ backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: '12px', padding: '8px 14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '18px', fontWeight: '900', color: 'rgba(255,255,255,0.7)' }}>{closedCount}</div>
@@ -283,12 +294,13 @@ const GroupListPage = () => {
             />
           </div>
 
-          {/* ── 모집중 / 마감 카테고리 탭 ── */}
+          {/* ── 모집중 / 진행중 / 마감 탭 ── */}
           <div style={{ display: 'flex', gap: '0', marginBottom: '16px', backgroundColor: 'white', borderRadius: '14px', padding: '4px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e8edf5' }}>
             {([
-              { key: 'open' as StatusTab,   label: '모집중', count: openCount },
-              { key: 'closed' as StatusTab, label: '마감',   count: closedCount },
-            ]).map(({ key, label, count }) => (
+              { key: 'open'       as StatusTab, label: '모집중', count: openCount,       activeColor: '#ff8a3d' },
+              { key: 'inProgress' as StatusTab, label: '진행중', count: inProgressCount, activeColor: '#3b82f6' },
+              { key: 'closed'     as StatusTab, label: '마감',   count: closedCount,     activeColor: '#64748b' },
+            ]).map(({ key, label, count, activeColor }) => (
                 <button
                     key={key}
                     type="button"
@@ -302,9 +314,7 @@ const GroupListPage = () => {
                       fontWeight: '800',
                       fontSize: '14px',
                       transition: 'all 0.18s',
-                      backgroundColor: statusTab === key
-                          ? (key === 'open' ? '#ff8a3d' : '#64748b')
-                          : 'transparent',
+                      backgroundColor: statusTab === key ? activeColor : 'transparent',
                       color: statusTab === key ? 'white' : '#94a3b8',
                       display: 'flex',
                       alignItems: 'center',
@@ -424,7 +434,7 @@ const GroupListPage = () => {
               const isClosed   = getIsClosed(group);
               const isJoined   = joinedGroupIds.includes(group.id);
               const canEdit    = isMyGroup(toPermissionShape(group));
-              const urgent     = !isClosed && isUrgent(group); // ✅ 마감 임박 여부
+              const urgent = getDisplayStatus(group) === 'open' && isUrgent(group);
 
               return (
                   <div key={group.id} onClick={() => navigate(`/groups/${group.id}`)}
@@ -494,13 +504,21 @@ const GroupListPage = () => {
                           {isJoined && !canEdit && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#ecfdf5', color: '#10b981', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>참여중</span>}
                           {isPassed && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#f1f5f9', color: '#94a3b8', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>일정 종료</span>}
                         </div>
-                        <span style={{
-                          flexShrink: 0, fontSize: '11px', fontWeight: '800', padding: '3px 10px', borderRadius: '20px',
-                          backgroundColor: isClosed ? '#f1f5f9' : '#ecfdf5',
-                          color: isClosed ? '#94a3b8' : '#10b981',
-                        }}>
-                          {isClosed ? '마감' : '● 모집중'}
-                        </span>
+                        {(() => {
+                          const ds = getDisplayStatus(group);
+                          const bgMap: Record<string, string> = { open: '#ecfdf5', inProgress: '#eff6ff', closed: '#f1f5f9' };
+                          const colorMap: Record<string, string> = { open: '#10b981', inProgress: '#3b82f6', closed: '#94a3b8' };
+                          const labelMap: Record<string, string> = { open: '● 모집중', inProgress: '● 진행중', closed: '마감' };
+                          return (
+                              <span style={{
+                                flexShrink: 0, fontSize: '11px', fontWeight: '800', padding: '3px 10px', borderRadius: '20px',
+                                backgroundColor: bgMap[ds],
+                                color: colorMap[ds],
+                              }}>
+                              {labelMap[ds]}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* 호스트 */}
@@ -564,7 +582,9 @@ const GroupListPage = () => {
                       ? '해당 날짜에 열리는 모임이 없습니다.'
                       : statusTab === 'open'
                           ? '현재 모집중인 게시글이 없습니다.'
-                          : '마감된 게시글이 없습니다.'}
+                          : statusTab === 'inProgress'
+                              ? '현재 진행중인 모임이 없습니다.'
+                              : '마감된 게시글이 없습니다.'}
                 </p>
               </div>
           )}
