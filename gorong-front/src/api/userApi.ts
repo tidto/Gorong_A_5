@@ -39,6 +39,7 @@ interface LoginResponse {
     nickname: string;
     email: string;
     roleType?: 'USER' | 'ADMIN';
+    interests?: string[];  // ✅ 추가
   };
 }
 

@@ -4,6 +4,7 @@ import com.gorong.backend.domain.event.dto.TourItemDto;
 import com.gorong.backend.domain.event.entity.Event;
 import com.gorong.backend.domain.event.repository.EventRepository;
 import com.gorong.backend.global.TourApiConfig;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -30,6 +31,20 @@ public class TourApiService {
         factory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.NONE);
         rt.setUriTemplateHandler(factory);
         return rt;
+    }
+
+    @PostConstruct
+    @Transactional
+    public void initMissingCategories() {
+        long naCount = eventRepository.countByTourCategoryCode("NA");
+        long lsCount = eventRepository.countByTourCategoryCode("LS");
+
+        if (naCount == 0 || lsCount == 0) {
+            System.out.println("📭 자연관광/레포츠 데이터 없음 → 자동 동기화 시작");
+            getAndSyncApiData();
+        } else {
+            System.out.println("✅ 자연관광(" + naCount + "개) / 레포츠(" + lsCount + "개) 확인 완료");
+        }
     }
 
     @Transactional
@@ -88,10 +103,9 @@ public class TourApiService {
     }
 
     public List<TourItemDto> getFestivalList() {
-        int[] contentTypes = {14, 15};
+        int[] contentTypes = {12, 14, 15, 28};
         List<TourItemDto> totalList = new ArrayList<>();
 
-        // 대구/경북 7개 거점 좌표 [경도(mapX), 위도(mapY)]
         double[][] centers = {
                 {128.6225, 35.8714},  // 대구 중심
                 {128.5911, 35.8019},  // 대구 서구
@@ -128,7 +142,6 @@ public class TourApiService {
                         if (itemArr != null) {
                             for (int i = 0; i < itemArr.length(); i++) {
                                 TourItemDto dto = mapToDtoFromJson(itemArr.getJSONObject(i));
-                                // contentid 기준 중복 제거
                                 boolean isDuplicate = totalList.stream()
                                         .anyMatch(d -> d.getContentid().equals(dto.getContentid()));
                                 if (!isDuplicate) totalList.add(dto);
@@ -199,13 +212,11 @@ public class TourApiService {
         String img2 = obj.optString("firstimage2", "").trim();
         if (!img2.isEmpty()) dto.setFirstimage2(img2);
 
-        // 행사 기간 (TourAPI 필드명)
         String startDate = obj.optString("eventstartdate", "").trim();
         String endDate   = obj.optString("eventenddate",   "").trim();
         if (!startDate.isEmpty()) dto.setEventStartDate(startDate);
         if (!endDate.isEmpty())   dto.setEventEndDate(endDate);
 
-        // 문의 전화
         String tel = obj.optString("tel", "").trim();
         if (!tel.isEmpty()) dto.setTel(tel);
 
@@ -230,17 +241,15 @@ public class TourApiService {
         dto.setEventEndDate(event.getEventEndDate());
         dto.setTel(event.getTel());
 
-        // tourCategoryCode(DB) → cat1(TourAPI 원본 코드) 역변환
-        // 프론트 필터가 A01/A02/A03/A04/A05 기준으로 동작하므로 반드시 필요
         String code = event.getTourCategoryCode();
         if (code != null) {
             switch (code) {
-                case "NA":  dto.setCat1("A01"); break; // 자연관광
-                case "VE":  dto.setCat1("A02"); break; // 문화/역사
-                case "LS":  dto.setCat1("A03"); break; // 레포츠
-                case "SH":  dto.setCat1("A04"); break; // 쇼핑
-                case "FD":  dto.setCat1("A05"); break; // 음식
-                case "C01": dto.setCat1("C01"); break; // 추천코스
+                case "NA":  dto.setCat1("A01"); break;
+                case "VE":  dto.setCat1("A02"); break;
+                case "LS":  dto.setCat1("A03"); break;
+                case "SH":  dto.setCat1("A04"); break;
+                case "FD":  dto.setCat1("A05"); break;
+                case "C01": dto.setCat1("C01"); break;
                 default:    dto.setCat1("ETC");
             }
         }
