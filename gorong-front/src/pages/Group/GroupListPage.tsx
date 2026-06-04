@@ -1,9 +1,4 @@
 // 경로: src/pages/Group/GroupListPage.tsx
-// 변경사항:
-//  1. 배너가 네비게이션 바 바로 아래에 붙도록 marginTop: '-64px' 적용
-//     (GroupDetailPage와 동일한 방식)
-//  2. 정렬 선택 기능 추가 (등록순 / 일정 가까운 순)
-//  3. meetingDate가 오늘 이전이면 프론트에서 자동 마감 처리
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -25,12 +20,15 @@ interface GroupForPermission { authorEmail?: string; authorName?: string }
 declare global { interface Window { kakao: any } }
 
 type SortOrder = 'createdAt' | 'meetingDate';
+type StatusTab = 'open' | 'closed';
+
+// ✅ 날짜 필터 옵션
+type DateFilter = 'ALL' | 'today' | 'thisWeek' | 'thisWeekend' | 'nextWeek';
 
 const escapeHtml = (v: string) =>
     v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
         .replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
 
-// ── 날짜가 오늘 이전인지 확인 ──────────────────────────────────────
 const isDatePassed = (dateStr?: string): boolean => {
   if (!dateStr) return false;
   try {
@@ -42,13 +40,80 @@ const isDatePassed = (dateStr?: string): boolean => {
   } catch { return false; }
 };
 
+// ✅ 날짜 필터 매칭 함수
+const matchesDateFilter = (meetingDate: string | undefined, filter: DateFilter): boolean => {
+  if (filter === 'ALL') return true;
+  if (!meetingDate) return false;
+  const meeting = new Date(meetingDate);
+  meeting.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (filter === 'today') {
+    return meeting.getTime() === today.getTime();
+  }
+
+  const dayOfWeek = today.getDay(); // 0=일, 6=토
+
+  if (filter === 'thisWeekend') {
+    // 이번 주 토~일
+    const sat = new Date(today);
+    sat.setDate(today.getDate() + ((6 - dayOfWeek + 7) % 7));
+    const sun = new Date(sat);
+    sun.setDate(sat.getDate() + 1);
+    const mt = meeting.getTime();
+    return mt === sat.getTime() || mt === sun.getTime();
+  }
+
+  if (filter === 'thisWeek') {
+    // 이번 주 월~일 (오늘 포함)
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    const mt = meeting.getTime();
+    return mt >= mon.getTime() && mt <= sun.getTime();
+  }
+
+  if (filter === 'nextWeek') {
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - ((dayOfWeek + 6) % 7) + 7);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    const mt = meeting.getTime();
+    return mt >= mon.getTime() && mt <= sun.getTime();
+  }
+
+  return true;
+};
+
+// ✅ 마감 임박 판별 (모집률 75%+ 이상이거나 3일 이내)
+const isUrgent = (g: Group): boolean => {
+  const cur = g.currentCapacity ?? 0;
+  const max = g.maxCapacity ?? 999;
+  const pct = max > 0 ? cur / max : 0;
+  const capacityUrgent = pct >= 0.75 && cur < max;
+
+  if (!g.meetingDate) return capacityUrgent;
+  const meeting = new Date(g.meetingDate);
+  meeting.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((meeting.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const dateUrgent = diffDays >= 0 && diffDays <= 3;
+
+  return capacityUrgent || dateUrgent;
+};
+
 const GroupListPage = () => {
   const navigate = useNavigate();
   const { openCatTower } = useCatTowerPreview();
   const [groups, setGroups]                           = useState<Group[]>([]);
   const [searchTerm, setSearchTerm]                   = useState('');
   const [selectedEventFilter, setSelectedEventFilter] = useState('ALL');
-  const [sortOrder, setSortOrder]                     = useState<SortOrder>('createdAt');  // ✅ 정렬 상태
+  const [sortOrder, setSortOrder]                     = useState<SortOrder>('createdAt');
+  const [statusTab, setStatusTab]                     = useState<StatusTab>('open');
+  const [dateFilter, setDateFilter]                   = useState<DateFilter>('ALL'); // ✅ 날짜 필터 상태
   const [currentPage, setCurrentPage]                 = useState(1);
   const [joinedGroupIds, setJoinedGroupIds]           = useState<number[]>([]);
   const [mapTarget, setMapTarget]                     = useState<Group | null>(null);
@@ -59,7 +124,7 @@ const GroupListPage = () => {
   const { isMyGroup } = useChatRoom();
 
   useEffect(() => { fetchGroups(); fetchJoinedGroupIds(); }, []);
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedEventFilter, sortOrder]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedEventFilter, sortOrder, statusTab, dateFilter]);
 
   const loadKakaoMapSdk = useCallback(() => {
     if (window.kakao?.maps?.services) return Promise.resolve();
@@ -129,24 +194,29 @@ const GroupListPage = () => {
 
   const eventCategories = Array.from(new Set(groups.map(g => g.event?.trim()).filter(Boolean) as string[])).sort((a,b) => a.localeCompare(b,'ko'));
 
-  // ── 필터링 ──────────────────────────────────────────────────────
+  const getIsClosed = (g: Group) => {
+    const isFull   = (g.currentCapacity ?? 0) >= (g.maxCapacity ?? 999);
+    const isPassed = isDatePassed(g.meetingDate);
+    return g.status === 'CLOSED' || isFull || isPassed;
+  };
+
   const filteredGroups = groups.filter(g => {
     const q = searchTerm.toLowerCase();
     const matchSearch = g.title?.toLowerCase().includes(q) || g.event?.toLowerCase().includes(q) || g.location?.toLowerCase().includes(q);
     const matchEvent  = selectedEventFilter === 'ALL' || g.event?.trim() === selectedEventFilter;
-    return matchSearch && matchEvent;
+    const isClosed    = getIsClosed(g);
+    const matchTab    = statusTab === 'open' ? !isClosed : isClosed;
+    const matchDate   = matchesDateFilter(g.meetingDate, dateFilter); // ✅ 날짜 필터 적용
+    return matchSearch && matchEvent && matchTab && matchDate;
   });
 
-  // ── 정렬 ✅ ───────────────────────────────────────────────────
   const sortedGroups = [...filteredGroups].sort((a, b) => {
     if (sortOrder === 'meetingDate') {
-      // 날짜 없는 항목은 뒤로
       if (!a.meetingDate && !b.meetingDate) return b.id - a.id;
       if (!a.meetingDate) return 1;
       if (!b.meetingDate) return -1;
       return new Date(a.meetingDate).getTime() - new Date(b.meetingDate).getTime();
     }
-    // 기본: 등록 최신순 (id 내림차순)
     return b.id - a.id;
   });
 
@@ -154,23 +224,27 @@ const GroupListPage = () => {
   const paginatedGroups = sortedGroups.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
-  // ── 통계: 자동 마감 포함 ✅ ────────────────────────────────────
-  const openCount   = groups.filter(g => {
-    const isFull   = (g.currentCapacity ?? 0) >= (g.maxCapacity ?? 999);
-    const isPassed = isDatePassed(g.meetingDate);
-    return g.status !== 'CLOSED' && !isFull && !isPassed;
-  }).length;
+  const openCount   = groups.filter(g => !getIsClosed(g)).length;
   const closedCount = groups.length - openCount;
 
+  // ✅ 날짜 필터 버튼 목록
+  const dateFilterOptions: { key: DateFilter; label: string; emoji: string }[] = [
+    { key: 'ALL',         label: '전체',    emoji: '📆' },
+    { key: 'today',       label: '오늘',    emoji: '🌅' },
+    { key: 'thisWeekend', label: '이번주 주말', emoji: '🎉' },
+    { key: 'thisWeek',   label: '이번 주',  emoji: '📅' },
+    { key: 'nextWeek',   label: '다음 주',  emoji: '🗓️' },
+  ];
+
   return (
-      <div style={{ backgroundColor: '#f1f5f9', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '100px', marginTop: '-64px' }}> {/* ✅ 1. 네비 바에 딱 붙도록 */}
+      <div style={{ backgroundColor: '#f1f5f9', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '100px', marginTop: '-64px' }}>
 
         {/* ── 배너 ── */}
-        <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '88px 20px 28px' }}> {/* paddingTop에 nav 높이 포함 */}
+        <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '88px 20px 28px' }}>
           <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
               <div>
-                <h1 style={{ fontSize: '26px', fontWeight: '900', color: 'white', margin: '0 0 6px' }}>👥 모집게시판</h1>
+                <h1 style={{ fontSize: '26px', fontWeight: '900', color: 'white', margin: '0 0 6px' }}>모집 게시판</h1>
                 <p style={{ color: 'rgba(255,255,255,0.82)', margin: 0, fontSize: '14px' }}>함께 행사에 참여할 동행자를 찾아보세요</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -211,6 +285,89 @@ const GroupListPage = () => {
             />
           </div>
 
+          {/* ── 모집중 / 마감 카테고리 탭 ── */}
+          <div style={{ display: 'flex', gap: '0', marginBottom: '16px', backgroundColor: 'white', borderRadius: '14px', padding: '4px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e8edf5' }}>
+            {([
+              { key: 'open' as StatusTab,   label: '모집중', count: openCount },
+              { key: 'closed' as StatusTab, label: '마감',   count: closedCount },
+            ]).map(({ key, label, count }) => (
+                <button
+                    key={key}
+                    type="button"
+                    onClick={() => setStatusTab(key)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: '800',
+                      fontSize: '14px',
+                      transition: 'all 0.18s',
+                      backgroundColor: statusTab === key
+                          ? (key === 'open' ? '#ff8a3d' : '#64748b')
+                          : 'transparent',
+                      color: statusTab === key ? 'white' : '#94a3b8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                    }}
+                >
+                  {label}
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    backgroundColor: statusTab === key ? 'rgba(255,255,255,0.25)' : '#f1f5f9',
+                    color: statusTab === key ? 'white' : '#94a3b8',
+                    padding: '1px 7px',
+                    borderRadius: '20px',
+                  }}>
+                    {count}
+                  </span>
+                </button>
+            ))}
+          </div>
+
+          {/* ✅ 날짜 필터 ── */}
+          <div style={{ backgroundColor: 'white', borderRadius: '14px', padding: '14px 16px', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e8edf5' }}>
+            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '700', marginBottom: '10px', letterSpacing: '0.5px' }}>📅 날짜 선택</div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {dateFilterOptions.map(({ key, label, emoji }) => {
+                const isActive = dateFilter === key;
+                return (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => setDateFilter(key)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '7px 14px',
+                          borderRadius: '20px',
+                          border: isActive ? '1.5px solid #ff8a3d' : '1.5px solid #e2e8f0',
+                          backgroundColor: isActive ? '#fff4ed' : 'white',
+                          color: isActive ? '#ff8a3d' : '#64748b',
+                          fontWeight: '700',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                    >
+                      <span>{emoji}</span>
+                      <span>{label}</span>
+                      {key !== 'ALL' && dateFilter === key && (
+                          <span style={{ fontSize: '10px', backgroundColor: '#ff8a3d', color: 'white', borderRadius: '99px', padding: '0px 5px', fontWeight: '800' }}>
+                        ON
+                      </span>
+                      )}
+                    </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* ── 행사 필터 ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
             <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>행사 분류</span>
@@ -231,18 +388,16 @@ const GroupListPage = () => {
             ))}
           </div>
 
-          {/* ── 결과 수 + 정렬 버튼 ✅ ── */}
+          {/* ── 결과 수 + 정렬 버튼 ── */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '600' }}>
               {sortedGroups.length > 0 ? `총 ${sortedGroups.length}개` : ''}
             </span>
-
-            {/* ── 정렬 선택 ── */}
             <div style={{ display: 'flex', gap: '6px' }}>
-              {([
-                { key: 'createdAt',  label: '⏱ 최신 등록순' },
-                { key: 'meetingDate', label: '📅 일정 가까운 순' },
-              ] as { key: SortOrder; label: string }[]).map(({ key, label }) => (
+              {(([
+                { key: 'createdAt',  label: '⏱ 최신 등록 순' },
+                { key: 'meetingDate', label: '📅 가까운 일정 순' },
+              ]) as { key: SortOrder; label: string }[]).map(({ key, label }) => (
                   <button
                       key={key}
                       type="button"
@@ -267,38 +422,76 @@ const GroupListPage = () => {
               const max = group.maxCapacity ?? 4;
               const pct = Math.min(100, Math.round((cur / max) * 100));
               const isFull     = cur >= max;
-              const isPassed   = isDatePassed(group.meetingDate);   // ✅ 3. 날짜 지난 게시글 자동 마감
-              const isClosed   = group.status === 'CLOSED' || isFull || isPassed;
+              const isPassed   = isDatePassed(group.meetingDate);
+              const isClosed   = getIsClosed(group);
               const isJoined   = joinedGroupIds.includes(group.id);
               const canEdit    = isMyGroup(toPermissionShape(group));
+              const urgent     = !isClosed && isUrgent(group); // ✅ 마감 임박 여부
 
               return (
                   <div key={group.id} onClick={() => navigate(`/groups/${group.id}`)}
                        style={{
                          backgroundColor: 'white', borderRadius: '16px', cursor: 'pointer',
-                         border: '1px solid #e8edf5',
-                         borderLeft: `4px solid ${isClosed ? '#cbd5e1' : '#ff8a3d'}`,
-                         boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+                         border: `1px solid ${urgent ? '#fed7aa' : '#e8edf5'}`,
+                         borderLeft: `4px solid ${isClosed ? '#cbd5e1' : urgent ? '#f97316' : '#ff8a3d'}`,
+                         boxShadow: urgent ? '0 2px 12px rgba(249,115,22,0.12)' : '0 1px 6px rgba(0,0,0,0.04)',
                          transition: 'box-shadow 0.15s, transform 0.15s',
                          overflow: 'hidden',
-                         opacity: isClosed ? 0.75 : 1,   // 마감된 글은 살짝 흐리게
+                         opacity: 1,
                        }}
                        onMouseEnter={e => {
                          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 24px rgba(0,0,0,0.10)';
                          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
                        }}
                        onMouseLeave={e => {
-                         (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 6px rgba(0,0,0,0.04)';
+                         (e.currentTarget as HTMLDivElement).style.boxShadow = urgent ? '0 2px 12px rgba(249,115,22,0.12)' : '0 1px 6px rgba(0,0,0,0.04)';
                          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
                        }}
                   >
+                    {/* ✅ 마감 임박 배너 */}
+                    {urgent && (
+                        <div style={{
+                          background: 'linear-gradient(90deg, #ff5e00, #ff8a3d)',
+                          padding: '5px 16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}>
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: 'white' }}>마감 임박</span>
+                          {(() => {
+                            // 마감 임박 세부 사유 표시
+                            const cur2 = group.currentCapacity ?? 0;
+                            const max2 = group.maxCapacity ?? 4;
+                            const pct2 = max2 > 0 ? cur2 / max2 : 0;
+                            if (group.meetingDate) {
+                              const meeting = new Date(group.meetingDate);
+                              meeting.setHours(0,0,0,0);
+                              const today = new Date();
+                              today.setHours(0,0,0,0);
+                              const diff = Math.ceil((meeting.getTime() - today.getTime()) / (1000*60*60*24));
+                              if (diff >= 0 && diff <= 3) {
+                                return <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', fontWeight: '600' }}>
+                                {diff === 0 ? '오늘 모임!' : `D-${diff}`}
+                              </span>;
+                              }
+                            }
+                            if (pct2 >= 0.75) {
+                              return <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', fontWeight: '600' }}>
+                              {cur2}/{max2}명 ({Math.round(pct2*100)}%)
+                            </span>;
+                            }
+                            return null;
+                          })()}
+                        </div>
+                    )}
+
                     <div style={{ padding: '18px 20px' }}>
                       {/* 제목 행 */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, flex: 1 }}>
-                      <span style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {group.title}
-                      </span>
+                          <span style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {group.title}
+                          </span>
                           {canEdit && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#fff4ed', color: '#ff8a3d', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>내 글</span>}
                           {isJoined && !canEdit && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#ecfdf5', color: '#10b981', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>참여중</span>}
                           {isPassed && <span style={{ flexShrink: 0, fontSize: '10px', backgroundColor: '#f1f5f9', color: '#94a3b8', padding: '2px 7px', borderRadius: '8px', fontWeight: '700' }}>일정 종료</span>}
@@ -308,8 +501,8 @@ const GroupListPage = () => {
                           backgroundColor: isClosed ? '#f1f5f9' : '#ecfdf5',
                           color: isClosed ? '#94a3b8' : '#10b981',
                         }}>
-                      {isClosed ? '마감' : '● 모집중'}
-                    </span>
+                          {isClosed ? '마감' : '● 모집중'}
+                        </span>
                       </div>
 
                       {/* 호스트 */}
@@ -330,23 +523,22 @@ const GroupListPage = () => {
                           <span>📍 {group.location || '장소 미정'}</span>
                           {group.meetingDate && (
                               <span style={{ color: isPassed ? '#94a3b8' : '#64748b' }}>
-                              📅 {group.meetingDate}{isPassed ? ' (종료)' : ''}
-                            </span>
+                                📅 {group.meetingDate}{isPassed ? ' (종료)' : ''}
+                              </span>
                           )}
                           {group.event && (
                               <span style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '8px', color: '#64748b' }}>
-                          🎟️ {group.event}
-                        </span>
+                                🎟️ {group.event}
+                              </span>
                           )}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                          {/* 정원 미니 바 */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <div style={{ width: '56px', height: '5px', backgroundColor: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isClosed ? '#cbd5e1' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s' }} />
+                              <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isClosed ? '#cbd5e1' : urgent ? '#f97316' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s' }} />
                             </div>
-                            <span style={{ fontSize: '11px', color: isClosed ? '#94a3b8' : '#ff8a3d', fontWeight: '700' }}>{cur}/{max}명</span>
+                            <span style={{ fontSize: '11px', color: isClosed ? '#94a3b8' : urgent ? '#f97316' : '#ff8a3d', fontWeight: '700' }}>{cur}/{max}명</span>
                           </div>
 
                           {group.location && (
@@ -366,8 +558,16 @@ const GroupListPage = () => {
           {/* 빈 결과 */}
           {sortedGroups.length === 0 && (
               <div style={{ marginTop: '20px', padding: '60px 20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #e8edf5' }}>
-                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🔍</div>
-                <p style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>조건에 맞는 모집글이 없습니다.</p>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>
+                  {dateFilter !== 'ALL' ? '📅' : statusTab === 'open' ? '🔍' : '📭'}
+                </div>
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>
+                  {dateFilter !== 'ALL'
+                      ? '해당 날짜에 열리는 모임이 없습니다.'
+                      : statusTab === 'open'
+                          ? '현재 모집중인 게시글이 없습니다.'
+                          : '마감된 게시글이 없습니다.'}
+                </p>
               </div>
           )}
 

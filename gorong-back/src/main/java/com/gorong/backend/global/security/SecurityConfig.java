@@ -64,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/ws-chat/**","/ws-chat/**" ).permitAll()
                         .requestMatchers("/api/chat/**").permitAll()
                         .requestMatchers("/api/public-chat/**").permitAll()
+                        //행사 참여 이력 API
+                        .requestMatchers("/api/event-participation/**").authenticated()
                                        
                         // anyRequest는 항상 마지막
                         .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함

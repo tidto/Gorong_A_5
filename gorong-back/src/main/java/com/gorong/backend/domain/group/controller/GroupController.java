@@ -6,6 +6,7 @@ import com.gorong.backend.domain.group.entity.GroupPost;
 import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.group.service.GroupService;
+import com.gorong.backend.domain.group.service.EventParticipationService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
@@ -31,6 +32,9 @@ public class GroupController {
 
     @Autowired
     private GroupService groupService;
+
+    @Autowired
+    private EventParticipationService eventParticipationService;
 
     public GroupController(GroupRepository groupRepository,
                            UserRepository userRepository,
@@ -106,6 +110,20 @@ public class GroupController {
             } catch (RuntimeException e) {
                 // 이미 참여 중이면 무시
             }
+
+            // ✅ 주최자도 event_participation에 그룹 참여로 기록
+            try {
+                if (saved.getEvent() != null && !saved.getEvent().isBlank()) {
+                    eventParticipationService.applyGroup(
+                            currentUser.getId(),
+                            saved.getEvent(),
+                            saved.getTitle(),
+                            saved.getId()
+                    );
+                }
+            } catch (Exception e) {
+                // 이력 저장 실패는 그룹 생성 자체를 막지 않음
+            }
         }
 
         return ResponseEntity.ok(saved);
@@ -138,7 +156,20 @@ public class GroupController {
         }).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // ── 5. 수정 ──────────────────────────────────────────────────────
+    // ── 5. 참여 취소 ─────────────────────────────────────────────────
+    @DeleteMapping("/{id}/leave")
+    public ResponseEntity<Void> leaveGroup(@PathVariable Long id, Authentication authentication) {
+        User currentUser = getCurrentUser(authentication);
+        if (currentUser == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        try {
+            groupService.leaveGroup(id, currentUser.getId());
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // ── 6. 수정 ──────────────────────────────────────────────────────
     @PutMapping("/{id}")
     public ResponseEntity<GroupPost> updateGroup(@PathVariable Long id, @RequestBody GroupPost updatedPost) {
         return groupRepository.findById(id)

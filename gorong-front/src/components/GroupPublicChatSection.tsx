@@ -6,6 +6,7 @@
 //  - 빈 슬롯 크기도 동일하게 확대
 //  - 내 메시지 오른쪽 정렬 유지
 //  - 퇴장 시 슬롯 즉시 제거 유지
+//  - [디자인 변경] 기존의 파란색 톤을 왼쪽 모집 UI와 어울리는 웜톤 오렌지/소프트 베이지/카키 톤으로 교체
 
 import { useRef, useState, useEffect, useMemo } from 'react'
 import {
@@ -139,11 +140,11 @@ function ParticipantSlot({
                 }}>
                     {stage.emoji}
                 </div>
-                {/* 캣타워 이동 가능 표시 */}
+                {/* 캣타워 이동 가능 표시 (오렌지 웜톤 매칭 배경) */}
                 {canNavigate && (
                     <div style={{
                         position: 'absolute', top: '-3px', left: '-3px',
-                        backgroundColor: 'rgba(21,101,192,0.85)',
+                        backgroundColor: 'rgba(212,122,85,0.9)',
                         borderRadius: '5px', padding: '1px 4px',
                         fontSize: '8px', color: 'white', fontWeight: '800',
                         lineHeight: '13px',
@@ -202,7 +203,7 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
             </div>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                 <div style={{ display: 'flex', gap: '5px', alignItems: 'baseline', marginBottom: '3px', flexDirection: isMe ? 'row-reverse' : 'row' }}>
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: isMe ? '#1565c0' : colors.text }}>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: isMe ? '#D47A55' : colors.text }}>
                         {isMe ? '나' : (msg.nickname || msg.catName || msg.user || '익명')}
                     </span>
                     <span style={{ fontSize: '9px', color: '#94a3b8' }}>{msg.sentAt}</span>
@@ -213,7 +214,8 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
                     lineHeight: '1.55',
                     background: isMasked
                         ? 'linear-gradient(135deg, #f1f5f9, #e2e8f0)'
-                        : (isMe ? 'linear-gradient(135deg, #1a5c9c, #1565c0)' : 'white'),
+                        // 파란색 그라데이션에서 따뜻한 딥오렌지 그라데이션으로 교체
+                        : (isMe ? 'linear-gradient(135deg, #E68A5C, #D47A55)' : 'white'),
                     padding: '8px 12px',
                     borderRadius: isMe ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
                     boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
@@ -296,13 +298,13 @@ export default function GroupPublicChatSection({ groupId }: Props) {
     }
 
     return (
-        <div style={{ marginTop: '28px', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 8px 32px rgba(21,101,192,0.15)', border: '1px solid rgba(26,92,156,0.2)', fontFamily: 'Pretendard, sans-serif', maxWidth: '725px', width: '100%', marginRight: 'auto', marginLeft: 'auto' }}>
+        // 파란색 그림자/테두리를 오렌지-브라운 테마에 맞게 보정
+        <div style={{ borderRadius: '20px', overflow: 'hidden', boxShadow: '0 8px 32px rgba(212,122,85,0.12)', border: '1px solid rgba(212,122,85,0.2)', fontFamily: 'Pretendard, sans-serif', maxWidth: '725px', width: '100%', marginRight: 'auto', marginLeft: 'auto' }}>
 
-            {/* ── 헤더 ── */}
-            <div style={{ background: 'linear-gradient(135deg, #0d47a1 0%, #1565c0 60%, #1976d2 100%)', padding: '13px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+            {/* ── 헤더 (파란색 그라데이션에서 차분한 딥오렌지 브라운 톤으로 교체) ── */}
+            <div style={{ background: 'linear-gradient(135deg, #C96F43 0%, #D47A55 60%, #E08B67 100%)', padding: '13px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '16px' }}>💬</span>
-                    <span style={{ color: 'white', fontWeight: '800', fontSize: '14px', letterSpacing: '-0.2px' }}>공개 그룹 채팅</span>
+                    <span style={{ color: 'white', fontWeight: '800', fontSize: '14px', letterSpacing: '-0.2px' }}>공개 그룹 채팅방</span>
                     <span style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: '700' }}>
                         👥 {displayParticipants.length} / {MAX_SLOTS}
                     </span>
@@ -318,7 +320,7 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                         <button
                             type="button"
                             onClick={() => { setIsEntered(true); sendJoin(); }}
-                            style={{ border: 'none', borderRadius: '10px', padding: '6px 14px', backgroundColor: 'rgba(255,255,255,0.9)', color: '#1565c0', fontWeight: '800', fontSize: '12px', cursor: 'pointer', transition: 'all 0.15s' }}
+                            style={{ border: 'none', borderRadius: '10px', padding: '6px 14px', backgroundColor: 'rgba(255,255,255,0.9)', color: '#D47A55', fontWeight: '800', fontSize: '12px', cursor: 'pointer', transition: 'all 0.15s' }}
                         >
                             입장하기
                         </button>
@@ -334,30 +336,29 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                 </div>
             </div>
 
-            {/* ── 참여자 슬롯 ── */}
-            <div style={{ background: 'linear-gradient(180deg, #1565c0 0%, #1976d2 100%)', padding: '16px 16px 12px', borderBottom: '2px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ background: 'linear-gradient(180deg, #FBC9A0 0%, #FBC9A0 100%)', padding: '16px 16px 12px', borderBottom: '2px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', marginBottom: '8px' }}>
                     {slots.map((p, i) => (
                         <ParticipantSlot key={i} participant={p} onNavigate={handleSlotNavigate} />
                     ))}
                 </div>
-                <p style={{ margin: 0, fontSize: '10px', color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontWeight: '600' }}>
+                <p style={{ margin: 0, fontSize: '10px', color: 'rgba(255,255,255,0.8)', textAlign: 'center', fontWeight: '600' }}>
                     🏠 고냥이를 클릭하면 캣타워를 미리볼 수 있어요
                 </p>
             </div>
 
             {/* ── 탭 헤더 ── */}
-            <div style={{ backgroundColor: '#EEF2FF', padding: '8px 16px 0', display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: '#1565c0', borderBottom: '2px solid #1565c0', paddingBottom: '7px', paddingRight: '4px' }}>전체 채팅</span>
+            <div style={{ backgroundColor: '#FAF7F2', padding: '8px 16px 0', display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: '#D47A55', borderBottom: '2px solid #D47A55', paddingBottom: '7px', paddingRight: '4px' }}>전체 채팅</span>
                 {!isEntered && (
                     <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#94a3b8', fontWeight: '600', paddingBottom: '7px', alignSelf: 'flex-end' }}>
-                        👀 열람 중 · 입장하면 채팅 참여 가능
+                        열람 중 · 입장하면 채팅 참여 가능
                     </span>
                 )}
             </div>
 
             {/* ── 메시지 목록 ── */}
-            <div ref={messageListRef} style={{ height: '260px', overflowY: 'auto', backgroundColor: '#f0f4ff', padding: '14px 14px 6px', display: 'flex', flexDirection: 'column', scrollbarWidth: 'thin', scrollbarColor: '#c7d2fe #f0f4ff' }}>
+            <div ref={messageListRef} style={{ height: '260px', overflowY: 'auto', backgroundColor: '#FDFBF7', padding: '14px 14px 6px', display: 'flex', flexDirection: 'column', scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb #FDFBF7' }}>
                 {messages.length === 0 ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px', textAlign: 'center', gap: '8px' }}>
                         <img
@@ -366,7 +367,7 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                             style={{ width: '40px', opacity: 0.5 }}
                             onError={e => { e.currentTarget.style.display = 'none' }}
                         />
-                        <span>아직 대화가 없어요 👀<br />첫 메시지를 남겨보세요!</span>
+                        <span>아직 대화가 없어요 ㅠ.ㅠ<br />첫 메시지를 남겨보세요!</span>
                     </div>
                 ) : (
                     messages.map((msg, i) => (
@@ -393,7 +394,7 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                         disabled={!connected || sending}
                         maxLength={500}
                         style={{ flex: 1, border: '1.5px solid #dde3ef', borderRadius: '12px', padding: '9px 14px', fontSize: '13px', outline: 'none', fontFamily: 'inherit', backgroundColor: !connected ? '#f8fafc' : 'white', color: '#1e293b', transition: 'border-color 0.2s' }}
-                        onFocus={e => { e.currentTarget.style.borderColor = '#1565c0' }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#D47A55' }}
                         onBlur={e =>  { e.currentTarget.style.borderColor = '#dde3ef' }}
                     />
                     <button
@@ -401,12 +402,12 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                         disabled={!connected || !input.trim() || sending}
                         style={{
                             padding: '9px 18px', borderRadius: '12px', border: 'none',
-                            background: connected && input.trim() && !sending ? 'linear-gradient(135deg, #1565c0, #1976d2)' : '#e2e8f0',
+                            background: connected && input.trim() && !sending ? 'linear-gradient(135deg, #E68A5C, #D47A55)' : '#e2e8f0',
                             color: connected && input.trim() && !sending ? 'white' : '#94a3b8',
                             fontWeight: '700', fontSize: '13px',
                             cursor: connected && input.trim() && !sending ? 'pointer' : 'default',
                             flexShrink: 0, fontFamily: 'inherit', transition: 'all 0.2s',
-                            boxShadow: connected && input.trim() && !sending ? '0 2px 8px rgba(21,101,192,0.3)' : 'none',
+                            boxShadow: connected && input.trim() && !sending ? '0 2px 8px rgba(212,122,85,0.3)' : 'none',
                         }}
                     >
                         {sending ? '...' : '전송'}
@@ -418,7 +419,7 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                     <button
                         type="button"
                         onClick={() => setIsEntered(true)}
-                        style={{ border: 'none', borderRadius: '10px', padding: '8px 18px', background: 'linear-gradient(135deg, #1565c0, #1976d2)', color: 'white', fontWeight: '800', fontSize: '13px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(21,101,192,0.25)' }}
+                        style={{ border: 'none', borderRadius: '10px', padding: '8px 18px', background: 'linear-gradient(135deg, #E68A5C, #D47A55)', color: 'white', fontWeight: '800', fontSize: '13px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(212,122,85,0.25)' }}
                     >
                         입장하기
                     </button>
