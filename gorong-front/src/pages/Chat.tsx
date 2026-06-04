@@ -2,11 +2,13 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { Send, Image, Users, MessageSquare, ChevronRight, Wifi, WifiOff, Loader2, Home } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useCatTowerPreview } from '../contexts/CatTowerPreviewContext'
 import { useChatRoom, fetchJoinedGroups, JoinedGroup } from '../hooks/useChatRoom'
 
 export default function Chat() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { openCatTower } = useCatTowerPreview()
   const { user } = useAuth()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -656,7 +658,8 @@ export default function Chat() {
                       type="button"
                       onClick={() => {
                         if (!selectedProfile.userId) return
-                        navigate(`/cattower/${selectedProfile.userId}`)
+                        setSelectedProfile(null)
+                        openCatTower(selectedProfile.userId)
                       }}
                       disabled={!selectedProfile.userId}
                       style={{
@@ -675,7 +678,7 @@ export default function Chat() {
                       }}
                   >
                     <Home size={17} />
-                    CatTower로 이동
+                    CatTower 미리보기
                   </button>
                   <button
                       type="button"

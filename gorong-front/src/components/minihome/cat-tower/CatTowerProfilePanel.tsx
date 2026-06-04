@@ -100,10 +100,6 @@ export default function CatTowerProfilePanel({
       </motion.div>
 
       <CatTowerDailyQuote catName={catName} />
-
-      <p className="rounded-2xl border border-rose-100/80 bg-gradient-to-r from-rose-50/80 to-orange-50/60 px-3 py-2.5 text-center text-[10px] leading-relaxed text-rose-900/65">
-        🏡 옛날 미니홈피처럼 Go냥이의 방을 꾸며 나만의 공간을 만들어 보세요
-      </p>
     </aside>
   );
 }

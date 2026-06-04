@@ -63,6 +63,11 @@ public class MiniHomeExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body(e.getMessage(), List.of()));
     }
 
+    @ExceptionHandler(GuestbookNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleGuestbookNotFound(GuestbookNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body(e.getMessage(), List.of()));
+    }
+
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Map<String, Object>> handleDataAccess(DataAccessException e) {
         log.error("[MiniHome] DB error", e);

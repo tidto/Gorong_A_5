@@ -153,8 +153,8 @@ export function computeGrowthState(page: MiniHomePage | null | undefined): Growt
 export { getCatVisualByStage, type CatVisual } from "../gocat/catVisual";
 
 const STAGE_SLOTS: Record<GrowthStage, SlotType[]> = {
-  BASIC: ["HEAD"],
-  TEEN: ["HEAD", "BODY"],
+  BASIC: ["HEAD", "ACCESSORY"],
+  TEEN: ["HEAD", "BODY", "ACCESSORY"],
   ADULT: ["HEAD", "BODY", "ACCESSORY"],
   MASTER: ["HEAD", "BODY", "ACCESSORY"],
 };

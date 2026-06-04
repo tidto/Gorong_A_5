@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import { useChatRoom } from '../../hooks/useChatRoom';
 import GroupPublicChatSection from '../../components/GroupPublicChatSection'
+import { useCatTowerPreview } from '../../contexts/CatTowerPreviewContext'
 
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
 
@@ -62,6 +63,7 @@ const isDatePassed = (dateStr?: string): boolean => {
 export default function GroupDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { openCatTower } = useCatTowerPreview();
 
     const [post, setPost]               = useState<GroupPost | null>(null);
     const [isJoining, setIsJoining]     = useState(false);
@@ -367,7 +369,7 @@ export default function GroupDetailPage() {
                 {post.author?.id ? (
                     <button
                         type="button"
-                        onClick={() => navigate(`/cattower/${post.author?.id}`)}
+                        onClick={() => post.author?.id && openCatTower(post.author.id)}
                         style={{ border: 'none', background: 'transparent', padding: 0, color: 'white', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' }}
                     >
                         {post.authorName || '익명'}
