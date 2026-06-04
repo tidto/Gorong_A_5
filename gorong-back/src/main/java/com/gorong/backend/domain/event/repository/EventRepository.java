@@ -7,6 +7,9 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface EventRepository extends JpaRepository<Event, Long> {
+
+    long countByTourCategoryCode(String tourCategoryCode);
+
     @Query("SELECT e FROM Event e WHERE e.tourCategoryCode IN :codes " +
             "AND (e.areaCode = '4' OR e.areaCode = '35')")
     List<Event> findRecommendedEvents(@Param("codes") List<String> codes);
