@@ -2,8 +2,7 @@
 
 import type { DecorItem, SlotType } from "../../../components/minihome/mini-home/DecorationModal";
 import type { CatAppearancePayload } from "../../../api/minihome/miniHomeApi";
-import { findGoCatItemByCode } from "../../../data/minihome/gocatItems";
-import { goCatItemToDecorItem } from "../gocat/decorItemCatalog";
+import { findCatalogItem, goCatItemToDecorItem } from "../gocat/decorItemCatalog";
 import { emptyDraft } from "../gocat/items";
 
 export const CAT_SPEECH_BUBBLES = [
@@ -74,11 +73,11 @@ export function equipDraftFromAppearanceState(
   const accRaw = state.accessoryItemCode ?? state.accessoryItem;
 
   if (typeof headRaw === "string" && headRaw.trim()) {
-    const item = findGoCatItemByCode(headRaw);
+    const item = findCatalogItem(undefined, headRaw);
     if (item) draft.HEAD = goCatItemToDecorItem(item);
   }
   if (typeof accRaw === "string" && accRaw.trim()) {
-    const item = findGoCatItemByCode(accRaw);
+    const item = findCatalogItem(undefined, accRaw);
     if (item) draft.ACCESSORY = goCatItemToDecorItem(item);
   }
   return draft;

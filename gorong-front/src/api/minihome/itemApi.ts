@@ -72,6 +72,23 @@ export async function saveMyEquipments(payload: SaveMyEquipmentsPayload): Promis
   );
 }
 
+export type ItemRewardResponse = {
+  granted: boolean;
+  itemCode?: string | null;
+  itemName?: string | null;
+  message?: string | null;
+};
+
+/** POST /api/minihomes/me/items/reward — 행사 참여 보상 지급 */
+export async function grantEventItemReward(payload: {
+  eventTitle: string;
+  description?: string;
+}): Promise<ItemRewardResponse> {
+  const token = await getFirebaseIdTokenOrThrow();
+  const res = await axiosInstance.post(`/minihomes/me/items/reward`, payload, authHeaders(token));
+  return res.data;
+}
+
 export async function saveEquipments(
   userId: number,
   payload: SaveMyEquipmentsPayload

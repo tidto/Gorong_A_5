@@ -5,6 +5,8 @@ import com.gorong.backend.domain.minihome.dto.GoCatAppearanceUpdateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GoCatCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
+import com.gorong.backend.domain.minihome.dto.ItemRewardRequestDto;
+import com.gorong.backend.domain.minihome.dto.ItemRewardResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipRequestDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipmentsSaveRequestDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeEquipmentDto;
@@ -12,6 +14,7 @@ import com.gorong.backend.domain.minihome.dto.MiniHomeItemDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomePageResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeUpdateRequestDto;
+import com.gorong.backend.domain.minihome.service.EventCategoryItemRewardService;
 import com.gorong.backend.domain.minihome.service.MiniHomeService;
 import com.gorong.backend.domain.minihome.service.MiniHomeUserResolver;
 import jakarta.validation.Valid;
@@ -40,6 +43,7 @@ public class MiniHomeController {
 
     private final MiniHomeService miniHomeService;
     private final MiniHomeUserResolver miniHomeUserResolver;
+    private final EventCategoryItemRewardService eventCategoryItemRewardService;
 
     @GetMapping("/me/page")
     public MiniHomePageResponseDto getMyMiniHomePage(Authentication authentication) {
@@ -64,6 +68,20 @@ public class MiniHomeController {
     public List<MiniHomeItemDto> getMyItems(Authentication authentication) {
         Long userId = resolveUserId(authentication);
         return miniHomeService.getUserItems(userId);
+    }
+
+    /** 행사 참여 완료 시 보상 아이템 지급 (중복 지급 없음) */
+    @PostMapping("/me/items/reward")
+    public ItemRewardResponseDto grantEventItemReward(
+            Authentication authentication,
+            @Valid @RequestBody ItemRewardRequestDto req
+    ) {
+        Long userId = resolveUserId(authentication);
+        return eventCategoryItemRewardService.grantForEventKeywords(
+                userId,
+                req.getEventTitle(),
+                req.getDescription()
+        );
     }
 
     @GetMapping("/me/equipments")

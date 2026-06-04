@@ -5,7 +5,7 @@ import EventDetail from '../pages/EventDetail'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
 import Chat from '../pages/Chat'
-import CatTower from '../pages/minihome/CatTower'
+const CatTower = lazy(() => import('../pages/minihome/CatTower'))
 import History from '../pages/History'
 import MyPage from '../pages/user/MyPage'
 import Chatbot from '../pages/chatbot/Chatbot'
@@ -16,7 +16,7 @@ import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { setNavigate } from '../utils/navigationHelper'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import GroupListPage from '../pages/Group/GroupListPage.tsx'
 import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx'
 import GroupDetailPage from '../pages/Group/GroupDetailPage.tsx'   // ✅ 추가
@@ -24,6 +24,7 @@ import ErrorPage from '../pages/ErrorPage'
 import GroupEditPage from '../pages/Group/GroupEditPage.tsx'
 import AdminPage from '../pages/admin/AdminPage'
 import RiveCustomizerDevPage from '../pages/minihome/dev/RiveCustomizerDevPage'
+import { CatTowerPreviewProvider } from '../contexts/CatTowerPreviewContext'
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
     const auth = useAuth()
@@ -69,6 +70,14 @@ function AdminRoute({ children }: { children: JSX.Element }) {
     return children
 }
 
+function CatTowerRouteFallback() {
+    return (
+        <div className="flex min-h-[50vh] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+        </div>
+    )
+}
+
 function NavigationInitializer() {
     const navigate = useNavigate()
     useEffect(() => {
@@ -85,6 +94,7 @@ function RedirectMiniHomeUserToCatTower() {
 export default function AppRouter() {
     return (
         <Router>
+            <CatTowerPreviewProvider>
             <NavigationInitializer />
             <Layout>
                 <Routes>
@@ -113,9 +123,9 @@ export default function AppRouter() {
                     <Route path="/group" element={<ProtectedRoute><GroupListPage /></ProtectedRoute>} />
                     <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
                     <Route path="/minihompy" element={<Navigate to="/cattower" replace />} />
-                    <Route path="/cattower/user/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
-                    <Route path="/cattower/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
-                    <Route path="/cattower" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
+                    <Route path="/cattower/user/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
+                    <Route path="/cattower/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
+                    <Route path="/cattower" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
                     {import.meta.env.DEV ? (
                         <Route path="/dev/rive-customizer" element={<ProtectedRoute><RiveCustomizerDevPage /></ProtectedRoute>} />
                     ) : null}
@@ -138,6 +148,7 @@ export default function AppRouter() {
                     />
                 </Routes>
             </Layout>
+            </CatTowerPreviewProvider>
         </Router>
     )
 }

@@ -30,17 +30,19 @@ axiosInstance.interceptors.response.use(
 
     const url = String(error.config?.url ?? '')
     const isMiniHomeApi = url.includes('/minihomes')
+    const isGuestbookApi = url.includes('/guestbook')
+    const isCattowerApi = url.includes('/cattower')
 
     if (status === 401) {
       await signOut(auth)
       localStorage.removeItem('gorong-db-user')
       localStorage.removeItem('gorong-firebase-uid')
       navigateTo('/login')
-    } else if (status === 403 && !isBanBlocked && !isMiniHomeApi) {
+    } else if (status === 403 && !isBanBlocked && !isMiniHomeApi && !isGuestbookApi && !isCattowerApi) {
       navigateTo('/error/403')
-    } else if (status === 404 && !isMiniHomeApi) {
+    } else if (status === 404 && !isMiniHomeApi && !isGuestbookApi && !isCattowerApi) {
       navigateTo('/error/404')
-    } else if (status === 500 && !isMiniHomeApi) {
+    } else if (status === 500 && !isMiniHomeApi && !isGuestbookApi && !isCattowerApi) {
       navigateTo('/error/500')
     }
 

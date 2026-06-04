@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
@@ -6,11 +6,16 @@ import { useRoomBackground } from "../../../pages/minihome/hooks/useRoomBackgrou
 import { useNotification } from "../../../contexts/NotificationContext";
 import CatTowerProfilePanel from "./CatTowerProfilePanel";
 import CatTowerRoomStage from "./CatTowerRoomStage";
-import CatTowerRoomBackgroundPanel from "./CatTowerRoomBackgroundPanel";
 import CatTowerRecentActivityCards from "./CatTowerRecentActivityCards";
-import CatTowerItemsPanel from "./CatTowerItemsPanel";
-import CatTowerSideMenu, { type CatTowerPanelId } from "./CatTowerSideMenu";
-import CatTowerHistorySection from "./CatTowerHistorySection";
+import CatTowerGalleryPreview from "./CatTowerGalleryPreview";
+import CatTowerGuestbookBlock from "./CatTowerGuestbookBlock";
+import CatTowerVisitorBlock from "./CatTowerVisitorBlock";
+import CatTowerViewAllModal from "./CatTowerViewAllModal";
+import CatTowerRoomDecorateModal from "./CatTowerRoomDecorateModal";
+import ActivityHistory from "../mini-home/ActivityHistory";
+import GallerySection from "../mini-home/GallerySection";
+
+const PREVIEW_LIMIT = 3;
 
 type CatTowerDashboardProps = {
   nickname: string;
@@ -28,6 +33,11 @@ type CatTowerDashboardProps = {
   canEdit?: boolean;
   isReadOnly?: boolean;
   resolvingOwner?: boolean;
+  roomOwnerId: number | null | undefined;
+  myUserId: number | null | undefined;
+  isOwner: boolean;
+  pageReady: boolean;
+  refreshToken?: number;
   onDecorate: () => void;
   onBack: () => void;
   onEvents: () => void;
@@ -35,10 +45,7 @@ type CatTowerDashboardProps = {
   onReport?: () => void;
 };
 
-/**
- * CatTower — 싸이월드 × 동물농장 감성 미니홈피
- */
-export default function CatTowerDashboard({
+function CatTowerDashboard({
   nickname,
   catName,
   growth,
@@ -54,6 +61,11 @@ export default function CatTowerDashboard({
   canEdit = true,
   isReadOnly = false,
   resolvingOwner = false,
+  roomOwnerId,
+  myUserId,
+  isOwner,
+  pageReady,
+  refreshToken = 0,
   onDecorate,
   onBack,
   onEvents,
@@ -61,55 +73,40 @@ export default function CatTowerDashboard({
   onReport,
 }: CatTowerDashboardProps) {
   const { toast } = useNotification();
-  const [activePanel, setActivePanel] = useState<CatTowerPanelId>("room");
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [galleryModalOpen, setGalleryModalOpen] = useState(false);
+  const [roomDecorateOpen, setRoomDecorateOpen] = useState(false);
+
   const roomBg = useRoomBackground({
     appearanceState,
     useLocalStorage: canEdit,
   });
 
-  const recentActivities = useMemo(() => activities.slice(0, 3), [activities]);
+  const recentActivities = useMemo(() => activities.slice(0, PREVIEW_LIMIT), [activities]);
 
-  const showDecoratePanel = canEdit && (activePanel === "room" || activePanel === "room-decorate");
+  const scrollToGuestbook = useCallback(() => {
+    document.getElementById("cattower-guestbook")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
-  async function handleSaveRoomBackground() {
+  const handleSaveRoomBackground = useCallback(async () => {
     const ok = await roomBg.saveBackground();
-    if (ok) toast("방 배경이 저장되었습니다.", "success");
-  }
+    if (ok) {
+      toast("방 배경이 저장되었습니다.", "success");
+      setRoomDecorateOpen(false);
+    }
+  }, [roomBg, toast]);
 
   return (
-    <div className="relative space-y-4">
-      {/* floating decorative icons */}
-      <span className="pointer-events-none absolute -left-1 top-24 hidden animate-float text-lg opacity-40 lg:block">
-        🌸
-      </span>
-      <span
-        className="pointer-events-none absolute -right-1 top-40 hidden animate-petal-sway text-base opacity-35 lg:block"
-        style={{ animationDelay: "1.2s" }}
-      >
-        ✨
-      </span>
-      <span className="pointer-events-none absolute left-1/2 top-2 hidden -translate-x-1/2 text-xs opacity-25 lg:block">
-        ♡ · ★ · ♡
-      </span>
-
-      <header className="relative overflow-hidden rounded-3xl border border-orange-200/60 bg-gradient-to-r from-orange-400 via-rose-400 to-emerald-400 shadow-[0_6px_28px_rgba(255,140,80,0.22)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.28),transparent_50%)]" />
-        <span className="pointer-events-none absolute right-5 top-3 animate-sparkle text-sm opacity-50">
-          ✨
-        </span>
-        <div className="relative flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 sm:px-6">
+    <div className="relative space-y-3">
+      <header className="relative overflow-hidden rounded-2xl border border-orange-200/60 bg-gradient-to-r from-orange-400 via-rose-400 to-emerald-400 shadow-[0_4px_20px_rgba(255,140,80,0.18)]">
+        <div className="relative flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-5">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/85">
               {isReadOnly ? "✨ Guest MiniHome" : "✨ My MiniHome"}
             </p>
-            <h1 className="text-lg font-extrabold text-white drop-shadow-sm sm:text-xl">
+            <h1 className="text-base font-extrabold text-white drop-shadow-sm sm:text-lg">
               {loading ? "불러오는 중…" : `${catName}의 CatTower`}
             </h1>
-            <p className="mt-0.5 text-[10px] font-medium text-white/75">
-              {isReadOnly
-                ? `${nickname}님의 공간을 둘러보고 있어요 🐾`
-                : `${nickname}님의 감성 Go냥이 공간 🐾`}
-            </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {isReadOnly && onReport ? (
@@ -131,17 +128,13 @@ export default function CatTowerDashboard({
               </button>
             ) : null}
             <div className="rounded-full border border-white/35 bg-white/20 px-3 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
-              {resolvingOwner
-                ? "확인 중…"
-                : isReadOnly
-                  ? "👀 둘러보기"
-                  : "🏡 내 공간"}
+              {resolvingOwner ? "확인 중…" : isReadOnly ? "👀 둘러보기" : "🏡 내 공간"}
             </div>
           </div>
         </div>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(200px,240px)_1fr_minmax(160px,200px)]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(180px,220px)_1fr_minmax(150px,180px)]">
         <CatTowerProfilePanel
           nickname={nickname}
           catName={catName}
@@ -151,7 +144,7 @@ export default function CatTowerDashboard({
           loading={loading}
         />
 
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           <CatTowerRoomStage
             growthStage={growth.stage}
             activityCount={activityCount}
@@ -162,51 +155,93 @@ export default function CatTowerDashboard({
             readOnly={isReadOnly}
           />
 
-          <CatTowerRecentActivityCards activities={recentActivities} />
+          <CatTowerRecentActivityCards
+            activities={recentActivities}
+            totalCount={activities.length}
+            onViewAll={() => setActivityModalOpen(true)}
+          />
 
-          {showDecoratePanel ? (
-            <CatTowerRoomBackgroundPanel
-              selected={roomBg.background}
-              saved={roomBg.savedBackground}
-              isDirty={roomBg.isDirty}
-              saving={roomBg.saving}
-              error={roomBg.error}
-              onSelect={roomBg.selectBackground}
-              onSave={handleSaveRoomBackground}
-              onCatDecorate={onDecorate}
-            />
-          ) : null}
+          <CatTowerGalleryPreview
+            galleries={galleries}
+            totalCount={galleryCount}
+            limit={PREVIEW_LIMIT}
+            onViewAll={() => setGalleryModalOpen(true)}
+          />
 
-          {activePanel === "items" ? (
-            <CatTowerItemsPanel
-              equipped={equipped}
-              onDecorate={onDecorate}
-              canEdit={canEdit}
-              readOnly={isReadOnly}
-            />
-          ) : null}
+          <CatTowerGuestbookBlock
+            catName={catName}
+            roomOwnerId={roomOwnerId}
+            myUserId={myUserId}
+            isOwner={isOwner}
+            pageReady={pageReady}
+            refreshToken={refreshToken}
+            previewLimit={PREVIEW_LIMIT}
+          />
         </div>
 
-        <CatTowerSideMenu
-          activePanel={activePanel}
-          onSelectPanel={setActivePanel}
+        <CatTowerVisitorBlock
           busy={busy}
           loading={loading}
           readOnly={isReadOnly}
+          canEdit={canEdit}
+          roomOwnerId={roomOwnerId}
+          myUserId={myUserId}
+          isOwner={isOwner}
+          pageReady={pageReady}
+          refreshToken={refreshToken}
+          onRoomDecorate={canEdit ? () => setRoomDecorateOpen(true) : undefined}
           onCatDecorate={onDecorate}
           onBack={onBack}
           onEvents={onEvents}
           onRefresh={onRefresh}
+          onScrollToGuestbook={scrollToGuestbook}
         />
       </div>
 
-      <CatTowerHistorySection
-        activities={activities}
-        galleries={galleries}
-        growth={growth}
-        activePanel={activePanel}
-        galleryCount={galleryCount}
-      />
+      <CatTowerViewAllModal
+        open={activityModalOpen}
+        title="활동 기록"
+        subtitle={`총 ${activities.length}건의 활동`}
+        emoji="📋"
+        onClose={() => setActivityModalOpen(false)}
+      >
+        <ActivityHistory
+          activities={activities}
+          variant="full"
+          emptyMessage="아직 활동 기록이 없어요. 행사에 참여해 보세요!"
+        />
+      </CatTowerViewAllModal>
+
+      <CatTowerViewAllModal
+        open={galleryModalOpen}
+        title="갤러리"
+        subtitle={`총 ${galleryCount}개`}
+        emoji="📸"
+        onClose={() => setGalleryModalOpen(false)}
+      >
+        <GallerySection
+          galleries={galleries}
+          variant="preview"
+          emptyMessage="등록된 갤러리가 없습니다."
+        />
+      </CatTowerViewAllModal>
+
+      {canEdit ? (
+        <CatTowerRoomDecorateModal
+          open={roomDecorateOpen}
+          selected={roomBg.background}
+          saved={roomBg.savedBackground}
+          isDirty={roomBg.isDirty}
+          saving={roomBg.saving}
+          error={roomBg.error}
+          onSelect={roomBg.selectBackground}
+          onSave={handleSaveRoomBackground}
+          onCatDecorate={onDecorate}
+          onClose={() => setRoomDecorateOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
+
+export default memo(CatTowerDashboard);

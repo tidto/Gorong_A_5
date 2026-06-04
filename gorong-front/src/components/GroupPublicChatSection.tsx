@@ -1,6 +1,6 @@
 // 경로: src/components/GroupPublicChatSection.tsx
 // 변경사항:
-//  - 슬롯 클릭 시 해당 유저의 캣타워(/cattower/:userId)로 이동
+//  - 슬롯 클릭 시 해당 유저 캣타워 미리보기 오버레이 표시
 //  - 고양이 이미지: matching_cat_faces 정적 이미지 + catColor 필터 유지
 //    (기존 방식 그대로, 슬롯 크기만 확대: 44px → 60px)
 //  - 빈 슬롯 크기도 동일하게 확대
@@ -9,13 +9,13 @@
 //  - [디자인 변경] 기존의 파란색 톤을 왼쪽 모집 UI와 어울리는 웜톤 오렌지/소프트 베이지/카키 톤으로 교체
 
 import { useRef, useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
     usePublicGroupWebSocketChat,
     type ChatParticipant,
     type PublicChatMsg,
 } from '../hooks/usePublicGroupWebSocketChat'
 import { auth } from '../firebase/firebaseConfig'
+import { useCatTowerPreview } from '../contexts/CatTowerPreviewContext'
 
 const MAX_SLOTS = 6
 
@@ -238,7 +238,7 @@ export default function GroupPublicChatSection({ groupId }: Props) {
     const [input, setInput]         = useState('')
     const [isEntered, setIsEntered] = useState(false)
     const messageListRef = useRef<HTMLDivElement>(null)
-    const navigate  = useNavigate()
+    const { openCatTower } = useCatTowerPreview()
 
     const { messages, participants, connected, sending, myCat, sendMessage, sendJoin, sendLeave } =
         usePublicGroupWebSocketChat(groupId)
@@ -292,9 +292,9 @@ export default function GroupPublicChatSection({ groupId }: Props) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
     }
 
-    // 슬롯 클릭 → 캣타워 이동
+    // 슬롯 클릭 → 캣타워 미리보기
     const handleSlotNavigate = (userId: number) => {
-        navigate(`/cattower/${userId}`)
+        openCatTower(userId)
     }
 
     return (
@@ -343,7 +343,7 @@ export default function GroupPublicChatSection({ groupId }: Props) {
                     ))}
                 </div>
                 <p style={{ margin: 0, fontSize: '10px', color: 'rgba(255,255,255,0.8)', textAlign: 'center', fontWeight: '600' }}>
-                    고냥이를 클릭하면 캣타워로 이동해요
+                    🏠 고냥이를 클릭하면 캣타워를 미리볼 수 있어요
                 </p>
             </div>
 

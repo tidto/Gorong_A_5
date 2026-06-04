@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
+import { Loader2, Trash2, User } from "lucide-react";
 import ActivityHistory from "../mini-home/ActivityHistory";
 import GallerySection from "../mini-home/GallerySection";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
+import type { GuestbookEntry } from "../../../api/minihome/guestbookApi";
 import {
-  MOCK_GUESTBOOK,
   MOCK_REVIEWS,
   buildMockGrowthLogs,
 } from "../../../data/minihome/catTowerDashboardMock";
-import type { CatTowerPanelId } from "./CatTowerSideMenu";
+import type { CatTowerPanelId } from "./catTowerPanelTypes";
 
 type HistoryTab = "events" | "reviews" | "growth" | "guestbook";
 
@@ -18,6 +19,11 @@ type CatTowerHistorySectionProps = {
   growth: GrowthState;
   activePanel: CatTowerPanelId;
   galleryCount: number;
+  guestbookEntries: GuestbookEntry[];
+  guestbookLoading?: boolean;
+  onGuestbookDelete: (entry: GuestbookEntry) => void;
+  guestbookCanDeleteEntry: (entry: GuestbookEntry) => boolean;
+  guestbookDeletingId?: number | null;
 };
 
 const TABS: { id: HistoryTab; label: string; emoji: string }[] = [
@@ -27,6 +33,16 @@ const TABS: { id: HistoryTab; label: string; emoji: string }[] = [
   { id: "guestbook", label: "방명록", emoji: "✉️" },
 ];
 
+function formatGuestbookDate(iso: string) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("ko-KR");
+  } catch {
+    return iso;
+  }
+}
+
 /** 아래 — 행사·리뷰·성장·방명록 히스토리 */
 export default function CatTowerHistorySection({
   activities,
@@ -34,6 +50,11 @@ export default function CatTowerHistorySection({
   growth,
   activePanel,
   galleryCount,
+  guestbookEntries,
+  guestbookLoading,
+  onGuestbookDelete,
+  guestbookCanDeleteEntry,
+  guestbookDeletingId,
 }: CatTowerHistorySectionProps) {
   const [tab, setTab] = useState<HistoryTab>("events");
 
@@ -130,19 +151,56 @@ export default function CatTowerHistorySection({
         ) : null}
 
         {tab === "guestbook" ? (
-          <ul className="space-y-2">
-            {MOCK_GUESTBOOK.map((g) => (
-              <li
-                key={g.id}
-                className="rounded-xl border border-dashed border-emerald-200 bg-white px-3 py-2.5"
-              >
-                <p className="text-[10px] font-bold text-emerald-700">{g.author}</p>
-                <p className="mt-0.5 text-xs text-slate-700">{g.message}</p>
-                <p className="mt-1 text-[10px] text-slate-400">{g.date}</p>
-              </li>
-            ))}
-            <p className="text-center text-[10px] text-slate-400">방명록 mock · 추후 연동 예정</p>
-          </ul>
+          guestbookLoading ? (
+            <div className="flex min-h-[100px] items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-rose-400" />
+            </div>
+          ) : guestbookEntries.length === 0 ? (
+            <p className="py-6 text-center text-xs text-slate-500">아직 방명록이 없어요.</p>
+          ) : (
+            <ul className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+              {guestbookEntries.slice(0, 10).map((g) => (
+                <li
+                  key={g.guestbookId}
+                  className="group flex gap-2 rounded-xl border border-dashed border-emerald-200 bg-white px-3 py-2.5"
+                >
+                  {g.authorProfileImageUrl ? (
+                    <img
+                      src={g.authorProfileImageUrl}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-400">
+                      <User className="h-4 w-4" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-[10px] font-bold text-emerald-700">{g.authorNickname}</p>
+                      {guestbookCanDeleteEntry(g) ? (
+                        <button
+                          type="button"
+                          onClick={() => onGuestbookDelete(g)}
+                          disabled={guestbookDeletingId === g.guestbookId}
+                          className="text-slate-400 opacity-0 transition hover:text-red-500 group-hover:opacity-100"
+                          aria-label="삭제"
+                        >
+                          {guestbookDeletingId === g.guestbookId ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-700">{g.content}</p>
+                    <p className="mt-1 text-[10px] text-slate-400">{formatGuestbookDate(g.createAt)}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )
         ) : null}
       </div>
     </section>
