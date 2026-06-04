@@ -27,4 +27,10 @@ public class MapController {
         TourItemDto detail = tourApiService.getEventDetail(id);
         return ResponseEntity.ok(detail);
     }
+
+    @PostMapping("/admin/sync-tour-api")
+    public ResponseEntity<String> syncTourApi() {
+        List<TourItemDto> result = tourApiService.getAndSyncApiData();
+        return ResponseEntity.ok("동기화 완료: " + result.size() + "건");
+    }
 }

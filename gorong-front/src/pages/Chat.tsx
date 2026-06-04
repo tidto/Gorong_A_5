@@ -49,11 +49,10 @@ export default function Chat() {
 
   const myNickname = user?.nickname || '나'
 
-  // 현재 활성 채팅방의 마감 여부 (날짜 만료 + 정원 초과 + 상태값 모두 체크)
+  // 현재 활성 채팅방의 잠금 여부 — CLOSED(일정 종료/강제 마감)일 때만 잠금
+  // IN_PROGRESS(정원 충족 후 진행 중)는 채팅 가능 상태 유지
   const isClosed = activeGroup
-      ? activeGroup.status === 'CLOSED' ||
-      activeGroup.currentCapacity >= activeGroup.maxCapacity ||
-      isDatePassed(activeGroup.meetingDate)
+      ? activeGroup.status === 'CLOSED' || isDatePassed(activeGroup.meetingDate)
       : false
 
   // 참여중인 그룹 로드
@@ -196,7 +195,6 @@ export default function Chat() {
                   const isActive = activeGroup?.id === group.id
                   const isGroupClosed =
                       group.status === 'CLOSED' ||
-                      group.currentCapacity >= group.maxCapacity ||
                       isDatePassed(group.meetingDate)
                   return (
                       <div
@@ -241,11 +239,19 @@ export default function Chat() {
                       fontSize: '11px',
                       padding: '2px 8px',
                       borderRadius: '20px',
-                      backgroundColor: isGroupClosed ? '#f1f5f9' : '#ecfdf5',
-                      color: isGroupClosed ? '#94a3b8' : '#10b981',
+                      backgroundColor: isGroupClosed
+                          ? '#f1f5f9'
+                          : group.status === 'IN_PROGRESS'
+                              ? '#fefce8'
+                              : '#ecfdf5',
+                      color: isGroupClosed
+                          ? '#94a3b8'
+                          : group.status === 'IN_PROGRESS'
+                              ? '#ca8a04'
+                              : '#10b981',
                       fontWeight: '600',
                     }}>
-                      {isGroupClosed ? '마감' : '모집중'}
+                      {isGroupClosed ? '마감' : group.status === 'IN_PROGRESS' ? '진행중' : '모집중'}
                     </span>
                           <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
                       인원: {group.currentCapacity}/{group.maxCapacity}명

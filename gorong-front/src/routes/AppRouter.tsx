@@ -6,6 +6,8 @@ import EventDetail from '../pages/EventDetail'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
 import Chat from '../pages/Chat'
+import { lazy, Suspense, useEffect } from 'react'
+const CatTower = lazy(() => import('../pages/minihome/CatTower'))
 import History from '../pages/History'
 import MyPage from '../pages/user/MyPage'
 import Chatbot from '../pages/chatbot/Chatbot'
@@ -23,6 +25,7 @@ import ErrorPage from '../pages/ErrorPage'
 import GroupEditPage from '../pages/Group/GroupEditPage.tsx'
 import AdminPage from '../pages/admin/AdminPage'
 import RiveCustomizerDevPage from '../pages/minihome/dev/RiveCustomizerDevPage'
+import { ChatNotificationProvider } from '../contexts/ChatNotificationContext'
 import { CatTowerPreviewProvider } from '../contexts/CatTowerPreviewContext'
 
 const CatTower = lazy(() => import('../pages/minihome/CatTower'))
@@ -97,14 +100,15 @@ export default function AppRouter() {
     return (
         <Router>
             <CatTowerPreviewProvider>
-            <NavigationInitializer />
-            <Layout>
-                <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/signup" element={<Signup />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/groups/create" element={<GroupCreatePage />} />
-                    <Route path="/groups/edit/:id" element={<GroupEditPage />} />
+                <ChatNotificationProvider>
+                <NavigationInitializer />
+                <Layout>
+                    <Routes>
+                        <Route path="/" element={<Home />} />
+                        <Route path="/signup" element={<Signup />} />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/groups/create" element={<GroupCreatePage />} />
+                        <Route path="/groups/edit/:id" element={<GroupEditPage />} />
 
                     {/* ✅ 모집글 상세 페이지 — /groups/:id */}
                     <Route
