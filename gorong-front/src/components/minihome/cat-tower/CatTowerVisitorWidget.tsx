@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Users } from "lucide-react";
-import { MOCK_TODAY_VISITORS, MOCK_VISITOR_COUNT } from "../../../data/minihome/catTowerDashboardMock";
+
+type CatTowerVisitorWidgetProps = {
+  todayCount: number;
+  totalCount: number;
+  loading?: boolean;
+};
 
 function AnimatedCount({ value }: { value: number }) {
   const [display, setDisplay] = useState(0);
@@ -22,7 +27,7 @@ function AnimatedCount({ value }: { value: number }) {
 
     const tick = (now: number) => {
       const t = Math.min((now - startedAt) / durationMs, 1);
-      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      const eased = 1 - Math.pow(1 - t, 3);
       setDisplay(Math.round(from + (to - from) * eased));
       if (t < 1) rafRef.current = requestAnimationFrame(tick);
     };
@@ -38,8 +43,15 @@ function AnimatedCount({ value }: { value: number }) {
   return <span>{display}</span>;
 }
 
-/** 방문자 수 mock — 카운트업 애니메이션 */
-export default function CatTowerVisitorWidget() {
+/** 방문자 현황 — 오늘(고유 방문자) / 누적(전체 방문 기록) */
+export default function CatTowerVisitorWidget({
+  todayCount,
+  totalCount,
+  loading,
+}: CatTowerVisitorWidgetProps) {
+  const today = loading ? 0 : todayCount;
+  const total = loading ? 0 : totalCount;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -54,20 +66,17 @@ export default function CatTowerVisitorWidget() {
       <div className="grid grid-cols-2 divide-x divide-emerald-100/70 px-1 py-2.5">
         <div className="text-center">
           <p className="text-lg font-extrabold tabular-nums text-emerald-700">
-            <AnimatedCount value={MOCK_TODAY_VISITORS} />
+            <AnimatedCount value={today} />
           </p>
           <p className="text-[9px] font-bold text-emerald-800/55">오늘</p>
         </div>
         <div className="text-center">
           <p className="text-lg font-extrabold tabular-nums text-teal-700">
-            <AnimatedCount value={MOCK_VISITOR_COUNT} />
+            <AnimatedCount value={total} />
           </p>
           <p className="text-[9px] font-bold text-emerald-800/55">누적</p>
         </div>
       </div>
-      <p className="border-t border-emerald-50 px-2 py-1 text-center text-[8px] text-emerald-700/45">
-        mock · 추후 연동 예정
-      </p>
     </motion.div>
   );
 }

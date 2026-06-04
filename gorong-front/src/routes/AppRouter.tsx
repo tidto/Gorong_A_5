@@ -5,7 +5,7 @@ import EventDetail from '../pages/EventDetail'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
 import Chat from '../pages/Chat'
-import CatTower from '../pages/minihome/CatTower'
+const CatTower = lazy(() => import('../pages/minihome/CatTower'))
 import History from '../pages/History'
 import MyPage from '../pages/user/MyPage'
 import Chatbot from '../pages/chatbot/Chatbot'
@@ -16,7 +16,7 @@ import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { setNavigate } from '../utils/navigationHelper'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import GroupListPage from '../pages/Group/GroupListPage.tsx'
 import GroupCreatePage from '../pages/Group/GroupCreatePage.tsx'
 import GroupDetailPage from '../pages/Group/GroupDetailPage.tsx'   // ✅ 추가
@@ -25,12 +25,13 @@ import GroupEditPage from '../pages/Group/GroupEditPage.tsx'
 import AdminPage from '../pages/admin/AdminPage'
 import RiveCustomizerDevPage from '../pages/minihome/dev/RiveCustomizerDevPage'
 import { ChatNotificationProvider } from '../contexts/ChatNotificationContext'
+import { CatTowerPreviewProvider } from '../contexts/CatTowerPreviewContext'
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
     const auth = useAuth()
     const location = useLocation()
-
-    // isLoading 중엔 판단 보류 : firebase 인증 상태가 아직 초기화되지 않았을 수 있음
+    
+  // isLoading 중엔 판단 보류 : firebase 인증 상태가 아직 초기화되지 않았을 수 있음
     if (auth.isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -70,6 +71,14 @@ function AdminRoute({ children }: { children: JSX.Element }) {
     return children
 }
 
+function CatTowerRouteFallback() {
+    return (
+        <div className="flex min-h-[50vh] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+        </div>
+    )
+}
+
 function NavigationInitializer() {
     const navigate = useNavigate()
     useEffect(() => {
@@ -86,7 +95,8 @@ function RedirectMiniHomeUserToCatTower() {
 export default function AppRouter() {
     return (
         <Router>
-            <ChatNotificationProvider>
+            <CatTowerPreviewProvider>
+                <ChatNotificationProvider>
                 <NavigationInitializer />
                 <Layout>
                     <Routes>
@@ -96,15 +106,15 @@ export default function AppRouter() {
                         <Route path="/groups/create" element={<GroupCreatePage />} />
                         <Route path="/groups/edit/:id" element={<GroupEditPage />} />
 
-                        {/* ✅ 모집글 상세 페이지 — /groups/:id */}
-                        <Route
-                            path="/groups/:id"
-                            element={
-                                <ProtectedRoute>
-                                    <GroupDetailPage />
-                                </ProtectedRoute>
-                            }
-                        />
+                    {/* ✅ 모집글 상세 페이지 — /groups/:id */}
+                    <Route
+                        path="/groups/:id"
+                        element={
+                            <ProtectedRoute>
+                                <GroupDetailPage />
+                            </ProtectedRoute>
+                        }
+                    />
 
                         <Route path="/error/:code" element={<ErrorPage />} />
                         <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
@@ -141,6 +151,7 @@ export default function AppRouter() {
                     </Routes>
                 </Layout>
             </ChatNotificationProvider>
+                </CatTowerPreviewProvider>
         </Router>
     )
 }

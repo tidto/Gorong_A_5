@@ -1,11 +1,11 @@
 import axios from 'axios';
 import { signOut } from 'firebase/auth'
-import { auth } from '../firebase/firebaseConfig';
+import { auth } from '../firebase/firebaseConfig'; 
 import { navigateTo } from '../utils/navigationHelper'
 import { API_BASE_URL } from '../config/env';
 
 const axiosInstance = axios.create({
-    baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL,
 });
 
 // ── 토큰 캐시 (매 요청마다 Firebase 네트워크 왕복 방지) ──────────
@@ -51,27 +51,28 @@ axiosInstance.interceptors.response.use(
         const status = error.response?.status
         const isBanBlocked = status === 403 && error.response?.data?.message === '계정 이용이 제한되었습니다.'
 
-        const url = String(error.config?.url ?? '')
-        const isMiniHomeApi = url.includes('/minihomes')
+    const url = String(error.config?.url ?? '')
+    const isMiniHomeApi = url.includes('/minihomes')
+    const isGuestbookApi = url.includes('/guestbook')
+    const isCattowerApi = url.includes('/cattower')
 
-        if (status === 401) {
-            // 토큰 캐시 무효화 후 로그아웃
-            _cachedToken = null
-            _tokenExpiresAt = 0
-            await signOut(auth)
-            localStorage.removeItem('gorong-db-user')
-            localStorage.removeItem('gorong-firebase-uid')
-            navigateTo('/login')
-        } else if (status === 403 && !isBanBlocked && !isMiniHomeApi) {
-            navigateTo('/error/403')
-        } else if (status === 404 && !isMiniHomeApi) {
-            navigateTo('/error/404')
-        } else if (status === 500 && !isMiniHomeApi) {
-            navigateTo('/error/500')
-        }
-
-        return Promise.reject(error)
+    if (status === 401) {
+        _cachedToken = null
+        _tokenExpiresAt = 0
+        await signOut(auth)
+      localStorage.removeItem('gorong-db-user')
+      localStorage.removeItem('gorong-firebase-uid')
+      navigateTo('/login')
+    } else if (status === 403 && !isBanBlocked && !isMiniHomeApi && !isGuestbookApi && !isCattowerApi) {
+      navigateTo('/error/403')
+    } else if (status === 404 && !isMiniHomeApi && !isGuestbookApi && !isCattowerApi) {
+      navigateTo('/error/404')
+    } else if (status === 500 && !isMiniHomeApi && !isGuestbookApi && !isCattowerApi) {
+      navigateTo('/error/500')
     }
+
+    return Promise.reject(error)
+  }
 );
 
 export default axiosInstance;

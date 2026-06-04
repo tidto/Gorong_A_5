@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import { getCatVisualByStage } from "../../../utils/minihome/gocat/catVisual";
 import { normalizeEquipPreview, type EquipPreview } from "../../../utils/minihome/gocat/items";
@@ -65,7 +65,7 @@ function CompactCatRig({
   );
 }
 
-export default function GoCatVisual({
+function GoCatVisual({
   stage,
   className = "",
   variant = "card",
@@ -103,3 +103,5 @@ export default function GoCatVisual({
     </div>
   );
 }
+
+export default memo(GoCatVisual);

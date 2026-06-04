@@ -164,6 +164,7 @@ export {
   unequipSlot,
   saveMyEquipments,
   saveEquipments,
+  grantEventItemReward,
 } from "./itemApi";
 
 export async function addGalleryImage(

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import { useChatRoom } from '../../hooks/useChatRoom';
+import { useCatTowerPreview } from '../../contexts/CatTowerPreviewContext';
 
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
 const ITEMS_PER_PAGE = 10;
@@ -106,6 +107,7 @@ const isUrgent = (g: Group): boolean => {
 
 const GroupListPage = () => {
   const navigate = useNavigate();
+  const { openCatTower } = useCatTowerPreview();
   const [groups, setGroups]                           = useState<Group[]>([]);
   const [searchTerm, setSearchTerm]                   = useState('');
   const [selectedEventFilter, setSelectedEventFilter] = useState('ALL');
@@ -187,8 +189,8 @@ const GroupListPage = () => {
   const toPermissionShape = (g: Group): GroupForPermission => ({ authorEmail: g.author?.email, authorName: g.authorName });
   const handleGoToHost = useCallback((g: Group) => {
     const id = g.author?.id;
-    if (id != null && Number.isFinite(id) && id > 0) navigate(`/cattower/${id}`);
-  }, [navigate]);
+    if (id != null && Number.isFinite(id) && id > 0) openCatTower(id);
+  }, [openCatTower]);
 
   const eventCategories = Array.from(new Set(groups.map(g => g.event?.trim()).filter(Boolean) as string[])).sort((a,b) => a.localeCompare(b,'ko'));
 
