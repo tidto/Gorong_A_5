@@ -1,4 +1,3 @@
-import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import Home from '../pages/Home'
 import EventList from '../pages/EventList'
@@ -27,9 +26,6 @@ import AdminPage from '../pages/admin/AdminPage'
 import RiveCustomizerDevPage from '../pages/minihome/dev/RiveCustomizerDevPage'
 import { ChatNotificationProvider } from '../contexts/ChatNotificationContext'
 import { CatTowerPreviewProvider } from '../contexts/CatTowerPreviewContext'
-
-const CatTower = lazy(() => import('../pages/minihome/CatTower'))
-const CatTowerCreatePage = lazy(() => import('../pages/minihome/CatTowerCreatePage'))
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
     const auth = useAuth()
@@ -120,41 +116,41 @@ export default function AppRouter() {
                         }
                     />
 
-                    <Route path="/error/:code" element={<ErrorPage />} />
-                    <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
-                    <Route path="/posting" element={<Navigate to="/reviews" replace />} />
-                    <Route path="/events/:id" element={<EventDetail />} />
-                    <Route path="/events/:id/review" element={<ProtectedRoute><Review /></ProtectedRoute>} />
-                    <Route path="/reviews" element={<ProtectedRoute><ReviewPage /></ProtectedRoute>} />
-                    <Route path="/group" element={<ProtectedRoute><GroupListPage /></ProtectedRoute>} />
-                    <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-                    <Route path="/minihompy" element={<Navigate to="/cattower" replace />} />
-                    <Route path="/cattower/create" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerCreatePage /></Suspense></ProtectedRoute>} />
-                    <Route path="/cattower/user/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
-                    <Route path="/cattower/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
-                    <Route path="/cattower" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTower /></Suspense></ProtectedRoute>} />
-                    {import.meta.env.DEV ? (
-                        <Route path="/dev/rive-customizer" element={<ProtectedRoute><RiveCustomizerDevPage /></ProtectedRoute>} />
-                    ) : null}
-                    <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-                    <Route path="/mypage" element={<ProtectedRoute><MyPage /></ProtectedRoute>} />
-                    <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
-                    <Route path="/minihome" element={<Navigate to="/cattower" replace />} />
-                    <Route path="/minihome/:userId" element={<RedirectMiniHomeUserToCatTower />} />
-                    <Route path="/users/:userId/minihome" element={<RedirectMiniHomeUserToCatTower />} />
-                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                    <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-                    <Route
-                        path="*"
-                        element={
-                            <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-                                <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                                <p className="text-gray-600 mb-6">페이지를 찾을 수 없습니다.</p>
-                            </div>
-                        }
-                    />
-                </Routes>
-            </Layout>
+                        <Route path="/error/:code" element={<ErrorPage />} />
+                        <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
+                        <Route path="/posting" element={<Navigate to="/reviews" replace />} />
+                        <Route path="/events/:id" element={<EventDetail />} />
+                        <Route path="/events/:id/review" element={<ProtectedRoute><Review /></ProtectedRoute>} />
+                        <Route path="/reviews" element={<ProtectedRoute><ReviewPage /></ProtectedRoute>} />
+                        <Route path="/group" element={<ProtectedRoute><GroupListPage /></ProtectedRoute>} />
+                        <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+                        <Route path="/minihompy" element={<Navigate to="/cattower" replace />} />
+                        <Route path="/cattower/user/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerPage /></Suspense></ProtectedRoute>} />
+                        <Route path="/cattower/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerPage /></Suspense></ProtectedRoute>} />
+                        <Route path="/cattower" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerPage /></Suspense></ProtectedRoute>} />
+                        {import.meta.env.DEV ? (
+                            <Route path="/dev/rive-customizer" element={<ProtectedRoute><RiveCustomizerDevPage /></ProtectedRoute>} />
+                        ) : null}
+                        <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+                        <Route path="/mypage" element={<ProtectedRoute><MyPage /></ProtectedRoute>} />
+                        <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
+                        <Route path="/minihome" element={<Navigate to="/cattower" replace />} />
+                        <Route path="/minihome/:userId" element={<RedirectMiniHomeUserToCatTower />} />
+                        <Route path="/users/:userId/minihome" element={<RedirectMiniHomeUserToCatTower />} />
+                        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                        <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+                        <Route
+                            path="*"
+                            element={
+                                <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+                                    <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+                                    <p className="text-gray-600 mb-6">페이지를 찾을 수 없습니다.</p>
+                                </div>
+                            }
+                        />
+                        </Routes>
+                    </Layout>
+                </ChatNotificationProvider>
             </CatTowerPreviewProvider>
         </Router>
     )
