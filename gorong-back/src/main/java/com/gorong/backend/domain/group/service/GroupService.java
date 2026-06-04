@@ -78,6 +78,24 @@ public class GroupService {
     }
 
     @Transactional
+    public void leaveGroup(Long groupId, Long userId) {
+        GroupPost post = groupPostRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("글을 찾을 수 없습니다."));
+
+        if (!participantRepository.existsByUserAndGroupPost(
+                userRepository.findById(userId).orElseThrow(), post)) {
+            throw new RuntimeException("참여 중인 그룹이 아닙니다.");
+        }
+
+        participantRepository.deleteByUserIdAndGroupPostId(userId, groupId);
+
+        // 정원 감소 (0 아래로 내려가지 않도록)
+        if (post.getCurrentCapacity() > 0) {
+            post.setCurrentCapacity(post.getCurrentCapacity() - 1);
+        }
+    }
+
+    @Transactional
     public void deleteGroupSafely(Long groupId) {
         // 1. 자식 데이터(참여자) 먼저 싹 지우기
         participantRepository.deleteByGroupPostId(groupId);
