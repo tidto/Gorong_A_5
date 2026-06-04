@@ -18,6 +18,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { onAuthStateChanged } from 'firebase/auth'
 
 import { auth } from './src/config/firebaseConfig'
@@ -108,9 +109,11 @@ export default function App() {
   return (
     // GestureHandlerRootView: Stack Navigator 제스처 활성화 (flex:1 필수)
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <AppContent />
-      </QueryClientProvider>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <AppContent />
+        </QueryClientProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }

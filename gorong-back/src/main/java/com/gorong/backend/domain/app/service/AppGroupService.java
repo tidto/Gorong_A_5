@@ -111,6 +111,8 @@ public class AppGroupService {
                 .title(group.getTitle())
                 .event(group.getEvent())
                 .location(group.getLocation())
+                .meetingDate(group.getMeetingDate())
+                .meetingTime(group.getMeetingTime())
                 .maxMembers(group.getMaxCapacity())
                 .currentMembers(group.getCurrentCapacity())
                 .joined(joined)

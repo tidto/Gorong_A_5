@@ -10,6 +10,8 @@ public class AppGroupResponseDto {
     private String title;
     private String event;
     private String location;
+    private String meetingDate;
+    private String meetingTime;
     private Integer maxMembers;
     private Integer currentMembers;
     private boolean joined;

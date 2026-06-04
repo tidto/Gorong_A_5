@@ -18,43 +18,24 @@ import {
   Alert,
   ScrollView,
 } from 'react-native'
-import * as WebBrowser from 'expo-web-browser'
-import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google'
-import {
-  GoogleAuthProvider,
-  signInWithCredential,
-  signInWithEmailAndPassword,
-} from 'firebase/auth'
+import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../config/firebaseConfig'
 import { useAuthStore } from '../../store/authStore'
 import { StackNavigationProp } from '@react-navigation/stack'
 import { AuthStackParamList } from '../../navigation/AppNavigator'
-
-WebBrowser.maybeCompleteAuthSession()
 
 // 네비게이션 타입 (AuthStack 내 화면)
 type Props = {
   navigation: StackNavigationProp<AuthStackParamList, 'Login'>
 }
 
-const GOOGLE_ANDROID_CLIENT_ID = '922347757040-mpn42qp4epab6l94gdhq9tvtieeq2dbd.apps.googleusercontent.com'
-const GOOGLE_IOS_CLIENT_ID = '922347757040-m26h57lbp4eqbuc5d25r6d8v35hmi89k.apps.googleusercontent.com'
-
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loadingProvider, setLoadingProvider] = useState<'email' | 'google' | null>(null)
+  const [loadingProvider, setLoadingProvider] = useState<'email' | null>(null)
 
   // 백엔드 로그인 확인 함수
   const { checkBackendLogin } = useAuthStore()
-
-  const [googleRequest, , promptGoogleAsync] = useIdTokenAuthRequest({
-    clientId: GOOGLE_ANDROID_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    scopes: ['openid', 'profile', 'email'],
-    selectAccount: true,
-  })
 
   // ─── 로그인 처리 ──────────────────────────────
   const handleLogin = async () => {
@@ -86,30 +67,6 @@ export default function LoginScreen({ navigation }: Props) {
     }
   }
 
-  const handleGoogleLogin = async () => {
-    setLoadingProvider('google')
-    try {
-      const result = await promptGoogleAsync()
-      if (result.type !== 'success') return
-
-      const idToken = result.authentication?.idToken ?? result.params?.id_token
-      const accessToken = result.authentication?.accessToken ?? result.params?.access_token
-      if (!idToken) {
-        throw new Error('Google ID 토큰을 받지 못했습니다.')
-      }
-
-      const credential = GoogleAuthProvider.credential(idToken, accessToken)
-      await signInWithCredential(auth, credential)
-      await checkBackendLogin()
-    } catch (error: any) {
-      if (error?.message?.includes('cancel')) return
-      console.error('[LoginScreen] Google 로그인 실패:', error)
-      Alert.alert('Google 로그인 실패', '구글 로그인 중 문제가 발생했습니다.')
-    } finally {
-      setLoadingProvider(null)
-    }
-  }
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -128,16 +85,14 @@ export default function LoginScreen({ navigation }: Props) {
         {/* 입력 폼 */}
         <View style={styles.form}>
           <TouchableOpacity
-            style={[styles.socialBtn, styles.googleBtn, loadingProvider && styles.btnDisabled]}
-            onPress={handleGoogleLogin}
-            disabled={loadingProvider !== null || !googleRequest}
+            style={[styles.socialBtn, styles.googleBtn, styles.btnDisabled]}
+            onPress={() => {
+              Alert.alert('안내', '현재는 이메일/비밀번호 로그인을 사용합니다.')
+            }}
+            disabled
             activeOpacity={0.85}
           >
-            {loadingProvider === 'google' ? (
-              <ActivityIndicator color="#1f2937" />
-            ) : (
-              <Text style={styles.socialBtnText}>Google로 계속</Text>
-            )}
+            <Text style={styles.socialBtnText}>Google로 계속</Text>
           </TouchableOpacity>
 
           <View style={styles.dividerRow}>
