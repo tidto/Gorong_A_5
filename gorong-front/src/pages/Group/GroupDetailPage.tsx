@@ -39,15 +39,13 @@ const toValidNumber = (value: unknown) => {
     return Number.isFinite(num) && num !== 0 ? num : null;
 };
 
-// 💡 여기에 뒤에 붙어있던 .replace 코드들을 하나로 합쳐주었습니다.
 const escapeHtml = (v: string) =>
     v.replace(/&/g,'&amp;')
         .replace(/</g,'&lt;')
         .replace(/>/g,'&gt;')
-        .replace(/"/g,'&quot;')
+        .replace(/\"/g,'&quot;')
         .replace(/'/g,'&#39;');
 
-// GroupListPage와 동일한 날짜 만료 체크 헬퍼
 const isDatePassed = (dateStr?: string): boolean => {
     if (!dateStr) return false;
     try {
@@ -57,7 +55,7 @@ const isDatePassed = (dateStr?: string): boolean => {
         today.setHours(0, 0, 0, 0);
         return meeting < today;
     } catch { return false; }
-}; // 💡 이 밑에 붕 떠있던 .replace 코드를 지웠습니다.
+};
 
 export default function GroupDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -66,14 +64,23 @@ export default function GroupDetailPage() {
     const [post, setPost]               = useState<GroupPost | null>(null);
     const [isJoining, setIsJoining]     = useState(false);
     const [isJoined, setIsJoined]       = useState(false);
-    const [showMap, setShowMap]         = useState(false);
-    const [mapLoading, setMapLoading]   = useState(false);
-    const [mapError, setMapError]       = useState('');
-    const [routeTarget, setRouteTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
+    // ✅ 인라인 미니맵 + 풀스크린 모달 상태 분리
+    const [miniMapReady, setMiniMapReady]   = useState(false);
+    const [miniMapError, setMiniMapError]   = useState('');
+    const [miniMapLoading, setMiniMapLoading] = useState(false);
+    const [showFullMap, setShowFullMap]     = useState(false);
+    const [fullMapLoading, setFullMapLoading] = useState(false);
+    const [fullMapError, setFullMapError]   = useState('');
+    const [routeTarget, setRouteTarget]     = useState<{ lat: number; lng: number; name: string } | null>(null);
     const [userRouteProfile, setUserRouteProfile] = useState<UserRouteProfile | null>(null);
 
-    const mapContainerRef = useRef<HTMLDivElement>(null);
-    const mapMarkerRef    = useRef<any>(null);
+    // ✅ 인라인 미니맵용 ref, 풀스크린 맵용 ref 별도
+    const miniMapContainerRef = useRef<HTMLDivElement>(null);
+    const fullMapContainerRef = useRef<HTMLDivElement>(null);
+    const miniMapMarkerRef    = useRef<any>(null);
+    const fullMapMarkerRef    = useRef<any>(null);
+    // 지오코딩 결과를 캐시해서 중복 요청 방지
+    const resolvedPosRef      = useRef<any>(null);
 
     const { isMyGroup } = useChatRoom();
 
@@ -81,7 +88,6 @@ export default function GroupDetailPage() {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     }, [id]);
 
-    // ── 데이터 로드 ──────────────────────────────────────────
     useEffect(() => {
         if (!id) return;
         axiosInstance.get<GroupPost>(`/groups/${id}`)
@@ -99,12 +105,10 @@ export default function GroupDetailPage() {
             .catch(() => setUserRouteProfile(null));
     }, []);
 
-    // ── 권한 판정 ────────────────────────────────────────────
     const canEdit = post
         ? isMyGroup({ authorEmail: post.author?.email, authorName: post.authorName })
         : false;
 
-    // ── 참여 취소 ────────────────────────────────────────────
     const handleLeave = useCallback(async () => {
         if (!window.confirm('정말 참여를 취소하시겠습니까?')) return;
         try {
@@ -114,8 +118,6 @@ export default function GroupDetailPage() {
                 ? { ...prev, currentCapacity: Math.max(0, (prev.currentCapacity ?? 1) - 1) }
                 : prev
             );
-
-            // event_participation 이력도 함께 취소
             if (post?.event) {
                 try {
                     await axiosInstance.delete(`/event-participation/group/${id}`, {
@@ -130,7 +132,6 @@ export default function GroupDetailPage() {
         }
     }, [id, post]);
 
-    // ── 참여 신청 ────────────────────────────────────────────
     const handleJoin = useCallback(async () => {
         try {
             setIsJoining(true);
@@ -140,19 +141,13 @@ export default function GroupDetailPage() {
                 ? { ...prev, currentCapacity: (prev.currentCapacity ?? 0) + 1 }
                 : prev
             );
-
-            // 행사 참여 이력 기록 (그룹 참여)
-            // post.event 에 eventContentId 가 담겨 있다고 가정 (GroupListPage → GroupPost.event)
-            // eventContentId 가 없으면 기록을 건너뜀
             if (post?.event) {
                 try {
                     await axiosInstance.post(`/event-participation/group/${id}`, {
-                        eventContentId: post.event,   // GroupPost.event = TourAPI contentId or title
+                        eventContentId: post.event,
                         eventTitle: post.title,
                     });
-                } catch {
-                    // 이력 저장 실패는 참여 자체를 막지 않음 (silent fail)
-                }
+                } catch { /* silent fail */ }
             }
         } catch (err: any) {
             const status = err?.response?.status;
@@ -163,7 +158,6 @@ export default function GroupDetailPage() {
         }
     }, [id, post]);
 
-    // ── 삭제 ─────────────────────────────────────────────────
     const handleDelete = useCallback(async () => {
         if (!canEdit) return;
         if (!window.confirm('정말 이 모집글을 삭제하시겠습니까?')) return;
@@ -175,7 +169,6 @@ export default function GroupDetailPage() {
         }
     }, [id, canEdit, navigate]);
 
-    // ── 카카오 지도 ──────────────────────────────────────────
     const loadKakaoSdk = useCallback(() => {
         if (window.kakao?.maps?.services) return Promise.resolve();
         return new Promise<void>((resolve, reject) => {
@@ -193,6 +186,96 @@ export default function GroupDetailPage() {
             document.head.appendChild(s);
         });
     }, []);
+
+    // ✅ 공통 지오코딩 (캐시)
+    const resolvePosition = useCallback(async (loc: string) => {
+        if (resolvedPosRef.current) return resolvedPosRef.current;
+        await loadKakaoSdk();
+        const geocoder = new window.kakao.maps.services.Geocoder();
+        const places   = new window.kakao.maps.services.Places();
+        const pos = await new Promise<any>((res, rej) => {
+            geocoder.addressSearch(loc, (r: any, s: any) => {
+                if (s === window.kakao.maps.services.Status.OK && r.length > 0)
+                    return res(new window.kakao.maps.LatLng(+r[0].y, +r[0].x));
+                places.keywordSearch(loc, (pr: any, ps: any) => {
+                    ps === window.kakao.maps.services.Status.OK && pr.length > 0
+                        ? res(new window.kakao.maps.LatLng(+pr[0].y, +pr[0].x))
+                        : rej(new Error('not found'));
+                });
+            });
+        });
+        resolvedPosRef.current = pos;
+        return pos;
+    }, [loadKakaoSdk]);
+
+    // ✅ 인라인 미니맵 렌더 (post.location 변경 시 자동 실행)
+    useEffect(() => {
+        if (!post?.location || !miniMapContainerRef.current) return;
+        let cancelled = false;
+        const loc = post.location.trim();
+
+        const render = async () => {
+            setMiniMapLoading(true);
+            setMiniMapError('');
+            try {
+                const pos = await resolvePosition(loc);
+                if (cancelled || !miniMapContainerRef.current) return;
+
+                setRouteTarget({ lat: pos.getLat(), lng: pos.getLng(), name: post.title || loc });
+
+                const map = new window.kakao.maps.Map(miniMapContainerRef.current, {
+                    center: pos,
+                    level: 3,
+                    draggable: false,   // 미니맵은 인터랙션 제한
+                    scrollwheel: false,
+                    disableDoubleClickZoom: true,
+                });
+                if (miniMapMarkerRef.current) miniMapMarkerRef.current.setMap(null);
+                miniMapMarkerRef.current = new window.kakao.maps.Marker({ position: pos, map });
+                new window.kakao.maps.InfoWindow({
+                    content: `<div style="padding:6px 10px;font-size:12px;font-weight:700;white-space:nowrap;">${escapeHtml(loc)}</div>`,
+                }).open(map, miniMapMarkerRef.current);
+                if (!cancelled) setMiniMapReady(true);
+            } catch {
+                if (!cancelled) setMiniMapError('위치를 지도에서 찾지 못했습니다.');
+            } finally {
+                if (!cancelled) setMiniMapLoading(false);
+            }
+        };
+
+        render();
+        return () => { cancelled = true; };
+    }, [post?.location, resolvePosition, post?.title]);
+
+    // ✅ 풀스크린 지도 모달 렌더
+    useEffect(() => {
+        if (!showFullMap || !post?.location || !fullMapContainerRef.current) return;
+        let cancelled = false;
+        const loc = post.location.trim();
+
+        const render = async () => {
+            setFullMapLoading(true);
+            setFullMapError('');
+            try {
+                const pos = await resolvePosition(loc);
+                if (cancelled || !fullMapContainerRef.current) return;
+
+                const map = new window.kakao.maps.Map(fullMapContainerRef.current, { center: pos, level: 3 });
+                if (fullMapMarkerRef.current) fullMapMarkerRef.current.setMap(null);
+                fullMapMarkerRef.current = new window.kakao.maps.Marker({ position: pos, map });
+                new window.kakao.maps.InfoWindow({
+                    content: `<div style="padding:8px 12px;font-size:13px;font-weight:700;white-space:nowrap;">${escapeHtml(loc)}</div>`,
+                }).open(map, fullMapMarkerRef.current);
+            } catch {
+                if (!cancelled) setFullMapError('위치를 지도에서 찾지 못했습니다.');
+            } finally {
+                if (!cancelled) setFullMapLoading(false);
+            }
+        };
+
+        render();
+        return () => { cancelled = true; };
+    }, [showFullMap, post?.location, resolvePosition]);
 
     const handleOpenKakaoMapRoute = useCallback(async () => {
         if (!post?.location) return;
@@ -220,11 +303,7 @@ export default function GroupDetailPage() {
                 startTarget = await new Promise<{ lat: number; lng: number; name: string } | null>((resolve) => {
                     geocoder.addressSearch(startAddress, (result: any, status: any) => {
                         if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
-                            resolve({
-                                lat: Number(result[0].y),
-                                lng: Number(result[0].x),
-                                name: '내 주소',
-                            });
+                            resolve({ lat: Number(result[0].y), lng: Number(result[0].x), name: '내 주소' });
                             return;
                         }
                         resolve(null);
@@ -245,61 +324,6 @@ export default function GroupDetailPage() {
         window.open(url, '_blank');
     }, [loadKakaoSdk, post?.location, routeTarget, userRouteProfile]);
 
-    useEffect(() => {
-        if (!showMap || !post?.location || !mapContainerRef.current) return;
-        let cancelled = false;
-
-        const render = async () => {
-            setMapLoading(true);
-            setMapError('');
-            setRouteTarget(null);
-            try {
-                await loadKakaoSdk();
-                if (cancelled || !mapContainerRef.current) return;
-
-                const geocoder = new window.kakao.maps.services.Geocoder();
-                const places   = new window.kakao.maps.services.Places();
-                const loc      = post.location!.trim();
-
-                const pos = await new Promise<any>((res, rej) => {
-                    geocoder.addressSearch(loc, (r: any, s: any) => {
-                        if (s === window.kakao.maps.services.Status.OK && r.length > 0)
-                            return res(new window.kakao.maps.LatLng(+r[0].y, +r[0].x));
-                        places.keywordSearch(loc, (pr: any, ps: any) => {
-                            ps === window.kakao.maps.services.Status.OK && pr.length > 0
-                                ? res(new window.kakao.maps.LatLng(+pr[0].y, +pr[0].x))
-                                : rej(new Error('not found'));
-                        });
-                    });
-                });
-
-                if (!cancelled) {
-                    setRouteTarget({
-                        lat: pos.getLat(),
-                        lng: pos.getLng(),
-                        name: post.title || loc,
-                    });
-                }
-
-                if (cancelled || !mapContainerRef.current) return;
-                const map = new window.kakao.maps.Map(mapContainerRef.current, { center: pos, level: 3 });
-                if (mapMarkerRef.current) mapMarkerRef.current.setMap(null);
-                mapMarkerRef.current = new window.kakao.maps.Marker({ position: pos, map });
-                new window.kakao.maps.InfoWindow({
-                    content: `<div style="padding:8px 12px;font-size:13px;font-weight:700;white-space:nowrap;">${escapeHtml(loc)}</div>`,
-                }).open(map, mapMarkerRef.current);
-            } catch {
-                if (!cancelled) setMapError('위치를 지도에서 찾지 못했습니다.');
-            } finally {
-                if (!cancelled) setMapLoading(false);
-            }
-        };
-
-        render();
-        return () => { cancelled = true; };
-    }, [showMap, post?.location, loadKakaoSdk]);
-
-    // ── 로딩 ─────────────────────────────────────────────────
     if (!post) {
         return (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', fontFamily: 'Pretendard, sans-serif' }}>
@@ -317,6 +341,7 @@ export default function GroupDetailPage() {
     const isPassed  = isDatePassed(post.meetingDate);
     const isClosed  = post.status === 'CLOSED' || isFull || isPassed;
     const pct      = Math.min(100, Math.round((current / max) * 100));
+
     const actionButtons = (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {!canEdit && (
@@ -371,14 +396,12 @@ export default function GroupDetailPage() {
         </div>
     );
 
-    // ── 렌더 ─────────────────────────────────────────────────
     return (
         <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '80px', marginTop: '-64px' }}>
 
-            {/* ── :히어로 헤더 ── */}
-            <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '80px 20px 88px', position: 'relative' }}>
-                <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-                    {/* 뒤로 가기 */}
+            {/* ── 히어로 헤더 ── */}
+            <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '80px 20px 40px', position: 'relative' }}>
+                <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
                     <button
                         onClick={() => navigate('/group')}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.18)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', marginBottom: '24px' }}
@@ -386,159 +409,268 @@ export default function GroupDetailPage() {
                         ← 목록으로
                     </button>
 
-                    {/* 상태 뱃지 */}
                     <div style={{ marginBottom: '12px' }}>
-            <span style={{
-                display: 'inline-block',
-                backgroundColor: isClosed ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.9)',
-                color: isClosed ? 'white' : '#ff8a3d',
-                padding: '4px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '800',
-            }}>
-              {isClosed ? '모집완료' : '🟢 모집중'}
-            </span>
+                        <span style={{
+                            display: 'inline-block',
+                            backgroundColor: isClosed ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.9)',
+                            color: isClosed ? 'white' : '#ff8a3d',
+                            padding: '4px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '800',
+                        }}>
+                            {isClosed ? '모집완료' : '🟢 모집중'}
+                        </span>
                         {canEdit && (
                             <span style={{ marginLeft: '8px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
-                내 글
-              </span>
+                                내 글
+                            </span>
                         )}
                     </div>
 
-                    {/* 제목 */}
                     <h1 style={{ fontSize: '28px', fontWeight: '900', color: 'white', margin: '0 0 16px', lineHeight: '1.3' }}>
                         {post.title}
                     </h1>
 
-                    {/* 호스트 + 행사 */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '14px', color: 'rgba(255,255,255,0.88)' }}>
-            <span>
-              👤 호스트:{' '}
-                {post.author?.id ? (
-                    <button
-                        type="button"
-                        onClick={() => navigate(`/cattower/${post.author?.id}`)}
-                        style={{ border: 'none', background: 'transparent', padding: 0, color: 'white', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                    >
-                        {post.authorName || '익명'}
-                    </button>
-                ) : (
-                    <strong style={{ color: 'white' }}>{post.authorName || '익명'}</strong>
-                )}
-            </span>
+                        <span>
+                            👤 호스트:{' '}
+                            {post.author?.id ? (
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/cattower/${post.author?.id}`)}
+                                    style={{ border: 'none', background: 'transparent', padding: 0, color: 'white', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                                >
+                                    {post.authorName || '익명'}
+                                </button>
+                            ) : (
+                                <strong style={{ color: 'white' }}>{post.authorName || '익명'}</strong>
+                            )}
+                        </span>
                         {post.event && <span>🎟️ {post.event}</span>}
                         {post.meetingDate && <span>📅 {post.meetingDate}</span>}
                     </div>
                 </div>
             </div>
 
-            {/* ── 메인 컨텐츠 ── */}
-            <div style={{ maxWidth: '760px', margin: '50px auto 0', padding: '0 20px', position: 'relative', zIndex: 1 }}>
+            {/* ── 2컬럼 메인 레이아웃 ── */}
+            <div style={{
+                maxWidth: '1200px',
+                margin: '32px auto 0',
+                padding: '0 20px',
+                display: 'grid',
+                gridTemplateColumns: '1fr 480px',
+                gap: '28px',
+                alignItems: 'stretch',
+            }}>
 
-                {/* 정원 진행 바 카드 */}
-                <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '20px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>참여 현황</span>
-                            <span style={{ fontSize: '13px', fontWeight: '800', color: isFull ? '#94a3b8' : '#ff8a3d' }}>
-                {current} / {max}명
-              </span>
+                {/* ── 왼쪽: 상세 그룹 정보 ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                    {/* 정원 진행 바 카드 */}
+                    <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '20px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>참여 현황</span>
+                                <span style={{ fontSize: '13px', fontWeight: '800', color: isFull ? '#94a3b8' : '#ff8a3d' }}>
+                                    {current} / {max}명
+                                </span>
+                            </div>
+                            <div style={{ height: '8px', backgroundColor: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isFull ? '#cbd5e1' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s ease' }} />
+                            </div>
                         </div>
-                        <div style={{ height: '8px', backgroundColor: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isFull ? '#cbd5e1' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s ease' }} />
+                        <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                            <div style={{ fontSize: '22px', fontWeight: '900', color: isFull ? '#94a3b8' : '#ff8a3d' }}>{pct}%</div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>모집률</div>
                         </div>
                     </div>
-                    <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                        <div style={{ fontSize: '22px', fontWeight: '900', color: isFull ? '#94a3b8' : '#ff8a3d' }}>{pct}%</div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>모집률</div>
+
+                    {/* 모임 정보 그리드 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        {[
+                            { icon: '📍', label: '모임 장소', value: post.location || '미정', highlight: true },
+                            { icon: '⏰', label: '모임 시간', value: post.meetingTime || '미정' },
+                            { icon: '📅', label: '모임 날짜', value: post.meetingDate || '미정' },
+                            { icon: '📋', label: '참여 조건', value: post.condition || '제한 없음' },
+                        ].map(({ icon, label, value, highlight }) => (
+                            <div key={label} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: highlight ? '3px solid #ff8a3d' : '3px solid #f1f5f9' }}>
+                                <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>{icon} {label}</div>
+                                <div style={{ fontSize: '15px', color: '#1e293b', fontWeight: '700', wordBreak: 'break-all' }}>{value}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* ✅ 인라인 미니맵 카드 (항상 표시, 클릭 시 풀스크린) */}
+                    {post.location && (
+                        <div style={{ backgroundColor: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', position: 'relative' }}>
+                            {/* 미니맵 헤더 */}
+                            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                    <span style={{ fontSize: '14px' }}>🗺️</span>
+                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>모임 위치</span>
+                                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>{post.location}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFullMap(true)}
+                                    style={{ fontSize: '11px', fontWeight: '700', color: '#ff8a3d', background: '#fff4ed', border: 'none', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer' }}
+                                >
+                                    크게 보기 ↗
+                                </button>
+                            </div>
+
+                            {/* 미니맵 본체 — 클릭하면 풀스크린 오픈 */}
+                            <div
+                                onClick={() => setShowFullMap(true)}
+                                style={{ position: 'relative', cursor: 'pointer' }}
+                            >
+                                <div
+                                    ref={miniMapContainerRef}
+                                    style={{ width: '100%', height: '200px', backgroundColor: '#f8fafc' }}
+                                />
+                                {/* 로딩 오버레이 */}
+                                {miniMapLoading && (
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b', fontSize: '13px', gap: '8px' }}>
+                                        <span style={{ fontSize: '18px' }}>⏳</span> 지도 불러오는 중...
+                                    </div>
+                                )}
+                                {miniMapError && (
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.92)', color: '#ef4444', fontWeight: '700', textAlign: 'center', padding: '20px', fontSize: '13px' }}>
+                                        {miniMapError}
+                                    </div>
+                                )}
+                                {/* 클릭 힌트 오버레이 (지도 준비된 경우만) */}
+                                {miniMapReady && !miniMapLoading && !miniMapError && (
+                                    <div style={{
+                                        position: 'absolute', bottom: '10px', right: '10px',
+                                        backgroundColor: 'rgba(15,23,42,0.65)', color: 'white',
+                                        fontSize: '11px', fontWeight: '700',
+                                        padding: '5px 10px', borderRadius: '8px',
+                                        pointerEvents: 'none',
+                                    }}>
+                                        클릭하면 크게 볼 수 있어요
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 길찾기 버튼 */}
+                            <div style={{ padding: '12px 14px' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleOpenKakaoMapRoute}
+                                    disabled={miniMapLoading || !!miniMapError}
+                                    style={{
+                                        width: '100%',
+                                        padding: '13px',
+                                        borderRadius: '12px',
+                                        border: 'none',
+                                        backgroundColor: miniMapLoading || miniMapError ? '#e2e8f0' : '#111827',
+                                        color: miniMapLoading || miniMapError ? '#94a3b8' : 'white',
+                                        fontWeight: '800',
+                                        fontSize: '13px',
+                                        cursor: miniMapLoading || miniMapError ? 'default' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                    }}
+                                >
+                                    <span>🚗</span>
+                                    <span>카카오맵으로 길찾기</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 모임 소개 */}
+                    {post.content && (
+                        <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
+                            <div style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '700', marginBottom: '12px' }}>📝 모임 소개</div>
+                            <p style={{ fontSize: '15px', color: '#334155', lineHeight: '1.8', margin: 0, whiteSpace: 'pre-wrap' }}>
+                                {post.content}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* 액션 버튼 */}
+                    <div style={{ marginTop: 'auto' }}>
+                        {actionButtons}
                     </div>
                 </div>
 
-                {/* 모임 정보 그리드 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                    {[
-                        { icon: '📍', label: '모임 장소', value: post.location || '미정', highlight: true },
-                        { icon: '⏰', label: '모임 시간', value: post.meetingTime || '미정' },
-                        { icon: '📅', label: '모임 날짜', value: post.meetingDate || '미정' },
-                        { icon: '📋', label: '참여 조건', value: post.condition || '제한 없음' },
-                    ].map(({ icon, label, value, highlight }) => (
-                        <div key={label} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: highlight ? '3px solid #ff8a3d' : '3px solid #f1f5f9' }}>
-                            <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>{icon} {label}</div>
-                            <div style={{ fontSize: '15px', color: '#1e293b', fontWeight: '700', wordBreak: 'break-all' }}>{value}</div>
-                        </div>
-                    ))}
+                {/* ── 오른쪽: 공개 채팅방 ── */}
+                <div style={{ alignSelf: 'start', position: 'sticky', top: '80px' }}>
+                    <GroupPublicChatSection groupId={post.id} isClosed={isClosed} />
                 </div>
+            </div>
 
-                {/* 지도 보기 버튼 */}
-                {post.location && (
-                    <button
-                        type="button"
-                        onClick={() => setShowMap(v => !v)}
-                        style={{
-                            width: '100%', marginBottom: '16px',
-                            padding: '14px', borderRadius: '14px',
-                            border: '1.5px solid ' + (showMap ? '#ff8a3d' : '#e2e8f0'),
-                            backgroundColor: showMap ? '#fff4ed' : 'white',
-                            color: showMap ? '#ff8a3d' : '#64748b',
-                            fontWeight: '700', fontSize: '14px', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                        }}
+            {/* ✅ 풀스크린 지도 모달 */}
+            {showFullMap && (
+                <div
+                    onClick={() => setShowFullMap(false)}
+                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '20px' }}
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: '800px', maxWidth: '96vw', maxHeight: '90vh', backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(15,23,42,0.3)', display: 'flex', flexDirection: 'column' }}
                     >
-                        🗺️ {showMap ? '지도 닫기' : '지도로 위치 확인하기'}
-                    </button>
-                )}
+                        {/* 모달 헤더 */}
+                        <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexShrink: 0 }}>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: '16px', fontWeight: '900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.title}</div>
+                                <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {post.location}</div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowFullMap(false)}
+                                style={{ border: 'none', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '6px 14px', cursor: 'pointer', fontWeight: '800', flexShrink: 0 }}
+                            >
+                                닫기
+                            </button>
+                        </div>
 
-                {/* 지도 */}
-                {showMap && (
-                    <div style={{ backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', marginBottom: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', position: 'relative' }}>
-                        <div ref={mapContainerRef} style={{ width: '100%', height: '320px', backgroundColor: '#f8fafc' }} />
-                        {mapLoading && (
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b' }}>
-                                지도를 불러오는 중...
-                            </div>
-                        )}
-                        {mapError && (
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.92)', color: '#ef4444', fontWeight: '700', textAlign: 'center', padding: '20px' }}>
-                                {mapError}
-                            </div>
-                        )}
-                        <div style={{ padding: '14px' }}>
+                        {/* 풀사이즈 지도 */}
+                        <div style={{ position: 'relative', flex: 1, minHeight: '400px' }}>
+                            <div ref={fullMapContainerRef} style={{ width: '100%', height: '460px', backgroundColor: '#f8fafc' }} />
+                            {fullMapLoading && (
+                                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b' }}>
+                                    지도를 불러오는 중...
+                                </div>
+                            )}
+                            {fullMapError && (
+                                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.92)', color: '#ef4444', fontWeight: '700', textAlign: 'center', padding: '20px' }}>
+                                    {fullMapError}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 길찾기 버튼 */}
+                        <div style={{ padding: '14px 16px', borderTop: '1px solid #f1f5f9', flexShrink: 0 }}>
                             <button
                                 type="button"
                                 onClick={handleOpenKakaoMapRoute}
-                                disabled={mapLoading || !!mapError}
+                                disabled={fullMapLoading || !!fullMapError}
                                 style={{
                                     width: '100%',
                                     padding: '14px',
                                     borderRadius: '14px',
                                     border: 'none',
-                                    backgroundColor: mapLoading || mapError ? '#e2e8f0' : '#111827',
-                                    color: mapLoading || mapError ? '#94a3b8' : 'white',
+                                    backgroundColor: fullMapLoading || fullMapError ? '#e2e8f0' : '#111827',
+                                    color: fullMapLoading || fullMapError ? '#94a3b8' : 'white',
                                     fontWeight: '800',
                                     fontSize: '14px',
-                                    cursor: mapLoading || mapError ? 'default' : 'pointer',
+                                    cursor: fullMapLoading || fullMapError ? 'default' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
                                 }}
                             >
-                                카카오맵으로 실시간 길찾기 및 이동 경로 보기
+                                <span>🚗</span>
+                                <span>카카오맵으로 실시간 길찾기 및 이동 경로 보기</span>
                             </button>
                         </div>
                     </div>
-                )}
-
-                {/* 모임 소개 */}
-                {post.content && (
-                    <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', marginBottom: '16px' }}>
-                        <div style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '700', marginBottom: '12px' }}>📝 모임 소개</div>
-                        <p style={{ fontSize: '15px', color: '#334155', lineHeight: '1.8', margin: 0, whiteSpace: 'pre-wrap' }}>
-                            {post.content}
-                        </p>
-                    </div>
-                )}
-
-                {/* 액션 버튼 */}
-            </div>
-            <GroupPublicChatSection groupId={post.id} isClosed={isClosed} />
-            <div style={{ maxWidth: '760px', margin: '16px auto 0', padding: '0 20px', position: 'relative', zIndex: 1 }}>
-                {actionButtons}
-            </div>
+                </div>
+            )}
         </div>
     );
 }
