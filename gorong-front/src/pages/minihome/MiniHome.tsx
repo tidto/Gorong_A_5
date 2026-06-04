@@ -27,7 +27,7 @@ import {
   equipPreviewFromDraft,
   normalizeEquipPreview,
 } from "../../utils/minihome/gocat/items";
-import { loadEquippedDecorDraft } from "../../utils/minihome/gocat/gocatEquippedStorage";
+import { loadNormalizedEquipDraft } from "../../utils/minihome/gocat/gocatEquipMigration";
 import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
 import DecorateCatPreview from "../../components/minihome/rive/DecorateCatPreview";
 import {
@@ -65,7 +65,7 @@ export default function MiniHome() {
   const [selectedTab, setSelectedTab] = useState<"character" | "activities" | "gallery">("character");
   const [decorateOpen, setDecorateOpen] = useState(false);
   const [equippedDraft, setEquippedDraft] = useState<Record<SlotType, DecorItem | null>>(() =>
-    loadEquippedDecorDraft()
+    loadNormalizedEquipDraft()
   );
 
   const [galleryTitle, setGalleryTitle] = useState("나의 갤러리");
@@ -171,12 +171,19 @@ export default function MiniHome() {
     appearanceState: cat?.appearanceState,
     goCatId: cat?.goCatId,
     canEdit,
+    activityCount: growth.activityCount,
     onEquippedSaved: handleEquippedSaved,
   });
 
   useEffect(() => {
-    setEquippedDraft(loadEquippedDecorDraft(page?.activeEquips, cat?.appearanceState));
-  }, [page?.activeEquips, cat?.appearanceState]);
+    setEquippedDraft(
+      loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
+        useLocalStorage: canEdit,
+        growthStage: growth.stage,
+        ownedItems: [],
+      })
+    );
+  }, [page?.activeEquips, cat?.appearanceState, canEdit, growth.stage]);
 
   const equippedPreview = useMemo(() => {
     const preview = decorateOpen
@@ -556,8 +563,8 @@ export default function MiniHome() {
             customizePanel={
               <DecorationCustomizePanel
                 selectedHeadItem={customize.selectedHeadItem}
-                selectedBodyItem={customize.selectedBodyItem}
-                selectedAccessoryItem={customize.selectedAccessoryItem}
+                selectedFaceItem={customize.selectedFaceItem}
+                selectedNeckItem={customize.selectedNeckItem}
                 setEquipDraft={customize.setEquipDraft}
                 itemsBySlot={customize.itemsBySlot}
                 itemsLoading={customize.itemsLoading}
@@ -565,6 +572,8 @@ export default function MiniHome() {
                 disabled={customize.saving}
                 growthStage={growth.stage}
                 activityCount={growth.activityCount}
+                ownedItems={customize.ownedItems}
+                onToggleSlotItem={customize.toggleSlotItem}
               />
             }
             onClose={() => setDecorateOpen(false)}

@@ -11,12 +11,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 /**
  * 행사(축제) 카테고리 키워드에 따라 Go냥이 장식 아이템을 1회 지급합니다.
+ * (장식/BADGE·퇴역 NECK 보상은 제외 — HEAD·FACE·NECK 카탈로그만)
  */
 @Service
 @RequiredArgsConstructor
@@ -28,15 +28,6 @@ public class EventCategoryItemRewardService {
             "EVENT_CHECKIN",
             "FESTIVAL_JOIN",
             "EVENT_PARTICIPATION"
-    );
-
-    private static final Map<String, String> REWARD_IMAGE_URLS = Map.of(
-            "CHERRY_HAT", "/assets/cat/items/cherry-hat.svg",
-            "BUNGEOPPANG_BADGE", "/assets/cat/items/bungeoppang-badge.svg",
-            "STAR_NECKLACE", "/assets/cat/items/star-necklace.svg",
-            "NEON_GLASSES", "/assets/cat/items/neon-glasses.svg",
-            "HANBOK", "/assets/cat/items/hanbok.svg",
-            "SHELL_ACCESSORY", "/assets/cat/items/shell-accessory.svg"
     );
 
     private final EventRepository eventRepository;
@@ -67,7 +58,6 @@ public class EventCategoryItemRewardService {
         resolveReward(haystack.toString()).ifPresent(spec -> grantOnce(userId, spec));
     }
 
-    /** 행사 참여 완료 등 — 키워드 기반 보상 지급 API */
     @Transactional
     public ItemRewardResponseDto grantForEventKeywords(Long userId, String eventTitle, String description) {
         if (userId == null) {
@@ -104,50 +94,25 @@ public class EventCategoryItemRewardService {
         return s == null ? "" : s;
     }
 
+    /** 퇴역 BADGE·NECK 보상 제거 — 필요 시 HEAD/NECK 키워드만 추가 */
     private Optional<RewardSpec> resolveReward(String raw) {
-        String t = raw.toLowerCase(Locale.ROOT);
-        if (containsAny(t, "벚꽃", "cherry", "벚꽃축제")) {
-            return Optional.of(new RewardSpec("CHERRY_HAT", "벚꽃 화관", "HEAD"));
-        }
-        if (containsAny(t, "야시장", "night market", "야경시장", "night_market", "붕어빵")) {
-            return Optional.of(new RewardSpec("BUNGEOPPANG_BADGE", "붕어빵 배지", "ACCESSORY"));
-        }
-        if (containsAny(t, "별축제", "star festival", "별 축제")) {
-            return Optional.of(new RewardSpec("STAR_NECKLACE", "별 목걸이", "ACCESSORY"));
-        }
-        if (containsAny(t, "전통축제", "전통", "한복", "hanbok")) {
-            return Optional.of(new RewardSpec("HANBOK", "한복", "BODY"));
-        }
-        if (containsAny(t, "바다축제", "바다", "해양", "해변", "shell", "조개")) {
-            return Optional.of(new RewardSpec("SHELL_ACCESSORY", "조개 악세", "ACCESSORY"));
-        }
         return Optional.empty();
     }
 
-    private static boolean containsAny(String haystack, String... needles) {
-        for (String n : needles) {
-            if (haystack.contains(n.toLowerCase(Locale.ROOT))) return true;
-        }
-        return false;
+    /** 다른 캣타워 첫 방문 — 장식 보상 없음 */
+    @Transactional
+    public void tryGrantVisitorReward(Long visitorUserId) {
+        /* no-op: visitor_ribbon retired */
     }
 
-    /** @return true if newly granted, false if already owned */
     private boolean grantOnce(Long userId, RewardSpec spec) {
         Item item = itemRepository.findByItemCode(spec.itemCode()).orElseGet(() ->
                 itemRepository.save(Item.builder()
                         .itemCode(spec.itemCode())
                         .itemName(spec.itemName())
                         .itemType(spec.itemType())
-                        .imageUrl(REWARD_IMAGE_URLS.get(spec.itemCode()))
                         .build())
         );
-        if (item.getImageUrl() == null || item.getImageUrl().isBlank()) {
-            String url = REWARD_IMAGE_URLS.get(spec.itemCode());
-            if (url != null) {
-                item.setImageUrl(url);
-                itemRepository.save(item);
-            }
-        }
         if (userItemRepository.existsByUserIdAndItemId(userId, item.getItemId())) {
             return false;
         }

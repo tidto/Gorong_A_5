@@ -8,6 +8,8 @@ type CatTowerGalleryPreviewProps = {
   totalCount?: number;
   limit?: number;
   onViewAll?: () => void;
+  /** 중앙 탭 패널 안 — 이중 카드 테두리 제거 */
+  embedded?: boolean;
 };
 
 function PhotoTile({ photo }: { photo: GalleryPhotoPreview }) {
@@ -31,13 +33,19 @@ function CatTowerGalleryPreview({
   totalCount,
   limit = 3,
   onViewAll,
+  embedded = false,
 }: CatTowerGalleryPreviewProps) {
   const photos = getRecentGalleryPhotos(galleries, limit);
   const total = totalCount ?? galleries.length;
   const hasMore = total > limit || photos.length > limit;
 
+  const shellClass = embedded
+    ? ""
+    : "overflow-hidden rounded-2xl border border-sky-100/80 bg-gradient-to-b from-white/90 to-sky-50/25 p-3.5 shadow-[0_2px_14px_rgba(56,189,248,0.08)]";
+
   return (
-    <section className="overflow-hidden rounded-2xl border border-sky-100/80 bg-gradient-to-b from-white/90 to-sky-50/25 p-3.5 shadow-[0_2px_14px_rgba(56,189,248,0.08)]">
+    <section className={shellClass || undefined}>
+      {!embedded ? (
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-[11px] font-extrabold tracking-wide text-sky-900/80">📸 갤러리</p>
         <div className="flex items-center gap-2">
@@ -55,6 +63,22 @@ function CatTowerGalleryPreview({
           ) : null}
         </div>
       </div>
+      ) : (
+        <div className="mb-3 flex items-center justify-end gap-2">
+          <span className="rounded-full bg-sky-100/80 px-2.5 py-0.5 text-[9px] font-bold text-sky-700/80">
+            {total}개
+          </span>
+          {hasMore && onViewAll ? (
+            <button
+              type="button"
+              onClick={onViewAll}
+              className="rounded-full border border-sky-200 bg-white px-2.5 py-0.5 text-[9px] font-bold text-sky-700 transition hover:bg-sky-50"
+            >
+              전체보기 →
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {photos.length === 0 ? (
         <div className="rounded-xl border border-dashed border-sky-200/70 bg-white/60 px-4 py-6 text-center">

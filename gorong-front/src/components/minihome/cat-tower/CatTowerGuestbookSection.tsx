@@ -21,6 +21,7 @@ type CatTowerGuestbookSectionProps = {
   onSubmit: () => void;
   onDelete: (entry: GuestbookEntry) => void;
   canDeleteEntry: (entry: GuestbookEntry) => boolean;
+  embedded?: boolean;
 };
 
 function formatDate(iso: string) {
@@ -135,6 +136,7 @@ export default function CatTowerGuestbookSection({
   onSubmit,
   onDelete,
   canDeleteEntry,
+  embedded = false,
 }: CatTowerGuestbookSectionProps) {
   const total = totalCount ?? entries.length;
   const previewEntries = entries.slice(0, previewLimit);
@@ -142,35 +144,54 @@ export default function CatTowerGuestbookSection({
 
   return (
     <section
-      id="cattower-guestbook"
-      className="overflow-hidden rounded-2xl border border-rose-200/70 bg-gradient-to-b from-rose-50/50 via-white to-orange-50/30 shadow-[0_2px_16px_rgba(244,114,182,0.08)]"
+      id={embedded ? undefined : "cattower-guestbook"}
+      className={
+        embedded
+          ? ""
+          : "overflow-hidden rounded-2xl border border-rose-200/70 bg-gradient-to-b from-rose-50/50 via-white to-orange-50/30 shadow-[0_2px_16px_rgba(244,114,182,0.08)]"
+      }
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rose-100/80 bg-gradient-to-r from-rose-400/90 via-pink-400/90 to-orange-300/90 px-4 py-2.5">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/85">
-            ✉️ Guestbook
-          </p>
-          <h2 className="text-sm font-extrabold text-white">
-            {catName}의 방명록
-          </h2>
+      {!embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rose-100/80 bg-gradient-to-r from-rose-400/90 via-pink-400/90 to-orange-300/90 px-4 py-2.5">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/85">
+              ✉️ Guestbook
+            </p>
+            <h2 className="text-sm font-extrabold text-white">{catName}의 방명록</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-white/35 bg-white/20 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+              💌 {total}개
+            </span>
+            {hasMore && onViewAll ? (
+              <button
+                type="button"
+                onClick={onViewAll}
+                className="rounded-full border border-white/40 bg-white/15 px-2.5 py-0.5 text-[9px] font-bold text-white backdrop-blur-sm transition hover:bg-white/25"
+              >
+                전체보기 →
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-white/35 bg-white/20 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+      ) : (
+        <div className="mb-3 flex items-center justify-end gap-2">
+          <span className="rounded-full bg-rose-100/80 px-2.5 py-0.5 text-[9px] font-bold text-rose-700/80">
             💌 {total}개
           </span>
           {hasMore && onViewAll ? (
             <button
               type="button"
               onClick={onViewAll}
-              className="rounded-full border border-white/40 bg-white/15 px-2.5 py-0.5 text-[9px] font-bold text-white backdrop-blur-sm transition hover:bg-white/25"
+              className="rounded-full border border-rose-200 bg-white px-2.5 py-0.5 text-[9px] font-bold text-rose-700 transition hover:bg-rose-50"
             >
               전체보기 →
             </button>
           ) : null}
         </div>
-      </div>
+      )}
 
-      <div className="space-y-3 p-3.5 sm:p-4">
+      <div className={embedded ? "space-y-3" : "space-y-3 p-3.5 sm:p-4"}>
         {canWrite ? (
           <div className="rounded-2xl border border-dashed border-rose-200/80 bg-white/70 p-3">
             {!isWriting ? (

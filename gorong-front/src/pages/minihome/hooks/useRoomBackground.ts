@@ -5,13 +5,16 @@ import {
   loadRoomBackgroundFromStorage,
   normalizeRoomBackground,
   parseRoomBackgroundFromAppearance,
+  sanitizeRoomBackgroundForStage,
   saveRoomBackgroundToStorage,
 } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 
 type Options = {
   appearanceState?: Record<string, unknown> | null;
   /** false — 다른 유저 CatTower: localStorage 미사용 */
   useLocalStorage?: boolean;
+  growthStage?: GrowthStage;
 };
 
 function resolveInitialBackground(
@@ -29,33 +32,49 @@ function resolveInitialBackground(
 }
 
 /** 내 공간 — 방 배경 선택·저장 (API 우선, localStorage fallback) */
-export function useRoomBackground({ appearanceState, useLocalStorage = true }: Options) {
+export function useRoomBackground({
+  appearanceState,
+  useLocalStorage = true,
+  growthStage = "BASIC",
+}: Options) {
+  const clamp = (id: RoomBackgroundId) => sanitizeRoomBackgroundForStage(id, growthStage);
+
   const [background, setBackground] = useState<RoomBackgroundId>(() =>
-    resolveInitialBackground(appearanceState, useLocalStorage)
+    clamp(resolveInitialBackground(appearanceState, useLocalStorage))
   );
   const [savedBackground, setSavedBackground] = useState<RoomBackgroundId>(() =>
-    resolveInitialBackground(appearanceState, useLocalStorage)
+    clamp(resolveInitialBackground(appearanceState, useLocalStorage))
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (useLocalStorage) return;
-    const fromApi = resolveInitialBackground(appearanceState, false);
+    const fromApi = clamp(resolveInitialBackground(appearanceState, false));
     setBackground(fromApi);
     setSavedBackground(fromApi);
-  }, [appearanceState, useLocalStorage]);
+  }, [appearanceState, useLocalStorage, growthStage]);
 
-  const selectBackground = useCallback((id: RoomBackgroundId) => {
-    setBackground(normalizeRoomBackground(id));
-    setError(null);
-  }, []);
+  useEffect(() => {
+    setBackground((prev) => sanitizeRoomBackgroundForStage(prev, growthStage));
+    setSavedBackground((prev) => sanitizeRoomBackgroundForStage(prev, growthStage));
+  }, [growthStage]);
+
+  const selectBackground = useCallback(
+    (id: RoomBackgroundId) => {
+      const next = normalizeRoomBackground(id);
+      setBackground(sanitizeRoomBackgroundForStage(next, growthStage));
+      setError(null);
+    },
+    [growthStage]
+  );
 
   const saveBackground = useCallback(async (): Promise<boolean> => {
     setSaving(true);
     setError(null);
 
-    const localOk = saveRoomBackgroundToStorage(background);
+    const safeBg = sanitizeRoomBackgroundForStage(background, growthStage);
+    const localOk = saveRoomBackgroundToStorage(safeBg);
     if (!localOk) {
       setError("방 배경을 기기에 저장하지 못했습니다.");
       setSaving(false);
@@ -63,15 +82,16 @@ export function useRoomBackground({ appearanceState, useLocalStorage = true }: O
     }
 
     try {
-      await updateMyCatAppearance({ roomBackground: background });
+      await updateMyCatAppearance({ roomBackground: safeBg });
     } catch (e) {
       console.warn("[GoCat] roomBackground API save failed — localStorage kept", e);
     }
 
-    setSavedBackground(background);
+    setBackground(safeBg);
+    setSavedBackground(safeBg);
     setSaving(false);
     return true;
-  }, [background]);
+  }, [background, growthStage]);
 
   const isDirty = background !== savedBackground;
 

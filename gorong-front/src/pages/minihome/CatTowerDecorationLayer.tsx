@@ -46,6 +46,7 @@ export default function CatTowerDecorationLayer({
     appearanceState: cat?.appearanceState,
     goCatId: cat?.goCatId,
     canEdit,
+    activityCount,
     onEquippedSaved,
   });
 
@@ -72,8 +73,8 @@ export default function CatTowerDecorationLayer({
         customizePanel={
           <DecorationCustomizePanel
             selectedHeadItem={customize.selectedHeadItem}
-            selectedBodyItem={customize.selectedBodyItem}
-            selectedAccessoryItem={customize.selectedAccessoryItem}
+            selectedFaceItem={customize.selectedFaceItem}
+            selectedNeckItem={customize.selectedNeckItem}
             setEquipDraft={customize.setEquipDraft}
             itemsBySlot={customize.itemsBySlot}
             itemsLoading={customize.itemsLoading}
@@ -81,6 +82,10 @@ export default function CatTowerDecorationLayer({
             disabled={customize.saving}
             growthStage={growthStage}
             activityCount={activityCount}
+            ownedItems={customize.ownedItems}
+            onLogLockState={customize.logLockStateToConsole}
+            onResetLockTest={customize.resetLockTestData}
+            onToggleSlotItem={customize.toggleSlotItem}
           />
         }
         onClose={onClose}

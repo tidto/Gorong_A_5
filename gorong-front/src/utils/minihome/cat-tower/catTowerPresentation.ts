@@ -4,6 +4,7 @@ import type { DecorItem, SlotType } from "../../../components/minihome/mini-home
 import type { CatAppearancePayload } from "../../../api/minihome/miniHomeApi";
 import { findCatalogItem, goCatItemToDecorItem } from "../gocat/decorItemCatalog";
 import { emptyDraft } from "../gocat/items";
+import { resolveItemSlot } from "../gocat/gocatSlots";
 
 export const CAT_SPEECH_BUBBLES = [
   "오늘도 와줘서 고마워! 🐾",
@@ -36,7 +37,6 @@ function hashString(value: string): number {
   return Math.abs(hash);
 }
 
-/** 날짜 + catName 기반 — 하루 동안 동일 문구 */
 export function pickDailyQuote(catName: string, date = new Date()): string {
   const key = `${date.toISOString().slice(0, 10)}-${catName}`;
   return DAILY_QUOTES[hashString(key) % DAILY_QUOTES.length];
@@ -52,7 +52,6 @@ export function nextSpeechBubble(current: string): string {
   return CAT_SPEECH_BUBBLES[next];
 }
 
-/** 말풍선 살짝 기울이기 (-3° ~ 3°) */
 export function speechBubbleTilt(text: string): number {
   let hash = 0;
   for (let i = 0; i < text.length; i += 1) {
@@ -62,7 +61,17 @@ export function speechBubbleTilt(text: string): number {
   return ((Math.abs(hash) % 7) - 3) * 0.85;
 }
 
-/** appearanceState → 장착 draft */
+function assignCodeToDraft(
+  draft: Record<SlotType, DecorItem | null>,
+  code: string
+) {
+  const slot = resolveItemSlot(code);
+  if (!slot) return;
+  const item = findCatalogItem(undefined, code);
+  if (item) draft[slot] = goCatItemToDecorItem(item);
+}
+
+/** appearanceState → 장착 draft (레거시 accessoryItemCode 호환) */
 export function equipDraftFromAppearanceState(
   state: Record<string, unknown> | null | undefined
 ): Record<SlotType, DecorItem | null> {
@@ -70,25 +79,34 @@ export function equipDraftFromAppearanceState(
   if (!state) return draft;
 
   const headRaw = state.headItemCode ?? state.headItem;
-  const accRaw = state.accessoryItemCode ?? state.accessoryItem;
-
   if (typeof headRaw === "string" && headRaw.trim()) {
-    const item = findCatalogItem(undefined, headRaw);
-    if (item) draft.HEAD = goCatItemToDecorItem(item);
+    assignCodeToDraft(draft, headRaw);
   }
-  if (typeof accRaw === "string" && accRaw.trim()) {
-    const item = findCatalogItem(undefined, accRaw);
-    if (item) draft.ACCESSORY = goCatItemToDecorItem(item);
+
+  const faceRaw = state.faceItemCode;
+  if (typeof faceRaw === "string" && faceRaw.trim()) {
+    assignCodeToDraft(draft, faceRaw);
   }
+
+  const neckRaw = state.neckItemCode;
+  if (typeof neckRaw === "string" && neckRaw.trim()) {
+    assignCodeToDraft(draft, neckRaw);
+  }
+
+  const legacyAcc = state.accessoryItemCode ?? state.accessoryItem;
+  if (typeof legacyAcc === "string" && legacyAcc.trim()) {
+    assignCodeToDraft(draft, legacyAcc);
+  }
+
   return draft;
 }
 
-/** 장착 draft → API appearance payload */
 export function toPresentationAppearancePayload(
   draft: Record<SlotType, DecorItem | null>
 ): CatAppearancePayload {
   return {
-    headItemCode: draft.HEAD?.itemCode?.trim() || undefined,
-    accessoryItemCode: draft.ACCESSORY?.itemCode?.trim() || undefined,
+    headItemCode: draft.HEAD?.itemCode?.trim() ?? "",
+    faceItemCode: draft.FACE?.itemCode?.trim() ?? "",
+    neckItemCode: draft.NECK?.itemCode?.trim() ?? "",
   };
 }

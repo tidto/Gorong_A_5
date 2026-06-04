@@ -4,6 +4,7 @@
 
 | File | Route | Role |
 |------|-------|------|
+| `CatTowerCreatePage.tsx` | `/cattower/create` | Go냥이 최초 생성·이름 설정 (1회) |
 | `CatTower.tsx` | `/cattower`, `/cattower/:userId` | CatTower 메인 (본인 편집 / 타인 읽기 전용) |
 | `MiniHome.tsx` | `/minihome` | 갤러리·성장·꾸미기 통합 페이지 |
 | `hooks/` | — | 페이지 전용 React hooks |

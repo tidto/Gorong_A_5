@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { useCatTowerVisitors } from "../../../pages/minihome/hooks/useCatTowerVisitors";
 import CatTowerSideMenu from "./CatTowerSideMenu";
+import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
 
 type Props = {
   busy?: boolean;
@@ -17,7 +18,8 @@ type Props = {
   onBack: () => void;
   onEvents: () => void;
   onRefresh: () => void;
-  onScrollToGuestbook: () => void;
+  activePanel: CatTowerCenterPanelId;
+  onPanelChange: (panel: CatTowerCenterPanelId) => void;
 };
 
 /** 방문자 통계 API — 사이드 메뉴에만 연결 */
@@ -36,7 +38,8 @@ function CatTowerVisitorBlock({
   onBack,
   onEvents,
   onRefresh,
-  onScrollToGuestbook,
+  activePanel,
+  onPanelChange,
 }: Props) {
   const visitors = useCatTowerVisitors({
     roomOwnerId,
@@ -57,7 +60,8 @@ function CatTowerVisitorBlock({
       onBack={onBack}
       onEvents={onEvents}
       onRefresh={onRefresh}
-      onScrollToGuestbook={onScrollToGuestbook}
+      activePanel={activePanel}
+      onPanelChange={onPanelChange}
       visitorTodayCount={visitors.stats.todayCount}
       visitorTotalCount={visitors.stats.totalCount}
       visitorStatsLoading={visitors.loading}

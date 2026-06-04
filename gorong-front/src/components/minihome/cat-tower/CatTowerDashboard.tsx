@@ -1,21 +1,17 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import { useRoomBackground } from "../../../pages/minihome/hooks/useRoomBackground";
 import { useNotification } from "../../../contexts/NotificationContext";
+import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
 import CatTowerProfilePanel from "./CatTowerProfilePanel";
-import CatTowerRoomStage from "./CatTowerRoomStage";
-import CatTowerRecentActivityCards from "./CatTowerRecentActivityCards";
-import CatTowerGalleryPreview from "./CatTowerGalleryPreview";
-import CatTowerGuestbookBlock from "./CatTowerGuestbookBlock";
+import CatTowerCenterPanel from "./CatTowerCenterPanel";
 import CatTowerVisitorBlock from "./CatTowerVisitorBlock";
 import CatTowerViewAllModal from "./CatTowerViewAllModal";
 import CatTowerRoomDecorateModal from "./CatTowerRoomDecorateModal";
 import ActivityHistory from "../mini-home/ActivityHistory";
 import GallerySection from "../mini-home/GallerySection";
-
-const PREVIEW_LIMIT = 3;
 
 type CatTowerDashboardProps = {
   nickname: string;
@@ -73,20 +69,16 @@ function CatTowerDashboard({
   onReport,
 }: CatTowerDashboardProps) {
   const { toast } = useNotification();
+  const [centerPanel, setCenterPanel] = useState<CatTowerCenterPanelId>("room");
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [roomDecorateOpen, setRoomDecorateOpen] = useState(false);
 
   const roomBg = useRoomBackground({
+    growthStage: growth.stage,
     appearanceState,
     useLocalStorage: canEdit,
   });
-
-  const recentActivities = useMemo(() => activities.slice(0, PREVIEW_LIMIT), [activities]);
-
-  const scrollToGuestbook = useCallback(() => {
-    document.getElementById("cattower-guestbook")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
 
   const handleSaveRoomBackground = useCallback(async () => {
     const ok = await roomBg.saveBackground();
@@ -144,40 +136,25 @@ function CatTowerDashboard({
           loading={loading}
         />
 
-        <div className="space-y-2.5">
-          <CatTowerRoomStage
-            growthStage={growth.stage}
-            activityCount={activityCount}
-            equipped={equipped}
-            roomBackground={roomBg.background}
-            catName={catName}
-            interactive
-            readOnly={isReadOnly}
-          />
-
-          <CatTowerRecentActivityCards
-            activities={recentActivities}
-            totalCount={activities.length}
-            onViewAll={() => setActivityModalOpen(true)}
-          />
-
-          <CatTowerGalleryPreview
-            galleries={galleries}
-            totalCount={galleryCount}
-            limit={PREVIEW_LIMIT}
-            onViewAll={() => setGalleryModalOpen(true)}
-          />
-
-          <CatTowerGuestbookBlock
-            catName={catName}
-            roomOwnerId={roomOwnerId}
-            myUserId={myUserId}
-            isOwner={isOwner}
-            pageReady={pageReady}
-            refreshToken={refreshToken}
-            previewLimit={PREVIEW_LIMIT}
-          />
-        </div>
+        <CatTowerCenterPanel
+          panel={centerPanel}
+          growthStage={growth.stage}
+          activityCount={activityCount}
+          equipped={equipped}
+          roomBackground={roomBg.background}
+          catName={catName}
+          isReadOnly={isReadOnly}
+          activities={activities}
+          galleries={galleries}
+          galleryCount={galleryCount}
+          roomOwnerId={roomOwnerId}
+          myUserId={myUserId}
+          isOwner={isOwner}
+          pageReady={pageReady}
+          refreshToken={refreshToken}
+          onViewAllActivity={() => setActivityModalOpen(true)}
+          onViewAllGallery={() => setGalleryModalOpen(true)}
+        />
 
         <CatTowerVisitorBlock
           busy={busy}
@@ -194,7 +171,8 @@ function CatTowerDashboard({
           onBack={onBack}
           onEvents={onEvents}
           onRefresh={onRefresh}
-          onScrollToGuestbook={scrollToGuestbook}
+          activePanel={centerPanel}
+          onPanelChange={setCenterPanel}
         />
       </div>
 
@@ -234,6 +212,7 @@ function CatTowerDashboard({
           isDirty={roomBg.isDirty}
           saving={roomBg.saving}
           error={roomBg.error}
+          growthStage={growth.stage}
           onSelect={roomBg.selectBackground}
           onSave={handleSaveRoomBackground}
           onCatDecorate={onDecorate}

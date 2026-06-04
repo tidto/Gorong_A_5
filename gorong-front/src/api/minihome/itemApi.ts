@@ -1,5 +1,7 @@
 import axiosInstance from "../axiosInstance";
 import type { Equipment, UserItem } from "../../types/minihome/item";
+import type { SlotType } from "../../utils/minihome/gocat/gocatSlots";
+import { GOCAT_SLOTS } from "../../utils/minihome/gocat/gocatSlots";
 import { getAuth } from "firebase/auth";
 
 async function getFirebaseIdTokenOrThrow(): Promise<string> {
@@ -14,11 +16,25 @@ function authHeaders(token: string) {
   return { headers: { Authorization: `Bearer ${token}` } };
 }
 
-export type SaveMyEquipmentsPayload = {
-  headItemId: number | null;
-  bodyItemId: number | null;
-  accessoryItemId: number | null;
+export type SlotEquipPayload = {
+  slotType: SlotType | string;
+  itemId: number | null;
 };
+
+export type SaveMyEquipmentsPayload = {
+  equipments: SlotEquipPayload[];
+};
+
+export function buildEquipmentsPayload(
+  slots: Record<SlotType, number | null>
+): SaveMyEquipmentsPayload {
+  return {
+    equipments: GOCAT_SLOTS.map((slotType) => ({
+      slotType,
+      itemId: slots[slotType],
+    })),
+  };
+}
 
 export async function getMyUserItems(): Promise<UserItem[]> {
   const token = await getFirebaseIdTokenOrThrow();
@@ -58,18 +74,10 @@ export async function unequipSlot(userId: number, slotType: string): Promise<voi
   await axiosInstance.delete(`/minihomes/${userId}/equip/${slotType}`, authHeaders(token));
 }
 
-/** PUT /api/minihomes/me/equipments — DB에 장착 상태 저장 */
+/** PUT /api/minihomes/me/equipments — DB에 슬롯별 장착 저장 */
 export async function saveMyEquipments(payload: SaveMyEquipmentsPayload): Promise<void> {
   const token = await getFirebaseIdTokenOrThrow();
-  await axiosInstance.put(
-    `/minihomes/me/equipments`,
-    {
-      headItemId: payload.headItemId,
-      bodyItemId: payload.bodyItemId,
-      accessoryItemId: payload.accessoryItemId,
-    },
-    authHeaders(token)
-  );
+  await axiosInstance.put(`/minihomes/me/equipments`, payload, authHeaders(token));
 }
 
 export type ItemRewardResponse = {
@@ -79,7 +87,6 @@ export type ItemRewardResponse = {
   message?: string | null;
 };
 
-/** POST /api/minihomes/me/items/reward — 행사 참여 보상 지급 */
 export async function grantEventItemReward(payload: {
   eventTitle: string;
   description?: string;
@@ -94,13 +101,5 @@ export async function saveEquipments(
   payload: SaveMyEquipmentsPayload
 ): Promise<void> {
   const token = await getFirebaseIdTokenOrThrow();
-  await axiosInstance.put(
-    `/minihomes/${userId}/equipments`,
-    {
-      headItemId: payload.headItemId,
-      bodyItemId: payload.bodyItemId,
-      accessoryItemId: payload.accessoryItemId,
-    },
-    authHeaders(token)
-  );
+  await axiosInstance.put(`/minihomes/${userId}/equipments`, payload, authHeaders(token));
 }

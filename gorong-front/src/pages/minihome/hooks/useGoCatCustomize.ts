@@ -10,10 +10,10 @@ type Options = {
   appearanceState?: Record<string, unknown> | null;
   goCatId?: number | null;
   canEdit?: boolean;
+  activityCount?: number;
   onEquippedSaved?: (draft: Record<SlotType, DecorItem | null>) => void;
 };
 
-/** 꾸미기 모달 — 아이템 장착(overlay) + localStorage/API 저장 */
 export function useGoCatCustomize(
   _cat: unknown,
   growthStage: GrowthStage,
@@ -23,8 +23,13 @@ export function useGoCatCustomize(
   const decoration = useGoCatDecoration(0, growthStage, modalOpen, options);
 
   const equipPreview = useMemo(
-    () => equipPreviewFromDraft(decoration.selectedEquipment),
-    [decoration.selectedEquipment]
+    () =>
+      equipPreviewFromDraft(
+        decoration.selectedEquipment,
+        decoration.ownedItems,
+        growthStage
+      ),
+    [decoration.selectedEquipment, decoration.ownedItems, growthStage]
   );
 
   const saveAll = useCallback(async () => {
@@ -37,24 +42,21 @@ export function useGoCatCustomize(
 
   return {
     selectedHeadItem: decoration.selectedEquipment.HEAD,
-    selectedBodyItem: decoration.selectedEquipment.BODY,
-    selectedAccessoryItem: decoration.selectedEquipment.ACCESSORY,
-    setSelectedHeadItem: (item: DecorItem | null) =>
-      decoration.setSelectedEquipment((d) => ({ ...d, HEAD: item })),
-    setSelectedBodyItem: (item: DecorItem | null) =>
-      decoration.setSelectedEquipment((d) => ({ ...d, BODY: item })),
-    setSelectedAccessoryItem: (item: DecorItem | null) =>
-      decoration.setSelectedEquipment((d) => ({ ...d, ACCESSORY: item })),
-    equipDraft: decoration.selectedEquipment,
+    selectedFaceItem: decoration.selectedEquipment.FACE,
+    selectedNeckItem: decoration.selectedEquipment.NECK,
     setEquipDraft: decoration.setSelectedEquipment,
     equipPreview,
     itemsBySlot: decoration.itemsBySlot,
     itemsLoading: decoration.itemsLoading,
     itemsLoadError: decoration.itemsLoadError,
     itemsEmptyBySlot: decoration.itemsEmptyBySlot,
+    ownedItems: decoration.ownedItems,
     saving: decoration.saving,
     error: decoration.decorationErr,
     saveAll,
+    logLockStateToConsole: decoration.logLockStateToConsole,
+    resetLockTestData: decoration.resetLockTestData,
+    toggleSlotItem: decoration.toggleSlotItem,
     canEdit: decoration.canEdit,
   };
 }

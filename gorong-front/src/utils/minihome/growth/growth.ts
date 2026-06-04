@@ -1,8 +1,29 @@
 import type { MiniHomePage } from "../../../types/minihome/minihome";
+import { GOCAT_DEBUG_UNLOCK_ALL } from "../gocat/gocatItemCatalog";
+import type { SlotType } from "../gocat/gocatSlots";
 
+/** 성장 단계 — 활동·경험치 기준 */
 export type GrowthStage = "BASIC" | "TEEN" | "ADULT" | "MASTER";
 
-export type SlotType = "HEAD" | "BODY" | "ACCESSORY";
+/** @deprecated SlotType는 gocatSlots에서 import */
+export type { SlotType };
+
+const LEGACY_STAGE_MAP: Record<string, GrowthStage> = {
+  BASIC: "BASIC",
+  TEEN: "TEEN",
+  ADULT: "ADULT",
+  MASTER: "MASTER",
+  BRONZE: "TEEN",
+  SILVER: "ADULT",
+  GOLD: "ADULT",
+  LEGEND: "MASTER",
+};
+
+export function normalizeGrowthStage(raw?: string | null): GrowthStage {
+  if (!raw?.trim()) return "BASIC";
+  const key = raw.trim().toUpperCase();
+  return LEGACY_STAGE_MAP[key] ?? "BASIC";
+}
 
 export type GrowthState = {
   stage: GrowthStage;
@@ -10,10 +31,8 @@ export type GrowthState = {
   nextStage: GrowthStage | null;
   nextStageLabel: string | null;
   activityCount: number;
-  /** 누적 온도(temperatureTotal) — 표시용 */
   experience: number;
   progressPercent: number;
-  /** 다음 단계까지 필요한 활동 횟수 */
   xpToNext: number;
   isMax: boolean;
 };
@@ -27,12 +46,11 @@ const NEXT_STAGE: Record<GrowthStage, GrowthStage | null> = {
 
 const STAGE_LABELS: Record<GrowthStage, string> = {
   BASIC: "기본",
-  TEEN: "성장 1",
-  ADULT: "성장 2",
+  TEEN: "성장1",
+  ADULT: "성장2",
   MASTER: "마스터",
 };
 
-/** 현재 단계 구간 시작 활동 횟수 (포함) */
 const STAGE_ACTIVITY_MIN: Record<GrowthStage, number> = {
   BASIC: 0,
   TEEN: 10,
@@ -42,7 +60,6 @@ const STAGE_ACTIVITY_MIN: Record<GrowthStage, number> = {
 
 const STAGE_ORDER: GrowthStage[] = ["BASIC", "TEEN", "ADULT", "MASTER"];
 
-/** 행사·활동 참여 횟수 기준 성장 단계 */
 export function stageFromActivityCount(count: number): GrowthStage {
   const n = Math.max(0, Math.floor(count));
   if (n >= 60) return "MASTER";
@@ -51,18 +68,22 @@ export function stageFromActivityCount(count: number): GrowthStage {
   return "BASIC";
 }
 
-/** @deprecated 활동 기준으로 통일 — 레거시 호환 */
 export function stageFromExperience(exp: number): GrowthStage {
-  return stageFromActivityCount(exp);
+  if (exp >= 600) return "MASTER";
+  if (exp >= 300) return "ADULT";
+  if (exp >= 100) return "TEEN";
+  return "BASIC";
 }
 
 export function formatGrowthStageLabel(stage?: string | null): string {
   if (!stage) return STAGE_LABELS.BASIC;
-  const key = stage.trim().toUpperCase() as GrowthStage;
-  return STAGE_LABELS[key] ?? stage;
+  return STAGE_LABELS[normalizeGrowthStage(stage)];
 }
 
-/** stats.activityCount 우선, 없으면 activities 목록 길이 */
+export function compareGrowthStage(a: GrowthStage, b: GrowthStage): number {
+  return STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b);
+}
+
 export function resolveActivityCount(page: MiniHomePage | null | undefined): number {
   if (!page) return 0;
   const fromStats = page.stats?.activityCount;
@@ -73,7 +94,6 @@ export function resolveActivityCount(page: MiniHomePage | null | undefined): num
   return fromList;
 }
 
-/** 누적 온도 — 표시용 (성장 단계와 분리) */
 export function resolveExperience(page: MiniHomePage | null | undefined): number {
   if (!page) return 0;
 
@@ -90,26 +110,15 @@ export function resolveExperience(page: MiniHomePage | null | undefined): number
   return Math.max(0, sumDelta);
 }
 
-/**
- * 성장 단계 — 활동 횟수가 기준 (API growthStage/characterType 과 불일치 시 활동 수 우선)
- */
 export function resolveGrowthStage(page: MiniHomePage | null | undefined): GrowthStage {
+  const apiStage = page?.miniHome?.cat?.appearanceState?.growthStage;
+  if (typeof apiStage === "string" && apiStage.trim()) {
+    return normalizeGrowthStage(apiStage);
+  }
   const activityCount = resolveActivityCount(page);
   const fromActivity = stageFromActivityCount(activityCount);
-
-  const apiRaw = page?.stats?.growthStage ?? page?.miniHome?.cat?.characterType;
-  if (apiRaw) {
-    const normalized = apiRaw.trim().toUpperCase() as GrowthStage;
-    if (normalized in STAGE_LABELS && normalized !== fromActivity) {
-      if (import.meta.env.DEV) {
-        console.warn(
-          `[growth] API stage "${normalized}" != activity-based "${fromActivity}" (count=${activityCount}) — using activity`
-        );
-      }
-    }
-  }
-
-  return fromActivity;
+  const fromExp = stageFromExperience(resolveExperience(page));
+  return compareGrowthStage(fromActivity, fromExp) >= 0 ? fromActivity : fromExp;
 }
 
 function activityProgress(stage: GrowthStage, activityCount: number) {
@@ -153,13 +162,14 @@ export function computeGrowthState(page: MiniHomePage | null | undefined): Growt
 export { getCatVisualByStage, type CatVisual } from "../gocat/catVisual";
 
 const STAGE_SLOTS: Record<GrowthStage, SlotType[]> = {
-  BASIC: ["HEAD", "ACCESSORY"],
-  TEEN: ["HEAD", "BODY", "ACCESSORY"],
-  ADULT: ["HEAD", "BODY", "ACCESSORY"],
-  MASTER: ["HEAD", "BODY", "ACCESSORY"],
+  BASIC: ["HEAD", "FACE", "NECK"],
+  TEEN: ["HEAD", "FACE", "NECK"],
+  ADULT: ["HEAD", "FACE", "NECK"],
+  MASTER: ["HEAD", "FACE", "NECK"],
 };
 
 export function isSlotUnlockedByStage(slotType: SlotType, currentStage: GrowthStage): boolean {
+  if (GOCAT_DEBUG_UNLOCK_ALL) return true;
   return STAGE_SLOTS[currentStage].includes(slotType);
 }
 
@@ -168,9 +178,7 @@ export function isItemUnlockedByStage(
   currentStage: GrowthStage
 ): boolean {
   if (!requiredStage) return true;
-  const currentIndex = STAGE_ORDER.indexOf(currentStage);
-  const requiredIndex = STAGE_ORDER.indexOf(requiredStage);
-  return currentIndex >= requiredIndex;
+  return compareGrowthStage(currentStage, requiredStage) >= 0;
 }
 
 export function isItemSlotCompatible(
@@ -179,4 +187,18 @@ export function isItemSlotCompatible(
 ): boolean {
   if (!itemSlotType) return false;
   return isSlotUnlockedByStage(itemSlotType, currentStage);
+}
+
+export function slotUnlockHint(slotType: SlotType, currentStage: GrowthStage): string | null {
+  if (isSlotUnlockedByStage(slotType, currentStage)) return null;
+  const required =
+    STAGE_ORDER.find((s) => STAGE_SLOTS[s].includes(slotType)) ?? "TEEN";
+  return `${formatGrowthStageLabel(required)} 단계에서 ${slotLabel(slotType)} 슬롯이 열려요`;
+}
+
+function slotLabel(slot: SlotType): string {
+  if (slot === "HEAD") return "머리";
+  if (slot === "FACE") return "얼굴";
+  if (slot === "NECK") return "목";
+  return "장식";
 }

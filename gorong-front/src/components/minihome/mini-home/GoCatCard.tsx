@@ -4,8 +4,7 @@ import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import GoCatVisual from "./GoCatVisual";
 import GrowthProgress from "./GrowthProgress";
 import { equipPreviewFromEquipBySlot, resolveEquipSlotLabel } from "../../../utils/minihome/gocat/items";
-
-type SlotType = "HEAD" | "BODY" | "ACCESSORY";
+import type { SlotType } from "../../../utils/minihome/gocat/gocatSlots";
 
 export default function GoCatCard(props: {
   catName: string;
@@ -34,7 +33,8 @@ export default function GoCatCard(props: {
 
         <div className="grid grid-cols-1 gap-1 text-xs text-slate-600">
           <div>머리: {resolveEquipSlotLabel("HEAD", equipBySlot)}</div>
-          <div>액세서리: {resolveEquipSlotLabel("ACCESSORY", equipBySlot)}</div>
+          <div>얼굴: {resolveEquipSlotLabel("FACE", equipBySlot)}</div>
+          <div>목: {resolveEquipSlotLabel("NECK", equipBySlot)}</div>
         </div>
 
         {canDecorate ? (

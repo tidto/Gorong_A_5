@@ -1,4 +1,8 @@
 import { BookOpen, RefreshCw, Search, Sparkles } from "lucide-react";
+import {
+  CATTOWER_VIEW_PANELS,
+  type CatTowerCenterPanelId,
+} from "./catTowerPanelTypes";
 import CatTowerVisitorWidget from "./CatTowerVisitorWidget";
 
 type CatTowerSideMenuProps = {
@@ -6,12 +10,13 @@ type CatTowerSideMenuProps = {
   loading?: boolean;
   readOnly?: boolean;
   canEdit?: boolean;
+  activePanel: CatTowerCenterPanelId;
+  onPanelChange: (panel: CatTowerCenterPanelId) => void;
   onRoomDecorate?: () => void;
   onCatDecorate: () => void;
   onBack: () => void;
   onEvents: () => void;
   onRefresh: () => void;
-  onScrollToGuestbook?: () => void;
   visitorTodayCount?: number;
   visitorTotalCount?: number;
   visitorStatsLoading?: boolean;
@@ -19,17 +24,28 @@ type CatTowerSideMenuProps = {
 
 const ICON_BOX = "flex h-7 w-7 shrink-0 items-center justify-center text-base";
 
+function panelButtonClass(active: boolean, disabled?: boolean): string {
+  const base =
+    "mb-1 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-xs font-bold transition";
+  if (disabled) return `${base} cursor-not-allowed opacity-50`;
+  if (active) {
+    return `${base} translate-x-0.5 bg-gradient-to-r from-orange-100 to-amber-50 text-orange-900 shadow-sm ring-1 ring-orange-200/80`;
+  }
+  return `${base} text-slate-700 hover:translate-x-0.5 hover:bg-orange-50/60 hover:shadow-sm`;
+}
+
 export default function CatTowerSideMenu({
   busy,
   loading,
   readOnly = false,
   canEdit = true,
+  activePanel,
+  onPanelChange,
   onRoomDecorate,
   onCatDecorate,
   onBack,
   onEvents,
   onRefresh,
-  onScrollToGuestbook,
   visitorTodayCount = 0,
   visitorTotalCount = 0,
   visitorStatsLoading,
@@ -41,8 +57,34 @@ export default function CatTowerSideMenu({
           📌 바로가기
         </div>
         <ul className="p-2">
-          {canEdit && !readOnly && onRoomDecorate ? (
-            <li>
+          {CATTOWER_VIEW_PANELS.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onPanelChange(item.id)}
+                className={panelButtonClass(activePanel === item.id, busy)}
+                aria-current={activePanel === item.id ? "page" : undefined}
+              >
+                <span className={ICON_BOX}>{item.emoji}</span>
+                {item.id === "gallery"
+                  ? "갤러리 보기"
+                  : item.id === "activity"
+                    ? "히스토리 보기"
+                    : item.id === "guestbook"
+                      ? "방명록 보기"
+                      : item.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {canEdit && !readOnly ? (
+          <div className="border-t border-orange-100/70 p-2 pt-1">
+            <p className="mb-1 px-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">
+              꾸미기
+            </p>
+            {onRoomDecorate ? (
               <button
                 type="button"
                 disabled={busy}
@@ -52,33 +94,18 @@ export default function CatTowerSideMenu({
                 <span className={ICON_BOX}>🖼️</span>
                 내 방 꾸미기
               </button>
-            </li>
-          ) : null}
-          {canEdit && !readOnly ? (
-            <li>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onCatDecorate}
-                className="mb-1 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:translate-x-0.5 hover:bg-orange-50/70 hover:shadow-sm"
-              >
-                <span className={ICON_BOX}>👕</span>
-                Go냥이 꾸미기
-              </button>
-            </li>
-          ) : null}
-          <li>
+            ) : null}
             <button
               type="button"
               disabled={busy}
-              onClick={onScrollToGuestbook}
-              className="mb-1 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:translate-x-0.5 hover:bg-rose-50/70 hover:shadow-sm"
+              onClick={onCatDecorate}
+              className="flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:translate-x-0.5 hover:bg-orange-50/70 hover:shadow-sm"
             >
-              <span className={ICON_BOX}>✉️</span>
-              방명록 보기
+              <span className={ICON_BOX}>👕</span>
+              Go냥이 꾸미기
             </button>
-          </li>
-        </ul>
+          </div>
+        ) : null}
       </div>
 
       <CatTowerVisitorWidget

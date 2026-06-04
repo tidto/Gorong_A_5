@@ -15,6 +15,7 @@ type Props = {
   pageReady: boolean;
   refreshToken?: number;
   previewLimit?: number;
+  embedded?: boolean;
 };
 
 function formatGuestbookDate(iso: string) {
@@ -108,19 +109,20 @@ function CatTowerGuestbookBlock({
   pageReady,
   refreshToken = 0,
   previewLimit = 3,
+  embedded = false,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
-  const { ref, inView } = useInViewport<HTMLElement>({ enabled: pageReady });
+  const { ref, inView } = useInViewport<HTMLElement>({ enabled: pageReady && !embedded });
   const guestbook = useCatTowerGuestbook({
     roomOwnerId,
     myUserId,
     isOwner,
-    enabled: pageReady && inView,
+    enabled: pageReady && (embedded || inView),
     refreshToken,
   });
 
   return (
-    <div id="cattower-guestbook" ref={ref}>
+    <div ref={embedded ? undefined : ref} id={embedded ? undefined : "cattower-guestbook"}>
       <CatTowerGuestbookSection
         catName={catName}
         entries={guestbook.entries}
@@ -139,6 +141,7 @@ function CatTowerGuestbookBlock({
         onSubmit={() => void guestbook.handleSubmit()}
         onDelete={(entry) => void guestbook.handleDelete(entry)}
         canDeleteEntry={guestbook.canDeleteEntry}
+        embedded={embedded}
       />
 
       <CatTowerViewAllModal
