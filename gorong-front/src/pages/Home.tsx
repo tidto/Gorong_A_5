@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import RiveCharacter from '../components/RiveCharacter'
+
 import MapView from '../components/MapView'
 import Card from '../components/Card'
 import { useAuth } from '../contexts/AuthContext'
@@ -488,23 +488,13 @@ export default function Home() {
                   </div>
               )}
             </div>
-
-            <div style={{
-              width: 148, height: 148, flexShrink: 0,
-              background: '#ffe8d0', borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              overflow: 'hidden',
-              boxShadow: '0 6px 24px rgba(249,115,22,.18)',
-            }}>
-              <RiveCharacter />
-            </div>
           </section>
 
           {/* ── 지도 ── */}
           <section className="s-anim" style={{ marginBottom: 60 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: '#111', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#f97316' }}>📍</span>
+                <span style={{ color: '#f97316' }}></span>
                 {searchQuery ? `"${searchQuery}" 검색 결과` : '대구/경북 주변 행사'}
                 <span style={{ fontSize: 13, fontWeight: 500, color: '#bbb', marginLeft: 2 }}>
                 {displayEvents.length}개
@@ -549,7 +539,7 @@ export default function Home() {
           {topEvents.length > 0 && (
               <section className="s-anim" style={{ marginBottom: 60 }}>
                 <SectionHeader
-                    icon={<Trophy size={21} color="#f59e0b" />}
+                    //icon={<Trophy size={21} color="#f59e0b" />}
                     title="지금 가장 핫한 인기 행사"
                     badge=" TOP 10"
                     canPrev={topCarousel.canPrev} canNext={topCarousel.canNext}
@@ -578,7 +568,7 @@ export default function Home() {
           {recommendedEvents.length > 0 && (
               <section className="s-anim">
                 <SectionHeader
-                    icon={<span style={{ fontSize: 20 }}>🎯</span>}
+                    icon={<span style={{ fontSize: 20 }}></span>}
                     title={`${auth.user?.nickname || 'Go냥이'}님을 위한 맞춤 추천`}
                     subtitle={weatherText}
                     canPrev={recCarousel.canPrev} canNext={recCarousel.canNext}

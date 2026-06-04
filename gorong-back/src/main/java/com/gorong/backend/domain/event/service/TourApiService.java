@@ -195,6 +195,20 @@ public class TourApiService {
         dto.setFirstimage(img.isEmpty()
                 ? "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?q=80&w=500"
                 : img);
+
+        String img2 = obj.optString("firstimage2", "").trim();
+        if (!img2.isEmpty()) dto.setFirstimage2(img2);
+
+        // 행사 기간 (TourAPI 필드명)
+        String startDate = obj.optString("eventstartdate", "").trim();
+        String endDate   = obj.optString("eventenddate",   "").trim();
+        if (!startDate.isEmpty()) dto.setEventStartDate(startDate);
+        if (!endDate.isEmpty())   dto.setEventEndDate(endDate);
+
+        // 문의 전화
+        String tel = obj.optString("tel", "").trim();
+        if (!tel.isEmpty()) dto.setTel(tel);
+
         return dto;
     }
 
@@ -206,11 +220,31 @@ public class TourApiService {
         dto.setMapx(event.getMapX() != null ? event.getMapX().trim() : "");
         dto.setMapy(event.getMapY() != null ? event.getMapY().trim() : "");
         dto.setFirstimage(event.getFirstImage());
+        dto.setFirstimage2(event.getFirstImage2());
         dto.setParking(event.getParking());
         dto.setElevator(event.getElevator());
         dto.setRestroom(event.getRestroom());
         dto.setRoute(event.getRoute());
         dto.setOverview(event.getDescription());
+        dto.setEventStartDate(event.getEventStartDate());
+        dto.setEventEndDate(event.getEventEndDate());
+        dto.setTel(event.getTel());
+
+        // tourCategoryCode(DB) → cat1(TourAPI 원본 코드) 역변환
+        // 프론트 필터가 A01/A02/A03/A04/A05 기준으로 동작하므로 반드시 필요
+        String code = event.getTourCategoryCode();
+        if (code != null) {
+            switch (code) {
+                case "NA":  dto.setCat1("A01"); break; // 자연관광
+                case "VE":  dto.setCat1("A02"); break; // 문화/역사
+                case "LS":  dto.setCat1("A03"); break; // 레포츠
+                case "SH":  dto.setCat1("A04"); break; // 쇼핑
+                case "FD":  dto.setCat1("A05"); break; // 음식
+                case "C01": dto.setCat1("C01"); break; // 추천코스
+                default:    dto.setCat1("ETC");
+            }
+        }
+
         return dto;
     }
 }
