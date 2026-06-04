@@ -289,10 +289,10 @@ function Header() {
           />
 
           <NavLink
-            label="Review"
+            label="Posting"
             path="/posting"
             isActive={isActive('/posting')}
-            desc="방문 후 느낀 감동을 글로 남겨보세요. 다른 고양이 집사들의 생생한 후기도 함께 만나볼 수 있습니다."
+            desc="현장 방문 후 느낀 감동을 글로 남겨보세요. 다른 고양이 집사들의 생생한 후기도 함께 만나볼 수 있습니다."
           />
 
           <NavLink
