@@ -40,7 +40,7 @@ public class SecurityConfig {
 
                         // 💡 카카오/네이버 전용 주소 삭제.
                         // 프론트엔드와 맞춰서 v1 로그인/회원가입 API 주소로 수정했습니다.
-                        .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup", "/api/v1/auth/github/login").permitAll()
+                        .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup").permitAll()
                         // 주소popup
                         .requestMatchers("/api/v1/juso/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
@@ -48,7 +48,6 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/users/login",
                                 "/api/v1/users/signup",
-                                "/api/v1/auth/github/login",
                                 "/api/v1/juso/**",
                                 "/api/v1/app/venues/**"   // ← 추가 (행사 조회는 비로그인도 가능)
                         ).permitAll()
