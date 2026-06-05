@@ -1,5 +1,7 @@
 export type ChatbotChatRequest = {
   message: string;
+  /** 이미 추천받은 eventId — 다음 추천에서 제외 */
+  excludeEventIds?: number[];
 };
 
 export type ChatbotChatResponse = {

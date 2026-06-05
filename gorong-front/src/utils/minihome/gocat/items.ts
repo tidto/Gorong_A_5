@@ -3,7 +3,7 @@ import type { Equipment, UserItem } from "../../../types/minihome/item";
 import type { EquipItem, MiniHomePage } from "../../../types/minihome/minihome";
 import { findCatalogItem } from "./decorItemCatalog";
 import { normalizeEquipDraft } from "./gocatEquipMigration";
-import { sanitizeEquipDraft } from "./gocatMvp";
+import { sanitizeEquipDraft, sanitizeEquipDraftForDisplay } from "./gocatEquipRules";
 import type { GrowthStage } from "../growth/growth";
 import type { SlotType } from "./gocatSlots";
 import { GOCAT_SLOTS, emptySlotRecord, resolveItemSlot } from "./gocatSlots";
@@ -61,8 +61,11 @@ export function enrichEquipItems(equips: EquipItem[]): EquipItem[] {
   return equips.map((e) => enrichEquipmentFields(e));
 }
 
-export function equipItemsFromDraft(draft: Record<SlotType, DecorItem | null>): EquipItem[] {
-  const safe = sanitizeEquipDraft(draft);
+export function equipItemsFromDraft(
+  draft: Record<SlotType, DecorItem | null>,
+  growthStage: GrowthStage = "BASIC"
+): EquipItem[] {
+  const safe = sanitizeEquipDraftForDisplay(draft, growthStage);
   const out: EquipItem[] = [];
   let seq = 1;
   for (const slot of GOCAT_SLOTS) {

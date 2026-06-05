@@ -1,8 +1,11 @@
 package com.gorong.backend.domain.minihome.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.List;
 
 /**
  * GO_CAT.appearance_state JSON 일부 필드만 갱신합니다.
@@ -24,6 +27,9 @@ public class GoCatAppearanceUpdateRequestDto {
 
     @Pattern(regexp = "BASIC_ROOM|FOREST_ROOM|NIGHT_ROOM", message = "roomBackground must be BASIC_ROOM, FOREST_ROOM, or NIGHT_ROOM")
     private String roomBackground;
+
+    @Valid
+    private List<RoomItemPlacementDto> roomItems;
 
     private String headItemCode;
     private String faceItemCode;

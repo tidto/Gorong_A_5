@@ -65,7 +65,7 @@ export function useGoCatDecoration(
     (items: UserItem[]) => {
       const filtered = filterOwnedUserItems(items);
       return loadNormalizedEquipDraft(options.pageEquips, options.appearanceState, {
-        useLocalStorage: options.canEdit !== false,
+        useLocalStorage: false,
         growthStage,
         ownedItems: filtered,
       });
@@ -182,9 +182,17 @@ export function useGoCatDecoration(
     [selectedEquipment, ownedItems, growthStage]
   );
 
-  const selectEquipment = useCallback((s: SlotType, item: DecorItem | null) => {
-    setSelectedEquipment((prev) => ({ ...prev, [s]: item }));
-  }, []);
+  const selectEquipment = useCallback(
+    (s: SlotType, item: DecorItem | null) => {
+      if (item && !canEquipDecorItem(item, ownedItems, growthStage)) {
+        const entry = findCatalogItemById(item.itemCode);
+        toast(entry ? lockedItemToastMessage(entry) : "아직 획득하지 않은 아이템이에요.", "info");
+        return;
+      }
+      setSelectedEquipment((prev) => ({ ...prev, [s]: item }));
+    },
+    [ownedItems, growthStage, toast]
+  );
 
   const toggleSlotItem = useCallback(
     (s: SlotType, item: DecorItemWithOwnership) => {
@@ -208,12 +216,15 @@ export function useGoCatDecoration(
     [toast]
   );
 
-  const saveDecoration = useCallback(async (): Promise<boolean> => {
+  const saveDecoration = useCallback(async (): Promise<{
+    ok: boolean;
+    draft: Record<SlotType, DecorItem | null>;
+  }> => {
     if (!canEdit) {
       const msg = "다른 사용자 홈에서는 저장할 수 없습니다.";
       setDecorationErr(msg);
       toast(msg, "warning");
-      return false;
+      return { ok: false, draft: selectedEquipment };
     }
 
     setSaving(true);
@@ -239,7 +250,7 @@ export function useGoCatDecoration(
       setDecorationErr(msg);
       toast(msg, "error");
       setSaving(false);
-      return false;
+      return { ok: false, draft };
     }
 
     try {
@@ -252,13 +263,13 @@ export function useGoCatDecoration(
       setSaveInfo("장착 정보가 저장되었습니다.");
       toast("장착 정보가 저장되었습니다.", "success");
       setSaving(false);
-      return true;
+      return { ok: true, draft };
     } catch (e) {
       const msg = mapMiniHomeApiError(e, "장착 저장에 실패했습니다.");
       setDecorationErr(msg);
       toast(msg, "error");
       setSaving(false);
-      return false;
+      return { ok: false, draft };
     }
   }, [selectedEquipment, ownedItems, rawUserItems, growthStage, canEdit, toast, options]);
 

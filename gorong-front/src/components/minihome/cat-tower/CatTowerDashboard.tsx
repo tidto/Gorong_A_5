@@ -2,8 +2,15 @@ import { memo, useCallback, useState } from "react";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
-import { useRoomBackground } from "../../../pages/minihome/hooks/useRoomBackground";
+import { useRoomDecorate } from "../../../pages/minihome/hooks/useRoomDecorate";
 import { useNotification } from "../../../contexts/NotificationContext";
+import {
+  CatTowerPageBackdrop,
+  CatTowerRoomThemeProvider,
+  useCatTowerPageTheme,
+} from "../../../contexts/CatTowerRoomThemeContext";
+import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import type { RoomPlacement } from "../../../utils/minihome/cat-tower/catTowerRoomCatalog";
 import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
 import CatTowerProfilePanel from "./CatTowerProfilePanel";
 import CatTowerCenterPanel from "./CatTowerCenterPanel";
@@ -38,6 +45,7 @@ type CatTowerDashboardProps = {
   onBack: () => void;
   onEvents: () => void;
   onRefresh: () => void;
+  onAppearanceSaved?: (appearanceState: Record<string, unknown>) => void;
   onReport?: () => void;
 };
 
@@ -66,6 +74,7 @@ function CatTowerDashboard({
   onBack,
   onEvents,
   onRefresh,
+  onAppearanceSaved,
   onReport,
 }: CatTowerDashboardProps) {
   const { toast } = useNotification();
@@ -74,23 +83,131 @@ function CatTowerDashboard({
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [roomDecorateOpen, setRoomDecorateOpen] = useState(false);
 
-  const roomBg = useRoomBackground({
-    growthStage: growth.stage,
+  const room = useRoomDecorate({
     appearanceState,
-    useLocalStorage: canEdit,
+    useLocalStorage: canEdit && !isReadOnly,
+    onSaved: onAppearanceSaved,
   });
 
-  const handleSaveRoomBackground = useCallback(async () => {
-    const ok = await roomBg.saveBackground();
+  const displayBackground = roomDecorateOpen && canEdit ? room.background : room.savedBackground;
+  const displayItems = roomDecorateOpen && canEdit ? room.items : room.savedItems;
+
+  const handleSaveRoom = useCallback(async () => {
+    const ok = await room.save();
     if (ok) {
-      toast("방 배경이 저장되었습니다.", "success");
+      toast("방 꾸미기가 저장되었습니다.", "success");
       setRoomDecorateOpen(false);
     }
-  }, [roomBg, toast]);
+  }, [room, toast]);
+
+  return (
+    <CatTowerRoomThemeProvider roomBackground={displayBackground}>
+      <CatTowerPageBackdrop />
+      <CatTowerDashboardBody
+        nickname={nickname}
+        catName={catName}
+        growth={growth}
+        isPublic={isPublic}
+        equipped={equipped}
+        activities={activities}
+        galleries={galleries}
+        activityCount={activityCount}
+        galleryCount={galleryCount}
+        loading={loading}
+        busy={busy}
+        canEdit={canEdit}
+        isReadOnly={isReadOnly}
+        resolvingOwner={resolvingOwner}
+        roomOwnerId={roomOwnerId}
+        myUserId={myUserId}
+        isOwner={isOwner}
+        pageReady={pageReady}
+        refreshToken={refreshToken}
+        displayBackground={displayBackground}
+        displayItems={displayItems}
+        centerPanel={centerPanel}
+        setCenterPanel={setCenterPanel}
+        activityModalOpen={activityModalOpen}
+        setActivityModalOpen={setActivityModalOpen}
+        galleryModalOpen={galleryModalOpen}
+        setGalleryModalOpen={setGalleryModalOpen}
+        roomDecorateOpen={roomDecorateOpen}
+        setRoomDecorateOpen={setRoomDecorateOpen}
+        room={room}
+        onDecorate={onDecorate}
+        onBack={onBack}
+        onEvents={onEvents}
+        onRefresh={onRefresh}
+        onReport={onReport}
+        handleSaveRoom={handleSaveRoom}
+      />
+    </CatTowerRoomThemeProvider>
+  );
+}
+
+type DashboardBodyProps = Omit<
+  CatTowerDashboardProps,
+  "appearanceState" | "onAppearanceSaved"
+> & {
+  displayBackground: RoomBackgroundId;
+  displayItems: RoomPlacement[];
+  centerPanel: CatTowerCenterPanelId;
+  setCenterPanel: (p: CatTowerCenterPanelId) => void;
+  activityModalOpen: boolean;
+  setActivityModalOpen: (v: boolean) => void;
+  galleryModalOpen: boolean;
+  setGalleryModalOpen: (v: boolean) => void;
+  roomDecorateOpen: boolean;
+  setRoomDecorateOpen: (v: boolean) => void;
+  room: ReturnType<typeof useRoomDecorate>;
+  handleSaveRoom: () => void;
+};
+
+function CatTowerDashboardBody({
+  nickname,
+  catName,
+  growth,
+  isPublic,
+  equipped,
+  activities,
+  galleries,
+  activityCount,
+  galleryCount,
+  loading,
+  busy,
+  canEdit,
+  isReadOnly,
+  resolvingOwner,
+  roomOwnerId,
+  myUserId,
+  isOwner,
+  pageReady,
+  refreshToken,
+  displayBackground,
+  displayItems,
+  centerPanel,
+  setCenterPanel,
+  activityModalOpen,
+  setActivityModalOpen,
+  galleryModalOpen,
+  setGalleryModalOpen,
+  roomDecorateOpen,
+  setRoomDecorateOpen,
+  room,
+  onDecorate,
+  onBack,
+  onEvents,
+  onRefresh,
+  onReport,
+  handleSaveRoom,
+}: DashboardBodyProps) {
+  const pageTheme = useCatTowerPageTheme();
 
   return (
     <div className="relative space-y-3">
-      <header className="relative overflow-hidden rounded-2xl border border-orange-200/60 bg-gradient-to-r from-orange-400 via-rose-400 to-emerald-400 shadow-[0_4px_20px_rgba(255,140,80,0.18)]">
+      <header
+        className={`relative overflow-hidden rounded-2xl border shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-colors duration-500 ${pageTheme.bannerBorderClass} ${pageTheme.bannerClass}`}
+      >
         <div className="relative flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-5">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/85">
@@ -134,6 +251,8 @@ function CatTowerDashboard({
           isPublic={isPublic}
           galleryCount={galleryCount}
           loading={loading}
+          showParticipatingEvents={isOwner && !isReadOnly}
+          refreshToken={refreshToken}
         />
 
         <CatTowerCenterPanel
@@ -141,7 +260,8 @@ function CatTowerDashboard({
           growthStage={growth.stage}
           activityCount={activityCount}
           equipped={equipped}
-          roomBackground={roomBg.background}
+          roomBackground={displayBackground}
+          roomItems={displayItems}
           catName={catName}
           isReadOnly={isReadOnly}
           activities={activities}
@@ -166,7 +286,14 @@ function CatTowerDashboard({
           isOwner={isOwner}
           pageReady={pageReady}
           refreshToken={refreshToken}
-          onRoomDecorate={canEdit ? () => setRoomDecorateOpen(true) : undefined}
+          onRoomDecorate={
+            canEdit
+              ? () => {
+                  setRoomDecorateOpen(true);
+                  onRefresh();
+                }
+              : undefined
+          }
           onCatDecorate={onDecorate}
           onBack={onBack}
           onEvents={onEvents}
@@ -207,16 +334,23 @@ function CatTowerDashboard({
       {canEdit ? (
         <CatTowerRoomDecorateModal
           open={roomDecorateOpen}
-          selected={roomBg.background}
-          saved={roomBg.savedBackground}
-          isDirty={roomBg.isDirty}
-          saving={roomBg.saving}
-          error={roomBg.error}
-          growthStage={growth.stage}
-          onSelect={roomBg.selectBackground}
-          onSave={handleSaveRoomBackground}
+          selectedBg={room.background}
+          savedBg={room.savedBackground}
+          items={room.items}
+          ownedIds={room.ownedIds}
+          isDirty={room.isDirty}
+          saving={room.saving}
+          error={room.error}
+          onSelectBg={room.selectBackground}
+          onToggleItem={room.togglePlacement}
+          onRemoveItem={room.removeItem}
+          onMoveItem={room.moveItem}
+          onSave={handleSaveRoom}
           onCatDecorate={onDecorate}
-          onClose={() => setRoomDecorateOpen(false)}
+          onClose={() => {
+            room.resetDraft();
+            setRoomDecorateOpen(false);
+          }}
         />
       ) : null}
     </div>

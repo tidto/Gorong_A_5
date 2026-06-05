@@ -37,20 +37,27 @@ import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
 import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class MiniHomeService {
+
+    private static final String EVENT_PARTICIPATION_TYPE = "EVENT_PARTICIPATION";
 
     private static final Set<String> EQUIP_SLOTS = Set.of("HEAD", "FACE", "NECK");
     private static final Set<String> RETIRED_SLOTS = Set.of("BADGE", "BODY", "ACCESSORY");
@@ -67,6 +74,8 @@ public class MiniHomeService {
     private final UserProfileRepository userProfileRepository;
     private final EventCategoryItemRewardService eventCategoryItemRewardService;
     private final GoCatItemUnlockService goCatItemUnlockService;
+    private final GoCatRoomUnlockService goCatRoomUnlockService;
+    private final GoCatUnlockSyncService goCatUnlockSyncService;
     private final GroupRepository groupRepository;
 
     public MiniHomeResponseDto getMiniHome(Long userId) {
@@ -128,6 +137,7 @@ public class MiniHomeService {
         }
 
         seedStarterItems(userId);
+        syncGoCatItemUnlocksForUser(userId);
 
         return MiniHomeResponseDto.from(miniHome, cat);
     }
@@ -139,6 +149,8 @@ public class MiniHomeService {
         } else {
             seedStarterItems(userId);
         }
+        syncGoCatItemUnlocksForUser(userId);
+        goCatRoomUnlockService.syncRoomUnlocksForUser(userId);
         return getMiniHomePage(userId);
     }
 
@@ -161,6 +173,7 @@ public class MiniHomeService {
 
     public MiniHomePageResponseDto getMiniHomePage(Long userId) {
         requireUserId(userId);
+        syncGoCatItemUnlocksForUser(userId);
 
         MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
                 .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
@@ -174,7 +187,13 @@ public class MiniHomeService {
 
         int temperatureTotal = cat != null ? readTemperatureTotal(cat) : 0;
         int level = calcLevel(temperatureTotal);
-        String growthStage = growthStageFromActivityCount(activityCount);
+        String growthStage = cat != null
+                ? GrowthStageResolver.effectiveGrowthStage(
+                activityCount,
+                temperatureTotal,
+                cat.getAppearanceState()
+        )
+                : growthStageFromActivityCount(activityCount);
 
         String ownerNickname = userProfileRepository.findByUserId(userId)
                 .map(UserProfile::getNickname)
@@ -247,12 +266,40 @@ public class MiniHomeService {
                 : "행사";
         return recordActivity(
                 userId,
-                "EVENT_PARTICIPATION",
+                EVENT_PARTICIPATION_TYPE,
                 referenceId,
                 50,
                 "행사 참여",
                 resolvedEventTitle + " 참여 신청"
         );
+    }
+
+    /** event_participation 이력 → activity_log 보완 후 Go냥이·방 해금 동기화 */
+    public void syncGoCatItemUnlocksForUser(Long userId) {
+        requireUserId(userId);
+        goCatUnlockSyncService.syncAllForUser(userId);
+    }
+
+    @Transactional
+    public void ensureEventParticipationActivityLogged(Long userId, Long referenceId, String eventTitle) {
+        requireUserId(userId);
+        if (referenceId == null || referenceId <= 0) {
+            return;
+        }
+        if (activityLogRepository.existsByUserIdAndActivityTypeAndReferenceId(
+                userId, EVENT_PARTICIPATION_TYPE, referenceId)) {
+            return;
+        }
+        recordEventParticipationActivity(userId, referenceId, eventTitle);
+    }
+
+    /** 혼자 참여(event_content_id) — activity_log referenceId용 */
+    public static long soloEventReferenceId(String eventContentId) {
+        if (eventContentId == null || eventContentId.isBlank()) {
+            return 0L;
+        }
+        long hash = eventContentId.trim().hashCode() & 0x7FFFFFFFL;
+        return hash == 0L ? 1L : hash;
     }
 
     private MiniHomePageResponseDto.ActivityDto recordActivity(
@@ -283,7 +330,7 @@ public class MiniHomeService {
                 resolvedTitle,
                 resolvedDescription
         );
-        goCatItemUnlockService.syncUnlocksForUser(userId);
+        goCatUnlockSyncService.syncAllForUser(userId);
 
         MiniHomePageResponseDto.ActivityDto dto = MiniHomePageResponseDto.ActivityDto.from(saved);
         if ((title != null && !title.isBlank()) || (description != null && !description.isBlank())) {
@@ -418,18 +465,28 @@ public class MiniHomeService {
     @Transactional
     public List<MiniHomeItemDto> getUserItems(Long userId) {
         requireUserId(userId);
-        goCatItemUnlockService.syncUnlocksForUser(userId);
+        syncGoCatItemUnlocksForUser(userId);
 
         List<UserItem> userItems = userItemRepository.findByUserIdOrderByAcquiredAtDesc(userId);
-        if (userItems.isEmpty()) return List.of();
+        if (userItems.isEmpty()) {
+            log.info("[MiniHome] GET /me/items userId={} userItemCount=0", userId);
+            return List.of();
+        }
 
         Map<Long, Item> items = itemRepository.findAllById(userItems.stream().map(UserItem::getItemId).distinct().toList())
                 .stream()
                 .collect(java.util.stream.Collectors.toMap(Item::getItemId, i -> i));
 
-        return userItems.stream()
+        List<MiniHomeItemDto> dtos = userItems.stream()
                 .map(ui -> MiniHomeItemDto.from(ui, items.get(ui.getItemId())))
                 .toList();
+        log.info(
+                "[MiniHome] GET /me/items userId={} userItemCount={} codes={}",
+                userId,
+                dtos.size(),
+                dtos.stream().map(MiniHomeItemDto::getItemCode).toList()
+        );
+        return dtos;
     }
 
     public List<MiniHomeEquipmentDto> getEquipments(Long userId) {
@@ -540,6 +597,7 @@ public class MiniHomeService {
         requireUserId(userId);
         if (req == null) throw new IllegalArgumentException("요청 본문이 비어 있습니다.");
 
+        goCatRoomUnlockService.syncRoomUnlocksForUser(userId);
         GoCat cat = requireGoCatForUser(userId);
 
         Map<String, Object> state = cat.getAppearanceState() != null
@@ -553,7 +611,7 @@ public class MiniHomeService {
                 req.getColor(),
                 true
         );
-        mergePresentationFields(state, req);
+        mergePresentationFields(cat, state, req);
         if (req.getCatName() != null && !req.getCatName().isBlank()) {
             cat.setCatName(req.getCatName().trim());
         }
@@ -584,12 +642,23 @@ public class MiniHomeService {
         }
     }
 
-    private static void mergePresentationFields(
+    private void mergePresentationFields(
+            GoCat cat,
             Map<String, Object> state,
             GoCatAppearanceUpdateRequestDto req
     ) {
+        Set<String> owned = GoCatRoomUnlockService.readOwnedIds(cat);
+
         if (req.getRoomBackground() != null && !req.getRoomBackground().isBlank()) {
-            state.put("roomBackground", req.getRoomBackground().trim().toUpperCase());
+            String bg = req.getRoomBackground().trim().toUpperCase();
+            String bgItemId = roomBackgroundToItemId(bg);
+            if (bgItemId != null && !owned.contains(bgItemId)) {
+                throw new IllegalArgumentException("해금되지 않은 방 배경입니다.");
+            }
+            state.put("roomBackground", bg);
+        }
+        if (req.getRoomItems() != null) {
+            state.put("roomItems", sanitizeRoomItems(req.getRoomItems(), owned));
         }
         if (req.getHeadItemCode() != null) {
             if (req.getHeadItemCode().isBlank()) {
@@ -622,6 +691,56 @@ public class MiniHomeService {
         }
     }
 
+    private static String roomBackgroundToItemId(String roomBackground) {
+        return switch (roomBackground) {
+            case "BASIC_ROOM" -> GoCatRoomUnlockService.ID_BG_BASIC;
+            case "FOREST_ROOM" -> GoCatRoomUnlockService.ID_BG_FOREST;
+            case "NIGHT_ROOM" -> GoCatRoomUnlockService.ID_BG_NIGHT;
+            default -> null;
+        };
+    }
+
+    private static List<Map<String, Object>> sanitizeRoomItems(
+            List<com.gorong.backend.domain.minihome.dto.RoomItemPlacementDto> items,
+            Set<String> owned
+    ) {
+        if (items == null) {
+            return List.of();
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (com.gorong.backend.domain.minihome.dto.RoomItemPlacementDto item : items) {
+            if (item == null || item.getItemId() == null) {
+                continue;
+            }
+            String id = item.getItemId().trim().toLowerCase(Locale.ROOT);
+            if (!GoCatRoomUnlockService.isCatalogItemId(id) || id.startsWith("room_bg_")) {
+                continue;
+            }
+            if (!owned.contains(id)) {
+                continue;
+            }
+            if (Boolean.FALSE.equals(item.getVisible())) {
+                continue;
+            }
+            if (seen.contains(id)) {
+                continue;
+            }
+            seen.add(id);
+            double x = item.getX() != null ? Math.min(100, Math.max(0, item.getX())) : 50;
+            double y = item.getY() != null ? Math.min(100, Math.max(0, item.getY())) : 50;
+            String type = item.getType() != null ? item.getType().trim().toUpperCase(Locale.ROOT) : "FURNITURE";
+            Map<String, Object> row = new HashMap<>();
+            row.put("itemId", id);
+            row.put("type", type);
+            row.put("x", x);
+            row.put("y", y);
+            row.put("visible", true);
+            out.add(row);
+        }
+        return out;
+    }
+
     private static Map<String, Object> defaultAppearance() {
         Map<String, Object> m = new HashMap<>();
         m.put("temperatureTotal", 0);
@@ -642,21 +761,21 @@ public class MiniHomeService {
     }
 
     /** 행사·리뷰 등 활동 로그 횟수 기준 성장 단계 */
-    static String growthStageFromActivityCount(long activityCount) {
+    public static String growthStageFromActivityCount(long activityCount) {
         if (activityCount >= 60) return "MASTER";
         if (activityCount >= 30) return "ADULT";
         if (activityCount >= 10) return "TEEN";
         return "BASIC";
     }
 
-    static String growthStageFromExp(int exp) {
+    public static String growthStageFromExp(int exp) {
         if (exp >= 600) return "MASTER";
         if (exp >= 300) return "ADULT";
         if (exp >= 100) return "TEEN";
         return "BASIC";
     }
 
-    private static int calcLevel(int temperatureTotal) {
+    public static int calcLevel(int temperatureTotal) {
         return Math.max(1, (temperatureTotal / 100) + 1);
     }
 

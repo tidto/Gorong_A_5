@@ -9,7 +9,8 @@ import {
   type RoomBackgroundId,
 } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import CatTowerRoomAmbience from "./CatTowerRoomAmbience";
-import CatTowerRoomStickers from "./CatTowerRoomStickers";
+import CatTowerRoomPlacedItems from "./CatTowerRoomPlacedItems";
+import type { RoomPlacement } from "../../../utils/minihome/cat-tower/catTowerRoomCatalog";
 import CatTowerSpeechBubble from "./CatTowerSpeechBubble";
 import GoCatVisual from "../mini-home/GoCatVisual";
 
@@ -18,6 +19,7 @@ type CatTowerRoomStageProps = {
   activityCount: number;
   equipped?: EquipPreview | null;
   roomBackground?: RoomBackgroundId;
+  roomItems?: RoomPlacement[];
   catName?: string;
   interactive?: boolean;
   readOnly?: boolean;
@@ -33,6 +35,7 @@ function CatTowerRoomStage({
   activityCount,
   equipped,
   roomBackground = "BASIC_ROOM",
+  roomItems = [],
   catName = "Go냥이",
   interactive = true,
   readOnly = false,
@@ -59,7 +62,7 @@ function CatTowerRoomStage({
       } ${bg.stageClass}`}
     >
       <CatTowerRoomAmbience theme={bg.theme} isDark={bg.isDark} />
-      <CatTowerRoomStickers isDark={bg.isDark} />
+      <CatTowerRoomPlacedItems items={roomItems} isDark={bg.isDark} />
 
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-b ${bg.glowClass}`} />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_58%,rgba(255,255,255,0.38),transparent_60%)]" />

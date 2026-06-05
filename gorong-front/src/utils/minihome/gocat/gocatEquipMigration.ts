@@ -12,7 +12,7 @@ import {
 } from "./gocatEquippedStorage";
 
 /** 버전 올리면 legacy localStorage 장착 초기화 */
-export const GOCAT_EQUIP_STORAGE_VERSION = 6;
+export const GOCAT_EQUIP_STORAGE_VERSION = 7;
 const VERSION_KEY = "gocat_equip_storage_version";
 
 export function runEquipStorageMigrationIfNeeded(): void {

@@ -3,11 +3,13 @@ import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import type { RoomPlacement } from "../../../utils/minihome/cat-tower/catTowerRoomCatalog";
 import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
 import CatTowerRoomStage from "./CatTowerRoomStage";
 import CatTowerRecentActivityCards from "./CatTowerRecentActivityCards";
 import CatTowerGalleryPreview from "./CatTowerGalleryPreview";
 import CatTowerGuestbookBlock from "./CatTowerGuestbookBlock";
+import { useCatTowerPageTheme } from "../../../contexts/CatTowerRoomThemeContext";
 
 const TAB_PREVIEW_LIMIT = 6;
 const PANEL_MIN_H = "min-h-[300px] sm:min-h-[360px]";
@@ -18,6 +20,7 @@ type CatTowerCenterPanelProps = {
   activityCount: number;
   equipped: EquipPreview;
   roomBackground: RoomBackgroundId;
+  roomItems?: RoomPlacement[];
   catName: string;
   isReadOnly?: boolean;
   activities: ActivityItem[];
@@ -41,12 +44,16 @@ function TabPanelShell({
   emoji: string;
   children: ReactNode;
 }) {
+  const theme = useCatTowerPageTheme();
+
   return (
     <div
-      className={`flex ${PANEL_MIN_H} flex-col overflow-hidden rounded-[1.75rem] border border-orange-100/80 bg-gradient-to-b from-white/95 via-[#fffaf5] to-orange-50/30 shadow-[0_12px_36px_rgba(255,140,80,0.1)]`}
+      className={`flex ${PANEL_MIN_H} flex-col overflow-hidden rounded-[1.75rem] border transition-colors duration-500 ${theme.shellClass}`}
     >
-      <div className="shrink-0 border-b border-orange-100/70 bg-gradient-to-r from-orange-50/90 to-amber-50/50 px-4 py-2.5 text-center">
-        <p className="text-[11px] font-extrabold tracking-wide text-orange-900/75">
+      <div
+        className={`shrink-0 border-b px-4 py-2.5 text-center ${theme.shellHeaderClass}`}
+      >
+        <p className={`text-[11px] font-extrabold tracking-wide ${theme.shellTitleClass}`}>
           {emoji} {title}
         </p>
       </div>
@@ -61,6 +68,7 @@ function CatTowerCenterPanel({
   activityCount,
   equipped,
   roomBackground,
+  roomItems = [],
   catName,
   isReadOnly = false,
   activities,
@@ -81,6 +89,7 @@ function CatTowerCenterPanel({
         activityCount={activityCount}
         equipped={equipped}
         roomBackground={roomBackground}
+        roomItems={roomItems}
         catName={catName}
         interactive
         readOnly={isReadOnly}

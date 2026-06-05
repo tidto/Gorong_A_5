@@ -31,6 +31,8 @@ public class ChatbotNearbyService {
     private final AppVenueService appVenueService;
     private final EventRepository eventRepository;
     private final EventRecommendationService eventRecommendationService;
+    private final EventRecommendationSelector recommendationSelector;
+    private final ChatRecommendationHistoryService recommendationHistory;
 
     @Value("${CHATBOT_DEFAULT_LAT:35.8714}")
     private double defaultLat;
@@ -41,9 +43,16 @@ public class ChatbotNearbyService {
     @Value("${CHATBOT_NEARBY_RADIUS:5000}")
     private int defaultRadius;
 
-    public ChatRecommendResponseDto recommendNearby(String message, Authentication authentication) {
+    public ChatRecommendResponseDto recommendNearby(
+            String message,
+            java.util.List<Long> excludeEventIds,
+            Authentication authentication
+    ) {
         String regionLabel = resolveRegionLabel(message, authentication);
         GeoPoint geo = resolveGeo(message, authentication);
+        Long userId = eventRecommendationService.resolveUserId(authentication).orElse(null);
+        java.util.Set<Long> exclude = recommendationHistory.resolveExcludeIds(userId, excludeEventIds);
+        java.util.Set<Long> relaxedExclude = recommendationHistory.strictExcludeOnly(userId, excludeEventIds);
 
         List<Event> merged = new ArrayList<>();
         try {
@@ -81,17 +90,59 @@ public class ChatbotNearbyService {
 
         if (merged.isEmpty()) {
             return ChatRecommendResponseDto.builder()
-                    .answer("지금은 " + regionLabel + " 근처 추천 행사를 불러오지 못했어요. 잠시 후 다시 시도하거나 행사 메뉴에서 직접 찾아보세요.")
+                    .answer("""
+                            **%s** 근처에서 조건에 맞는 행사를 찾지 못했어요.
+                            
+                            **다시 검색 팁**
+                            - 다른 지역을 말씀해 주세요 (예: 서울 근처 행사 추천해줘)
+                            - 마이페이지에 **주소**를 등록하면 내 근처 추천이 더 정확해져요
+                            - **행사** 메뉴에서 직접 검색해 보세요""".formatted(regionLabel))
                     .intent(ChatIntent.LOCATION_RECOMMENDATION.name())
                     .recommendedEvents(List.of())
                     .actions(defaultNearbyActions())
                     .build();
         }
 
-        List<Event> picks = merged.stream().limit(3).toList();
-        String answer = "회원님 기준 **" + regionLabel + "** 근처에서 갈 만한 행사를 골라봤어요. (거리·인기 순 Tour API + DB)";
-        List<ChatRecommendResponseDto.RecommendedEventDto> recommended =
-                eventRecommendationService.mapEventsToRecommendedDtos(picks, regionLabel, message, ChatIntent.LOCATION_RECOMMENDATION);
+        EventRecommendationSelector.SelectionResult selection = recommendationSelector.selectFromPool(
+                merged,
+                message,
+                regionLabel,
+                ChatIntent.LOCATION_RECOMMENDATION,
+                exclude,
+                relaxedExclude,
+                userId
+        );
+
+        List<Event> picks = selection.picks();
+        if (picks.isEmpty()) {
+            picks = merged.stream().limit(3).toList();
+        }
+
+        recommendationHistory.recordRecommended(
+                userId,
+                picks.stream().map(Event::getId).toList()
+        );
+
+        List<ChatRecommendResponseDto.RecommendedEventDto> recommended = new ArrayList<>();
+        for (Event event : picks) {
+            EventRecommendReason tag = selection.reasonByEventId() != null
+                    ? selection.reasonByEventId().get(event.getId())
+                    : EventRecommendReason.NEARBY;
+            recommended.add(eventRecommendationService.toRecommendedDto(
+                    event,
+                    tag,
+                    regionLabel,
+                    message,
+                    ChatIntent.LOCATION_RECOMMENDATION
+            ));
+        }
+
+        String answer = "회원님 기준 **" + regionLabel + "** 근처에서 갈 만한 행사를 골라봤어요.";
+        if (selection.matchedCount() == 1 && picks.size() == 1) {
+            answer += "\n\n현재 조건에 맞는 행사가 **1개뿐**입니다.";
+        } else {
+            answer += " (" + picks.size() + "개)";
+        }
 
         return ChatRecommendResponseDto.builder()
                 .answer(answer)

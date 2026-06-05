@@ -12,7 +12,11 @@ import { isGoCatSlotEnabled } from "../../../data/minihome/gocatItems";
 import type { GoCatItemCategory } from "../../../data/minihome/gocatItems";
 import { findCatalogItem } from "./decorItemCatalog";
 import { equipDraftFromAppearanceState } from "../cat-tower/catTowerPresentation";
-import { sanitizeEquipDraft, sanitizeEquipDraftForDisplay } from "./gocatEquipRules";
+import {
+  sanitizeEquipDraft,
+  sanitizeEquipDraftForDisplay,
+} from "./gocatEquipRules";
+import { draftFromEquips } from "./items";
 import type { GrowthStage } from "../growth/growth";
 import type { UserItem } from "../../../types/minihome/item";
 import { GOCAT_SLOTS, resolveItemSlot } from "./gocatSlots";
@@ -111,9 +115,8 @@ export function storedToDecorDraft(stored: StoredEquippedItems): Record<SlotType
 
 export function decorDraftToStored(draft: Record<SlotType, DecorItem | null>): StoredEquippedItems {
   const stored = emptyStoredEquipped();
-  const safe = sanitizeEquipDraft(draft);
   for (const slot of GOCAT_SLOTS) {
-    const item = safe[slot];
+    const item = draft[slot];
     if (!item) continue;
     const catalog = findCatalogItem(item.itemId, item.itemCode);
     const imageUrl = item.imageUrl?.trim() || catalog?.imageUrl;
@@ -150,6 +153,51 @@ function draftHasAny(draft: Record<SlotType, DecorItem | null>): boolean {
   return GOCAT_SLOTS.some((s) => draft[s]);
 }
 
+function mergeEquipDraftFromDb(
+  pageEquips?: EquipItem[] | null,
+  appearanceState?: Record<string, unknown> | null
+): Record<SlotType, DecorItem | null> {
+  const fromEquips = draftFromEquips(pageEquips);
+  const fromAppearance = equipDraftFromAppearanceState(appearanceState);
+  const merged = emptyDraft();
+
+  for (const slot of GOCAT_SLOTS) {
+    merged[slot] = fromAppearance[slot] ?? fromEquips[slot] ?? null;
+  }
+
+  return merged;
+}
+
+function appearanceDefinesSlot(
+  state: Record<string, unknown> | null | undefined,
+  slot: SlotType
+): boolean {
+  if (!state) return false;
+  if (slot === "HEAD") return "headItemCode" in state || "headItem" in state;
+  if (slot === "FACE") return "faceItemCode" in state;
+  if (slot === "NECK") return "neckItemCode" in state || "accessoryItemCode" in state || "accessoryItem" in state;
+  return false;
+}
+
+function mergeEquipDraftFromDbRespectingAppearance(
+  pageEquips?: EquipItem[] | null,
+  appearanceState?: Record<string, unknown> | null
+): Record<SlotType, DecorItem | null> {
+  const fromEquips = draftFromEquips(pageEquips);
+  const fromAppearance = equipDraftFromAppearanceState(appearanceState);
+  const merged = emptyDraft();
+
+  for (const slot of GOCAT_SLOTS) {
+    if (appearanceDefinesSlot(appearanceState, slot)) {
+      merged[slot] = fromAppearance[slot] ?? null;
+    } else {
+      merged[slot] = fromEquips[slot] ?? fromAppearance[slot] ?? null;
+    }
+  }
+
+  return merged;
+}
+
 export function loadEquippedDecorDraft(
   pageEquips?: EquipItem[] | null,
   appearanceState?: Record<string, unknown> | null,
@@ -159,21 +207,24 @@ export function loadEquippedDecorDraft(
   const growthStage = options?.growthStage ?? "BASIC";
   const ownedItems = options?.ownedItems ?? [];
 
-  const finalize = (draft: Record<SlotType, DecorItem | null>) =>
-    useLocalStorage
-      ? sanitizeEquipDraft(draft, ownedItems, growthStage)
-      : sanitizeEquipDraftForDisplay(draft, growthStage);
+  const finalizeForEdit = (draft: Record<SlotType, DecorItem | null>) =>
+    sanitizeEquipDraft(draft, ownedItems, growthStage);
+
+  const finalizeForDisplay = (draft: Record<SlotType, DecorItem | null>) =>
+    sanitizeEquipDraftForDisplay(draft, growthStage);
+
+  const finalize = useLocalStorage ? finalizeForEdit : finalizeForDisplay;
+
+  const fromDb = mergeEquipDraftFromDbRespectingAppearance(pageEquips, appearanceState);
+  if (draftHasAny(fromDb) || appearanceState != null) {
+    return finalize(fromDb);
+  }
 
   if (useLocalStorage && hasStoredEquippedState()) {
     return finalize(storedToDecorDraft(loadStoredEquipped()));
   }
 
-  const fromAppearance = equipDraftFromAppearanceState(appearanceState);
-  if (draftHasAny(fromAppearance)) {
-    return finalize(fromAppearance);
-  }
-
-  return finalize(draftFromEquips(pageEquips));
+  return finalize(mergeEquipDraftFromDb(pageEquips, appearanceState));
 }
 
 export function activeEquipsFromStoredOrDraft(

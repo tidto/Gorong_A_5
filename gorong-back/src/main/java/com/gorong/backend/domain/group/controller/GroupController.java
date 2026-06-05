@@ -143,7 +143,7 @@ public class GroupController {
             try {
                 groupService.joinGroup(id, currentUser.getId());
             } catch (RuntimeException e) {
-                if (e.getMessage().contains("이미 참여")) {
+                if (e.getMessage() != null && e.getMessage().contains("이미 참여")) {
                     return ResponseEntity.ok(group);
                 }
                 throw new ResponseStatusException(

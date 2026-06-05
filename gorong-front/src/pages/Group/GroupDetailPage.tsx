@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
+import { getMyMiniHomePage } from '../../api/minihome/miniHomeApi';
+import { notifyMinihomeUnlocksSync } from '../../utils/minihome/core/minihomeUnlocksSync';
+import { invalidateMiniHomeMeCache } from '../../utils/minihome/core/miniHomeMeCache';
 import { useChatRoom } from '../../hooks/useChatRoom';
 import GroupPublicChatSection from '../../components/GroupPublicChatSection'
 import { useCatTowerPreview } from '../../contexts/CatTowerPreviewContext'
@@ -154,6 +157,11 @@ export default function GroupDetailPage() {
                     });
                 } catch { /* silent fail */ }
             }
+            try {
+                invalidateMiniHomeMeCache();
+                await getMyMiniHomePage();
+                notifyMinihomeUnlocksSync();
+            } catch { /* 해금 동기화 실패는 참여 성공과 분리 */ }
         } catch (err: any) {
             const status = err?.response?.status;
             if (status === 401) alert('로그인이 필요합니다.');

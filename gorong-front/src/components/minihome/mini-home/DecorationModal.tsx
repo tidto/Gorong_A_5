@@ -4,6 +4,8 @@ import Button from "../../Button";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import type { SlotType } from "../../../utils/minihome/gocat/gocatSlots";
 import DecorationCatStage from "../decoration/DecorationCatStage";
+import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import type { RoomPlacement } from "../../../utils/minihome/cat-tower/catTowerRoomCatalog";
 
 export type { SlotType };
 
@@ -21,8 +23,11 @@ export default function DecorationModal(props: {
   onClose: () => void;
   onSave: () => void;
   Preview: ReactNode;
+  roomBackground?: RoomBackgroundId;
+  roomItems?: RoomPlacement[];
 }) {
-  const { open, saving, error, customizePanel, onClose, onSave, Preview } = props;
+  const { open, saving, error, customizePanel, onClose, onSave, Preview, roomBackground, roomItems } =
+    props;
 
   if (!open) return null;
 
@@ -43,7 +48,9 @@ export default function DecorationModal(props: {
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 sm:grid-cols-[1fr_minmax(280px,360px)]">
-          <DecorationCatStage>{Preview}</DecorationCatStage>
+          <DecorationCatStage roomBackground={roomBackground} roomItems={roomItems}>
+            {Preview}
+          </DecorationCatStage>
           <aside className="flex min-h-0 flex-col border-t border-amber-100/80 sm:border-l sm:border-t-0">
             <div className="min-h-0 flex-1 overflow-y-auto p-4">{customizePanel}</div>
             <footer className="shrink-0 border-t border-amber-100/80 bg-white/60 p-4">

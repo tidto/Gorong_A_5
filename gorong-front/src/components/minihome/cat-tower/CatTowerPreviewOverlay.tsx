@@ -7,7 +7,7 @@ import { computeGrowthState } from "../../../utils/minihome/growth/growth";
 import { enrichEquipItems, normalizeEquipPreview } from "../../../utils/minihome/gocat/items";
 import { ownerEquipPreviewFromPage } from "../../../utils/minihome/gocat/gocatEquippedStorage";
 import { mapMiniHomeApiError } from "../../../utils/minihome/core/minihomeApiError";
-import { parseRoomBackgroundFromAppearance } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import { getCatTowerRoomPresentation } from "../../../utils/minihome/cat-tower/catTowerRoomPresentation";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import CatTowerPreviewStage from "./CatTowerPreviewStage";
 import CatTowerRecentActivityCards from "./CatTowerRecentActivityCards";
@@ -77,8 +77,11 @@ export default function CatTowerPreviewOverlay({
       ),
     [page?.activeEquips, cat?.appearanceState, growth?.stage]
   );
-  const roomBackground =
-    parseRoomBackgroundFromAppearance(cat?.appearanceState) ?? "BASIC_ROOM";
+  const roomPresentation = useMemo(
+    () => getCatTowerRoomPresentation(cat?.appearanceState ?? null, false),
+    [cat?.appearanceState]
+  );
+  const { background: roomBackground, items: roomItems } = roomPresentation;
   const recentActivities = useMemo(
     () => (page?.activities ?? []).slice(0, 2),
     [page?.activities]
@@ -170,6 +173,7 @@ export default function CatTowerPreviewOverlay({
                     activityCount={activityCount}
                     equipped={equipped}
                     roomBackground={roomBackground}
+                    roomItems={roomItems}
                     catName={catName}
                   />
                 </div>

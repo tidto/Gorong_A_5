@@ -4,6 +4,7 @@ import type { MiniHomePage } from "../../types/minihome/minihome";
 import { useGoCatCustomize } from "./hooks/useGoCatCustomize";
 import { applyEquipDraftToPage } from "../../utils/minihome/gocat/items";
 import type { GrowthStage } from "../../utils/minihome/growth/growth";
+import { getCatTowerRoomPresentation } from "../../utils/minihome/cat-tower/catTowerRoomPresentation";
 
 const DecorationModal = lazy(
   () => import("../../components/minihome/mini-home/DecorationModal")
@@ -40,6 +41,7 @@ export default function CatTowerDecorationLayer({
   onReloadPage,
 }: Props) {
   const cat = page?.miniHome?.cat ?? null;
+  const roomPresentation = getCatTowerRoomPresentation(cat?.appearanceState ?? null, true);
 
   const customize = useGoCatCustomize(cat, growthStage, open, {
     pageEquips: page?.activeEquips,
@@ -90,6 +92,8 @@ export default function CatTowerDecorationLayer({
         }
         onClose={onClose}
         onSave={handleSave}
+        roomBackground={roomPresentation.background}
+        roomItems={roomPresentation.items}
         Preview={
           <DecorateCatPreview
             growthStage={growthStage}

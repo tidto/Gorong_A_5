@@ -34,17 +34,29 @@ public class ChatbotController {
     /** 통합 메시지 — intent 분류 후 안내·DB 추천·근처 추천 */
     @PostMapping("/message")
     public ResponseEntity<?> message(@Valid @RequestBody ChatRequestDto req, Authentication authentication) {
-        return okOrError(() -> chatbotMessageService.handleMessage(req.getMessage(), authentication));
+        return okOrError(() -> chatbotMessageService.handleMessage(
+                req.getMessage(),
+                req.getExcludeEventIds(),
+                authentication
+        ));
     }
 
     @PostMapping("/recommend/events")
     public ResponseEntity<?> recommendEvents(@Valid @RequestBody ChatRequestDto req, Authentication authentication) {
-        return okOrError(() -> chatbotMessageService.recommendEvents(req.getMessage(), authentication));
+        return okOrError(() -> chatbotMessageService.recommendEvents(
+                req.getMessage(),
+                req.getExcludeEventIds(),
+                authentication
+        ));
     }
 
     @PostMapping("/recommend/nearby")
     public ResponseEntity<?> recommendNearby(@Valid @RequestBody ChatRequestDto req, Authentication authentication) {
-        return okOrError(() -> chatbotMessageService.recommendNearby(req.getMessage(), authentication));
+        return okOrError(() -> chatbotMessageService.recommendNearby(
+                req.getMessage(),
+                req.getExcludeEventIds(),
+                authentication
+        ));
     }
 
     @GetMapping("/help")

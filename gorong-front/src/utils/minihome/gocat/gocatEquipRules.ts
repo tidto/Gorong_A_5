@@ -4,7 +4,6 @@ import type { UserItem } from "../../../types/minihome/item";
 import type { GrowthStage } from "../growth/growth";
 import { isSlotUnlockedByStage } from "../growth/growth";
 import { findCatalogItem, itemCodesMatch } from "./decorItemCatalog";
-import { normalizeEquipDraft } from "./gocatEquipMigration";
 import {
   filterOwnedUserItems,
   findCatalogItemById,
@@ -40,11 +39,30 @@ export function canEquipDecorItem(
   return Boolean(findCatalogItem(item.itemId, item.itemCode));
 }
 
+/** DB·방문자 표시용 — 보유 검증 없이 카탈로그·슬롯만 검증 */
 export function sanitizeEquipDraftForDisplay(
   draft: Record<SlotType, DecorItem | null>,
   growthStage: GrowthStage = "BASIC"
 ): Record<SlotType, DecorItem | null> {
-  return normalizeEquipDraft(draft, [], growthStage);
+  const out = emptySlotRecord<DecorItem>();
+  for (const slot of GOCAT_SLOTS) {
+    const item = draft[slot];
+    if (!item) {
+      out[slot] = null;
+      continue;
+    }
+    if (!isSlotUnlockedByStage(slot, growthStage)) {
+      out[slot] = null;
+      continue;
+    }
+    const entry = findCatalogItemById(item.itemCode);
+    if (!entry || !findCatalogItem(item.itemId, item.itemCode)) {
+      out[slot] = null;
+      continue;
+    }
+    out[slot] = { ...item, slotType: slot };
+  }
+  return out;
 }
 
 /** 보유(user_item + 기본) 아이템만 장착 유지 */

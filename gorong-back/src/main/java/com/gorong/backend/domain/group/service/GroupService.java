@@ -39,7 +39,8 @@ public class GroupService {
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다."));
 
         if (participantRepository.existsByUserAndGroupPost(user, post)) {
-            throw new RuntimeException("이미 참여 중인 방입니다.");
+            miniHomeService.syncGoCatItemUnlocksForUser(userId);
+            return;
         }
 
         // 📌 builder 패턴을 완성하고 .save()를 호출해야 DB에 저장됩니다.
@@ -74,12 +75,13 @@ public class GroupService {
                 miniHomeService.recordEventParticipationActivity(userId, groupId, eventTitle);
             }
         }
+        miniHomeService.syncGoCatItemUnlocksForUser(userId);
     }
 
     // 📌 컨트롤러에서 빨간 줄 뜨던 메서드 (참여 목록 가져오기)
     @Transactional(readOnly = true)
     public List<Long> getJoinedGroupIdsByUserId(Long userId) {
-        return participantRepository.findByUserId(userId).stream()
+        return participantRepository.findByUser_Id(userId).stream()
                 .map(p -> p.getGroupPost().getId())
                 .collect(Collectors.toList());
     }
@@ -94,7 +96,7 @@ public class GroupService {
             throw new RuntimeException("참여 중인 그룹이 아닙니다.");
         }
 
-        participantRepository.deleteByUserIdAndGroupPostId(userId, groupId);
+        participantRepository.deleteByUser_IdAndGroupPost_Id(userId, groupId);
 
         // 정원 감소 (0 아래로 내려가지 않도록)
         if (post.getCurrentCapacity() > 0) {

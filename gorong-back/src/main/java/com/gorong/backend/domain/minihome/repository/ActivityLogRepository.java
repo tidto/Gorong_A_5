@@ -16,18 +16,34 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
     @Query("""
             SELECT COUNT(a) FROM ActivityLog a
             WHERE a.userId = :userId
-            AND UPPER(a.activityType) IN (
-                'EVENT_PARTICIPATED', 'EVENT_PARTICIPATION', 'EVENT_ATTEND',
-                'EVENT_CHECKIN', 'FESTIVAL_JOIN'
+            AND (
+                UPPER(a.activityType) IN (
+                    'EVENT_PARTICIPATED', 'EVENT_PARTICIPATION', 'EVENT_ATTEND',
+                    'EVENT_CHECKIN', 'FESTIVAL_JOIN', 'EVENT_JOIN', 'EVENT_APPLY',
+                    'EVENT_SOLO', 'GROUP_EVENT_JOIN'
+                )
+                OR UPPER(a.activityType) LIKE '%EVENT%'
+                OR UPPER(a.activityType) LIKE '%PARTICIP%'
+                OR UPPER(a.activityType) LIKE '%FESTIVAL%'
             )
             """)
     long countEventParticipations(@Param("userId") Long userId);
 
     @Query("""
+            SELECT UPPER(a.activityType), COUNT(a) FROM ActivityLog a
+            WHERE a.userId = :userId
+            GROUP BY UPPER(a.activityType)
+            """)
+    List<Object[]> countGroupByActivityType(@Param("userId") Long userId);
+
+    @Query("""
             SELECT COUNT(a) FROM ActivityLog a
             WHERE a.userId = :userId
-            AND UPPER(a.activityType) IN (
-                'REVIEW_WRITTEN', 'REVIEW_WRITE', 'REVIEW_CREATED'
+            AND (
+                UPPER(a.activityType) IN (
+                    'REVIEW_WRITTEN', 'REVIEW_WRITE', 'REVIEW_CREATED'
+                )
+                OR UPPER(a.activityType) LIKE '%REVIEW%'
             )
             """)
     long countReviewActivities(@Param("userId") Long userId);

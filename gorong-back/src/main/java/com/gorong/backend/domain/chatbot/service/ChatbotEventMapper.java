@@ -14,8 +14,21 @@ public class ChatbotEventMapper {
             String message,
             ChatIntent intent
     ) {
+        return toRecommended(event, reason, null, userLocation, message, intent);
+    }
+
+    public ChatRecommendResponseDto.RecommendedEventDto toRecommended(
+            Event event,
+            String reason,
+            EventRecommendReason reasonTag,
+            String userLocation,
+            String message,
+            ChatIntent intent
+    ) {
         String safeReason = reason != null && !reason.isBlank()
                 ? reason
+                : reasonTag != null
+                ? reasonTag.line()
                 : buildFallbackReason(event, userLocation, message, intent);
         return ChatRecommendResponseDto.RecommendedEventDto.builder()
                 .eventId(event.getId())

@@ -4,6 +4,7 @@ import {
   type CatTowerCenterPanelId,
 } from "./catTowerPanelTypes";
 import CatTowerVisitorWidget from "./CatTowerVisitorWidget";
+import { useCatTowerPageTheme } from "../../../contexts/CatTowerRoomThemeContext";
 
 type CatTowerSideMenuProps = {
   busy?: boolean;
@@ -24,16 +25,6 @@ type CatTowerSideMenuProps = {
 
 const ICON_BOX = "flex h-7 w-7 shrink-0 items-center justify-center text-base";
 
-function panelButtonClass(active: boolean, disabled?: boolean): string {
-  const base =
-    "mb-1 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-xs font-bold transition";
-  if (disabled) return `${base} cursor-not-allowed opacity-50`;
-  if (active) {
-    return `${base} translate-x-0.5 bg-gradient-to-r from-orange-100 to-amber-50 text-orange-900 shadow-sm ring-1 ring-orange-200/80`;
-  }
-  return `${base} text-slate-700 hover:translate-x-0.5 hover:bg-orange-50/60 hover:shadow-sm`;
-}
-
 export default function CatTowerSideMenu({
   busy,
   loading,
@@ -50,10 +41,24 @@ export default function CatTowerSideMenu({
   visitorTotalCount = 0,
   visitorStatsLoading,
 }: CatTowerSideMenuProps) {
+  const theme = useCatTowerPageTheme();
+
+  const panelButtonClass = (active: boolean, disabled?: boolean) => {
+    const base =
+      "mb-1 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-xs font-bold transition";
+    if (disabled) return `${base} cursor-not-allowed opacity-50`;
+    if (active) return `${base} translate-x-0.5 ${theme.sideMenuActiveClass}`;
+    return `${base} hover:translate-x-0.5 hover:shadow-sm ${theme.sideMenuIdleClass}`;
+  };
+
   return (
     <nav className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-3xl border border-orange-100/90 bg-white/90 shadow-[0_4px_16px_rgba(255,140,80,0.08)] backdrop-blur-sm">
-        <div className="border-b border-orange-100/80 bg-gradient-to-r from-orange-400 to-amber-400 px-3 py-2.5 text-center text-[11px] font-extrabold text-white">
+      <div
+        className={`overflow-hidden rounded-3xl border backdrop-blur-sm transition-colors duration-500 ${theme.sideMenuClass}`}
+      >
+        <div
+          className={`border-b px-3 py-2.5 text-center text-[11px] font-extrabold text-white ${theme.sideMenuHeaderClass}`}
+        >
           📌 바로가기
         </div>
         <ul className="p-2">
@@ -80,8 +85,10 @@ export default function CatTowerSideMenu({
         </ul>
 
         {canEdit && !readOnly ? (
-          <div className="border-t border-orange-100/70 p-2 pt-1">
-            <p className="mb-1 px-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">
+          <div className={`border-t p-2 pt-1 ${theme.sideMenuDividerClass}`}>
+            <p
+              className={`mb-1 px-1 text-[9px] font-bold uppercase tracking-wide ${theme.isDark ? "text-indigo-300/50" : "text-slate-400"}`}
+            >
               꾸미기
             </p>
             {onRoomDecorate ? (

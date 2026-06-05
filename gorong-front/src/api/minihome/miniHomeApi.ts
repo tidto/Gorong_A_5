@@ -44,12 +44,21 @@ export async function getMiniHomePage(userId: number): Promise<MiniHomePage> {
   return res.data;
 }
 
+export type RoomItemPlacementPayload = {
+  itemId: string;
+  type: "BACKGROUND" | "FURNITURE" | "DECOR";
+  x: number;
+  y: number;
+  visible?: boolean;
+};
+
 export type CatAppearancePayload = {
   bodyType?: string;
   pattern?: string;
   color?: string;
   catName?: string;
   roomBackground?: string;
+  roomItems?: RoomItemPlacementPayload[];
   headItemCode?: string;
   faceItemCode?: string;
   neckItemCode?: string;

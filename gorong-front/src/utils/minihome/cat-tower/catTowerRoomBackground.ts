@@ -118,20 +118,37 @@ export function saveRoomBackgroundToStorage(id: RoomBackgroundId): boolean {
   }
 }
 
+/** @deprecated getCatTowerRoomPresentation 사용 */
 export function resolveRoomBackground(
-  appearanceState?: Record<string, unknown> | null
+  appearanceState?: Record<string, unknown> | null,
+  localCacheFallback = false
 ): RoomBackgroundId {
-  return (
-    loadRoomBackgroundFromStorage() ??
-    parseRoomBackgroundFromAppearance(appearanceState) ??
-    DEFAULT_ROOM_BACKGROUND
-  );
+  const fromDb = parseRoomBackgroundFromAppearance(appearanceState);
+  if (fromDb != null) return fromDb;
+  if (localCacheFallback) {
+    const cached = loadRoomBackgroundFromStorage();
+    if (cached != null) return cached;
+  }
+  return DEFAULT_ROOM_BACKGROUND;
 }
+
+const ROOM_BG_CATALOG_ID: Record<RoomBackgroundId, string> = {
+  BASIC_ROOM: "room_bg_basic",
+  FOREST_ROOM: "room_bg_forest",
+  NIGHT_ROOM: "room_bg_night",
+};
 
 export function isRoomBackgroundUnlocked(
   id: RoomBackgroundId,
-  growthStage: GrowthStage
+  growthStage: GrowthStage,
+  ownedIds?: Set<string>
 ): boolean {
+  if (ownedIds?.size) {
+    const catalogId = ROOM_BG_CATALOG_ID[id];
+    if (catalogId) {
+      return ownedIds.has(catalogId.trim().toLowerCase());
+    }
+  }
   const option = ROOM_BACKGROUND_BY_ID[id];
   if (!option.requiredGrowthStage) return true;
   return isItemUnlockedByStage(option.requiredGrowthStage, growthStage);

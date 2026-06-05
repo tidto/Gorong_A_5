@@ -111,14 +111,23 @@ export function resolveExperience(page: MiniHomePage | null | undefined): number
 }
 
 export function resolveGrowthStage(page: MiniHomePage | null | undefined): GrowthStage {
-  const apiStage = page?.miniHome?.cat?.appearanceState?.growthStage;
-  if (typeof apiStage === "string" && apiStage.trim()) {
-    return normalizeGrowthStage(apiStage);
-  }
   const activityCount = resolveActivityCount(page);
   const fromActivity = stageFromActivityCount(activityCount);
   const fromExp = stageFromExperience(resolveExperience(page));
-  return compareGrowthStage(fromActivity, fromExp) >= 0 ? fromActivity : fromExp;
+  const apiRaw = page?.miniHome?.cat?.appearanceState?.growthStage;
+  const fromApi =
+    typeof apiRaw === "string" && apiRaw.trim() ? normalizeGrowthStage(apiRaw) : "BASIC";
+  const fromStats = page?.stats?.growthStage;
+  const fromStatsNorm =
+    typeof fromStats === "string" && fromStats.trim()
+      ? normalizeGrowthStage(fromStats)
+      : "BASIC";
+
+  let best: GrowthStage = "BASIC";
+  for (const s of [fromActivity, fromExp, fromApi, fromStatsNorm]) {
+    if (compareGrowthStage(s, best) > 0) best = s;
+  }
+  return best;
 }
 
 function activityProgress(stage: GrowthStage, activityCount: number) {

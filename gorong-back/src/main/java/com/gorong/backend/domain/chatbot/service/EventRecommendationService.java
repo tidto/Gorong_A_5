@@ -38,9 +38,15 @@ public class EventRecommendationService {
     private final GeminiChatService geminiChatService;
     private final ChatbotHelpService chatbotHelpService;
     private final ChatbotEventMapper chatbotEventMapper;
+    private final EventRecommendationSelector recommendationSelector;
+    private final ChatRecommendationHistoryService recommendationHistory;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ChatRecommendResponseDto recommend(String message, Authentication authentication) {
+    public ChatRecommendResponseDto recommend(
+            String message,
+            java.util.List<Long> excludeEventIds,
+            Authentication authentication
+    ) {
         if (message == null || message.trim().isEmpty()) {
             throw new IllegalArgumentException("message is required.");
         }
@@ -64,11 +70,17 @@ public class EventRecommendationService {
 
         return switch (intent) {
             case GREETING -> respondGreeting(trimmedMessage);
-            case SERVICE_GUIDE -> chatbotHelpService.buildHelpResponse(trimmedMessage);
-            case UNKNOWN -> respondUnknown();
+            case REVIEW_GUIDE, CATTOWER_GUIDE, GROUP_GUIDE, SERVICE_GUIDE ->
+                    chatbotHelpService.buildHelpResponse(trimmedMessage, intent);
+            case GENERAL_QUESTION, UNKNOWN -> chatbotHelpService.buildGeneralResponse(trimmedMessage);
             case LOCATION_RECOMMENDATION, EVENT_RECOMMENDATION ->
-                    recommendEvents(trimmedMessage, userLocation, intent);
+                    recommendEvents(trimmedMessage, userLocation, intent, excludeEventIds, userContext.userId());
         };
+    }
+
+    /** @deprecated excludeEventIds 없이 호출 — 빈 제외 목록 */
+    public ChatRecommendResponseDto recommend(String message, Authentication authentication) {
+        return recommend(message, java.util.List.of(), authentication);
     }
 
     private ChatRecommendResponseDto respondGreeting(String message) {
@@ -81,16 +93,14 @@ public class EventRecommendationService {
                 .build();
     }
 
-    private ChatRecommendResponseDto respondUnknown() {
-        return ChatRecommendResponseDto.builder()
-                .answer("어떤 행사를 찾고 계신가요? 사진·전시·주변 행사 추천이나 리뷰/동행 안내도 도와드릴게요.")
-                .intent(ChatIntent.UNKNOWN.name())
-                .recommendedEvents(List.of())
-                .actions(defaultServiceActions())
-                .build();
-    }
 
-    private ChatRecommendResponseDto recommendEvents(String trimmedMessage, String userLocation, ChatIntent intent) {
+    private ChatRecommendResponseDto recommendEvents(
+            String trimmedMessage,
+            String userLocation,
+            ChatIntent intent,
+            java.util.List<Long> excludeEventIds,
+            Long userId
+    ) {
         if (intent == ChatIntent.LOCATION_RECOMMENDATION && !hasText(userLocation)) {
             return ChatRecommendResponseDto.builder()
                     .answer(
@@ -104,32 +114,105 @@ public class EventRecommendationService {
                     .build();
         }
 
-        List<Event> events = loadCandidateEvents(intent, userLocation, trimmedMessage);
-        if (events.isEmpty()) {
-            return chatbotHelpService.buildFallbackHelp();
-        }
+        Set<Long> exclude = recommendationHistory.resolveExcludeIds(userId, excludeEventIds);
+        Set<Long> relaxedExclude = recommendationHistory.strictExcludeOnly(userId, excludeEventIds);
 
-        List<Event> backendPicks = pickTopEvents(events, userLocation, intent, trimmedMessage, 3);
-
-        String rawAnswer;
-        try {
-            rawAnswer = geminiChatService.generateRecommendation(
-                    buildPrompt(trimmedMessage, events, backendPicks, userLocation, intent)
-            );
-        } catch (RuntimeException e) {
-            log.warn("Gemini event recommendation failed", e);
-            return backendFallbackWithOptionalPolish(backendPicks, trimmedMessage, userLocation, intent);
-        }
-
-        ChatRecommendResponseDto parsed = parseGeminiResponse(
-                rawAnswer, events, backendPicks, userLocation, intent
+        EventRecommendationSelector.SelectionResult selection = recommendationSelector.select(
+                trimmedMessage,
+                userLocation,
+                intent,
+                exclude,
+                relaxedExclude,
+                userId
         );
-        if (shouldUseBackendFallback(parsed, intent, userLocation)) {
-            log.info("[AI CHAT] intent={} Ambiguous Gemini response; using backend-picked events", intent);
-            return backendFallbackWithOptionalPolish(backendPicks, trimmedMessage, userLocation, intent);
+
+        if (selection.matchedCount() == 0) {
+            return chatbotHelpService.buildNoEventsResponse(trimmedMessage, intent);
         }
-        parsed = withSanitizedAnswer(parsed, intent);
-        return withIntentAndActions(parsed, intent);
+
+        List<Event> backendPicks = selection.picks();
+        if (backendPicks.isEmpty()) {
+            return chatbotHelpService.buildNoEventsResponse(trimmedMessage, intent);
+        }
+
+        recommendationHistory.recordRecommended(
+                userId,
+                backendPicks.stream().map(Event::getId).toList()
+        );
+
+        List<ChatRecommendResponseDto.RecommendedEventDto> recommended = mapPicksWithReasons(
+                backendPicks,
+                selection.reasonByEventId(),
+                userLocation,
+                trimmedMessage,
+                intent
+        );
+
+        String baseAnswer = buildAnswerPrefix(userLocation, intent, selection, backendPicks.size());
+        String polished = tryPolishAnswerOnly(baseAnswer, recommended, userLocation, trimmedMessage, intent);
+
+        return ChatRecommendResponseDto.builder()
+                .answer(sanitizeAnswerForIntent(polished, intent))
+                .intent(intent.name())
+                .recommendedEvents(recommended)
+                .actions(eventActions())
+                .build();
+    }
+
+    private List<ChatRecommendResponseDto.RecommendedEventDto> mapPicksWithReasons(
+            List<Event> picks,
+            java.util.Map<Long, EventRecommendReason> reasonByEventId,
+            String userLocation,
+            String message,
+            ChatIntent intent
+    ) {
+        List<ChatRecommendResponseDto.RecommendedEventDto> out = new ArrayList<>();
+        for (Event event : picks) {
+            EventRecommendReason tag = reasonByEventId != null
+                    ? reasonByEventId.get(event.getId())
+                    : null;
+            out.add(chatbotEventMapper.toRecommended(event, null, tag, userLocation, message, intent));
+        }
+        return out;
+    }
+
+    private String buildAnswerPrefix(
+            String userLocation,
+            ChatIntent intent,
+            EventRecommendationSelector.SelectionResult selection,
+            int pickCount
+    ) {
+        StringBuilder sb = new StringBuilder();
+        if (intent == ChatIntent.LOCATION_RECOMMENDATION && hasText(userLocation)) {
+            sb.append("회원님의 위치가 ").append(userLocation).append("로 등록되어 있어, 주변 행사 중 추천드릴게요.");
+        } else if (selection.mode() == EventRecommendationSelector.QueryMode.THIS_WEEK) {
+            sb.append("**이번 주**에 참여할 수 있는 행사를 골라봤어요.");
+        } else if (selection.mode() == EventRecommendationSelector.QueryMode.POPULAR) {
+            sb.append("**인기** 행사(신청·모집·최근 등록) 기준으로 추천드릴게요.");
+        } else {
+            sb.append("질문에 맞는 행사를 골라봤어요.");
+        }
+        if (selection.matchedCount() == 1 && pickCount == 1) {
+            sb.append("\n\n현재 조건에 맞는 행사가 **1개뿐**입니다.");
+        } else if (pickCount > 0) {
+            sb.append(" (총 ").append(pickCount).append("개)");
+        }
+        return sb.toString();
+    }
+
+    public java.util.Optional<Long> resolveUserId(Authentication authentication) {
+        UserLocationContext ctx = resolveUserLocation(authentication);
+        return ctx.userId() != null ? java.util.Optional.of(ctx.userId()) : java.util.Optional.empty();
+    }
+
+    public ChatRecommendResponseDto.RecommendedEventDto toRecommendedDto(
+            Event event,
+            EventRecommendReason reasonTag,
+            String userLocation,
+            String message,
+            ChatIntent intent
+    ) {
+        return chatbotEventMapper.toRecommended(event, null, reasonTag, userLocation, message, intent);
     }
 
     public java.util.Optional<String> resolveUserLocationString(Authentication authentication) {
@@ -322,6 +405,7 @@ public class EventRecommendationService {
         lines.add("너는 고롱 서비스의 AI 행사 추천 도우미(Go냥이)입니다.");
         lines.add("intent=" + intent);
         lines.add("아래 DB 행사 목록의 eventId만 사용해 추천하세요. 목록에 없는 행사는 절대 만들지 마세요.");
+        lines.add("answer에는 각 행사를 왜 추천하는지 1문장씩 이유를 넣고, 마지막에 '상세 보기'·'그룹 모집' 안내 한 줄을 추가하세요.");
         lines.add("");
 
         if (locationIntent) {

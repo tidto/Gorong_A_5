@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import CatTowerDailyQuote from "./CatTowerDailyQuote";
+import CatTowerParticipatingEvents from "./CatTowerParticipatingEvents";
+import { useCatTowerPageTheme } from "../../../contexts/CatTowerRoomThemeContext";
 
 type CatTowerProfilePanelProps = {
   nickname: string;
@@ -10,6 +12,8 @@ type CatTowerProfilePanelProps = {
   isPublic: boolean;
   galleryCount?: number;
   loading?: boolean;
+  showParticipatingEvents?: boolean;
+  refreshToken?: number;
 };
 
 /** 왼쪽 — 싸이월드/동물농장 스타일 프로필 카드 */
@@ -20,15 +24,21 @@ export default function CatTowerProfilePanel({
   isPublic,
   galleryCount = 0,
   loading,
+  showParticipatingEvents = false,
+  refreshToken = 0,
 }: CatTowerProfilePanelProps) {
+  const theme = useCatTowerPageTheme();
+
   return (
     <aside className="flex flex-col gap-3">
       <motion.div
         whileHover={{ y: -2 }}
         transition={{ type: "spring", stiffness: 300, damping: 24 }}
-        className="overflow-hidden rounded-3xl border border-emerald-100/90 bg-gradient-to-b from-emerald-50/95 via-white to-rose-50/30 shadow-[0_4px_20px_rgba(16,185,129,0.1)] transition-shadow duration-300 hover:shadow-[0_8px_28px_rgba(16,185,129,0.14)]"
+        className={`overflow-hidden rounded-3xl border transition-shadow duration-500 hover:shadow-lg ${theme.profileCardClass}`}
       >
-        <div className="border-b border-emerald-100/70 bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-white">
+        <div
+          className={`border-b px-3 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-white ${theme.profileHeaderClass}`}
+        >
           🌿 MY Go냥이 프로필
         </div>
 
@@ -40,8 +50,12 @@ export default function CatTowerProfilePanel({
                 ★
               </span>
             </div>
-            <p className="mt-2 text-[10px] font-bold text-emerald-800/60">{nickname || "주인"}</p>
-            <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">
+            <p className={`mt-2 text-[10px] font-bold ${theme.profileLabelClass}`}>
+              {nickname || "주인"}
+            </p>
+            <h2
+              className={`mt-0.5 text-lg font-extrabold ${theme.isDark ? "text-indigo-50" : "text-slate-900"}`}
+            >
               {loading ? "…" : catName}
             </h2>
           </div>
@@ -62,18 +76,28 @@ export default function CatTowerProfilePanel({
             </span>
           </div>
 
-          <dl className="space-y-2 rounded-xl border border-dashed border-emerald-100 bg-emerald-50/40 px-3 py-2.5 text-xs">
+          <dl
+            className={`space-y-2 rounded-xl border border-dashed px-3 py-2.5 text-xs ${theme.profileStatsClass}`}
+          >
             <div className="flex justify-between">
-              <dt className="font-semibold text-emerald-900/70">성장 단계</dt>
-              <dd className="font-extrabold text-slate-800">{growth.stageLabel}</dd>
+              <dt className={`font-semibold ${theme.profileLabelClass}`}>성장 단계</dt>
+              <dd
+                className={`font-extrabold ${theme.isDark ? "text-indigo-100" : "text-slate-800"}`}
+              >
+                {growth.stageLabel}
+              </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="font-semibold text-emerald-900/70">활동 횟수</dt>
+              <dt className={`font-semibold ${theme.profileLabelClass}`}>활동 횟수</dt>
               <dd className="font-extrabold text-orange-700">{growth.activityCount}회</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="font-semibold text-emerald-900/70">갤러리</dt>
-              <dd className="font-extrabold text-slate-800">{galleryCount}개</dd>
+              <dt className={`font-semibold ${theme.profileLabelClass}`}>갤러리</dt>
+              <dd
+                className={`font-extrabold ${theme.isDark ? "text-indigo-100" : "text-slate-800"}`}
+              >
+                {galleryCount}개
+              </dd>
             </div>
           </dl>
 
@@ -98,6 +122,11 @@ export default function CatTowerProfilePanel({
           ) : null}
         </div>
       </motion.div>
+
+      <CatTowerParticipatingEvents
+        enabled={showParticipatingEvents}
+        refreshToken={refreshToken}
+      />
 
       <CatTowerDailyQuote catName={catName} />
     </aside>

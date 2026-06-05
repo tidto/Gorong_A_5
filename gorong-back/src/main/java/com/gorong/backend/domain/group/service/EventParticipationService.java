@@ -6,6 +6,7 @@ import com.gorong.backend.domain.group.entity.EventParticipation.ParticipationTy
 import com.gorong.backend.domain.group.entity.GroupPost;
 import com.gorong.backend.domain.group.repository.EventParticipationRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
+import com.gorong.backend.domain.minihome.service.MiniHomeService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class EventParticipationService {
     private final EventParticipationRepository participationRepository;
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
+    private final MiniHomeService miniHomeService;
 
     // ── 혼자 참여 신청 (사용자가 선택한 visitDate 저장) ──────────────
     @Transactional
@@ -49,7 +51,14 @@ public class EventParticipationService {
                 .visitDate(visitDate)
                 .build();
 
-        return new EventParticipationResponseDto(participationRepository.save(participation));
+        EventParticipation saved = participationRepository.save(participation);
+        miniHomeService.ensureEventParticipationActivityLogged(
+                userId,
+                MiniHomeService.soloEventReferenceId(eventContentId),
+                eventTitle
+        );
+        miniHomeService.syncGoCatItemUnlocksForUser(userId);
+        return new EventParticipationResponseDto(saved);
     }
 
     // ── 그룹 참여 신청 (GroupPost.meetingDate 를 visitDate 로 저장) ──
@@ -84,7 +93,14 @@ public class EventParticipationService {
                 .visitDate(visitDate)
                 .build();
 
-        return new EventParticipationResponseDto(participationRepository.save(participation));
+        EventParticipation saved = participationRepository.save(participation);
+        miniHomeService.ensureEventParticipationActivityLogged(
+                userId,
+                groupPostId,
+                resolvedTitle
+        );
+        miniHomeService.syncGoCatItemUnlocksForUser(userId);
+        return new EventParticipationResponseDto(saved);
     }
 
     // ── 내 참여 이력 조회 ─────────────────────────────────────────────

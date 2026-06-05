@@ -22,6 +22,7 @@ import {
 import { emptyDraft } from "../../utils/minihome/gocat/items";
 import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
 import { computeGrowthState } from "../../utils/minihome/growth/growth";
+import { MINIHOME_UNLOCKS_SYNC_EVENT } from "../../utils/minihome/core/minihomeUnlocksSync";
 import { needsGoCatSetup } from "../../utils/minihome/gocat/goCatSetup";
 import CatTowerDecorationLayer from "./CatTowerDecorationLayer";
 
@@ -49,9 +50,11 @@ export default function CatTower() {
 
   const [decorateOpen, setDecorateOpen] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [itemsRefreshToken, setItemsRefreshToken] = useState(0);
   const [equippedDraft, setEquippedDraft] = useState<Record<SlotType, DecorItem | null>>(() =>
     emptyDraft()
   );
+  const [ownedUserItems, setOwnedUserItems] = useState<ReturnType<typeof filterOwnedUserItems>>([]);
 
   const growth = useMemo(() => computeGrowthState(page), [page]);
   const needsSetup = useMemo(() => needsGoCatSetup(page), [page]);
@@ -71,8 +74,9 @@ export default function CatTower() {
       .then((items) => {
         if (cancelled) return;
         const filtered = filterOwnedUserItems(items);
+        setOwnedUserItems(filtered);
         const raw = loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
-          useLocalStorage: canEdit,
+          useLocalStorage: false,
           growthStage: growth.stage,
           ownedItems: filtered,
         });
@@ -92,9 +96,10 @@ export default function CatTower() {
       })
       .catch(() => {
         if (cancelled) return;
+        setOwnedUserItems([]);
         setEquippedDraft(
           loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
-            useLocalStorage: canEdit,
+            useLocalStorage: false,
             growthStage: growth.stage,
             ownedItems: [],
           })
@@ -103,11 +108,25 @@ export default function CatTower() {
     return () => {
       cancelled = true;
     };
-  }, [canEdit, pageReady, page?.activeEquips, cat?.appearanceState, growth.stage]);
+  }, [canEdit, pageReady, page?.activeEquips, cat?.appearanceState, growth.stage, itemsRefreshToken]);
+
+  useEffect(() => {
+    if (!isOwnTower || !pageReady) return;
+    const onUnlocksSync = () => {
+      void loadPage();
+      setItemsRefreshToken((t) => t + 1);
+      setRefreshToken((t) => t + 1);
+    };
+    window.addEventListener(MINIHOME_UNLOCKS_SYNC_EVENT, onUnlocksSync);
+    return () => window.removeEventListener(MINIHOME_UNLOCKS_SYNC_EVENT, onUnlocksSync);
+  }, [isOwnTower, pageReady, loadPage]);
 
   const myEquippedPreview = useMemo(
-    () => normalizeEquipPreview(equipPreviewFromDraft(equippedDraft)),
-    [equippedDraft]
+    () =>
+      normalizeEquipPreview(
+        equipPreviewFromDraft(equippedDraft, ownedUserItems, growth.stage)
+      ),
+    [equippedDraft, ownedUserItems, growth.stage]
   );
 
   const ownerEquippedPreview = useMemo(
@@ -132,8 +151,35 @@ export default function CatTower() {
     setRefreshToken((t) => t + 1);
   }, [loadPage]);
 
+  const handleRoomAppearanceSaved = useCallback(
+    (nextAppearance: Record<string, unknown>) => {
+      void loadPage();
+      setItemsRefreshToken((t) => t + 1);
+      setPage((prev) => {
+        if (!prev?.miniHome?.cat) return prev;
+        const cat = prev.miniHome.cat;
+        return {
+          ...prev,
+          miniHome: {
+            ...prev.miniHome,
+            cat: {
+              ...cat,
+              appearanceState: {
+                ...(cat.appearanceState ?? {}),
+                ...nextAppearance,
+              },
+            },
+          },
+        };
+      });
+    },
+    [loadPage, setPage]
+  );
+
+  /** 최초 로드만 전체 스피너 — 새로고침 중에는 대시보드·모달 유지 */
+  const bootstrapping = loading && page == null;
   const gateReady =
-    !loadingUserId && isReady && Boolean(firebaseUser) && !loading && Boolean(page);
+    !loadingUserId && isReady && Boolean(firebaseUser) && !bootstrapping && Boolean(page);
 
   /** 본인 /cattower — 미설정 시 생성 페이지로 (온보딩 UI는 캣타워에 표시하지 않음) */
   useEffect(() => {
@@ -171,13 +217,7 @@ export default function CatTower() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute -left-20 top-20 h-64 w-64 rounded-full bg-emerald-200/20 blur-3xl" />
-        <div className="absolute -right-16 top-40 h-56 w-56 rounded-full bg-orange-200/20 blur-3xl" />
-        <div className="absolute bottom-32 left-1/4 h-48 w-48 rounded-full bg-rose-100/25 blur-3xl" />
-      </div>
-
+    <div className="relative min-h-screen overflow-hidden bg-transparent">
       <div className="relative mx-auto max-w-6xl px-4 py-4 sm:py-6">
         <CatTowerDashboard
           nickname={ownerLabel}
@@ -204,6 +244,7 @@ export default function CatTower() {
           onBack={handleBack}
           onEvents={handleEvents}
           onRefresh={handleRefresh}
+          onAppearanceSaved={handleRoomAppearanceSaved}
           onReport={isReadOnly ? handleReport : undefined}
         />
 

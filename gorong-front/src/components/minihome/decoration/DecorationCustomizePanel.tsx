@@ -128,11 +128,10 @@ function SlotItemRow(props: {
       {lockedItems.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {lockedItems.map((it) => (
-            <button
+            <div
               key={`locked-${it.itemCode}`}
-              type="button"
-              disabled={disabled}
-              onClick={() => onToggle(it)}
+              role="img"
+              aria-label={it.unlockHint ?? "획득 조건 미달성"}
               title={it.unlockHint ?? "획득 조건 미달성"}
               className="relative flex h-10 w-10 shrink-0 cursor-not-allowed items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 opacity-60"
             >
@@ -144,7 +143,7 @@ function SlotItemRow(props: {
               <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 text-white">
                 <Lock className="h-2.5 w-2.5" />
               </span>
-            </button>
+            </div>
           ))}
         </div>
       ) : null}

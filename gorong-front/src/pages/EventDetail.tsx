@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import axiosInstance from '../api/axiosInstance';
+import { getMyUserItems } from '../api/minihome/itemApi';
+import { notifyMinihomeUnlocksSync } from '../utils/minihome/core/minihomeUnlocksSync';
 import MapView from '../components/MapView';
 import IconLabel from '../components/IconLabel';
 import AccessibilityBadge from '../components/AccessibilityBadge';
@@ -172,6 +174,10 @@ export default function EventDetail() {
         visitDate: selectedDate,
       });
       setSoloApplied(true);
+      try {
+        await getMyUserItems();
+        notifyMinihomeUnlocksSync();
+      } catch { /* 해금 UI 갱신 실패는 참여 성공과 분리 */ }
       alert('혼자 참여 신청이 완료되었습니다! 🎉');
     } catch (err: any) {
       const status = err?.response?.status;

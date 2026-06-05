@@ -29,7 +29,11 @@ public class ChatRecommendationController {
     @PostMapping("/recommend")
     public ResponseEntity<?> recommend(@Valid @RequestBody ChatRequestDto req, Authentication authentication) {
         try {
-            ChatRecommendResponseDto response = chatbotMessageService.handleMessage(req.getMessage(), authentication);
+            ChatRecommendResponseDto response = chatbotMessageService.handleMessage(
+                    req.getMessage(),
+                    req.getExcludeEventIds(),
+                    authentication
+            );
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));

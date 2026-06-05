@@ -21,14 +21,12 @@ function resolveInitialBackground(
   appearanceState?: Record<string, unknown> | null,
   useLocalStorage = true
 ): RoomBackgroundId {
+  const fromDb = parseRoomBackgroundFromAppearance(appearanceState);
+  if (fromDb != null) return fromDb;
   if (useLocalStorage) {
-    return (
-      loadRoomBackgroundFromStorage() ??
-      parseRoomBackgroundFromAppearance(appearanceState) ??
-      "BASIC_ROOM"
-    );
+    return loadRoomBackgroundFromStorage() ?? "BASIC_ROOM";
   }
-  return parseRoomBackgroundFromAppearance(appearanceState) ?? "BASIC_ROOM";
+  return "BASIC_ROOM";
 }
 
 /** 내 공간 — 방 배경 선택·저장 (API 우선, localStorage fallback) */
@@ -74,17 +72,20 @@ export function useRoomBackground({
     setError(null);
 
     const safeBg = sanitizeRoomBackgroundForStage(background, growthStage);
-    const localOk = saveRoomBackgroundToStorage(safeBg);
-    if (!localOk) {
-      setError("방 배경을 기기에 저장하지 못했습니다.");
-      setSaving(false);
-      return false;
-    }
-
     try {
       await updateMyCatAppearance({ roomBackground: safeBg });
+      saveRoomBackgroundToStorage(safeBg);
     } catch (e) {
-      console.warn("[GoCat] roomBackground API save failed — localStorage kept", e);
+      console.warn("[GoCat] roomBackground API save failed", e);
+      if (saveRoomBackgroundToStorage(safeBg)) {
+        setBackground(safeBg);
+        setSavedBackground(safeBg);
+        setSaving(false);
+        return true;
+      }
+      setError("방 배경을 저장하지 못했습니다.");
+      setSaving(false);
+      return false;
     }
 
     setBackground(safeBg);

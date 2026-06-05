@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface GroupRepository extends JpaRepository<GroupPost, Long> {
     // 기본 CRUD(findById, save, delete 등)는 JpaRepository가 자동으로 제공합니다.
@@ -27,4 +29,12 @@ public interface GroupRepository extends JpaRepository<GroupPost, Long> {
            AND CONCAT(g.meetingDate, ' ', g.meetingTime) < :now
         """)
     int closeExpiredGroups(@Param("now") String now);
+
+    @Query("""
+            SELECT g.event, COUNT(g)
+            FROM GroupPost g
+            WHERE g.event IS NOT NULL AND TRIM(g.event) <> ''
+            GROUP BY g.event
+            """)
+    List<Object[]> countGroupByEventField();
 }

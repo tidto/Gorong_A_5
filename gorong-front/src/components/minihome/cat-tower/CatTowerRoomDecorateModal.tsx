@@ -1,32 +1,40 @@
 import { X } from "lucide-react";
-import CatTowerRoomBackgroundPanel from "./CatTowerRoomBackgroundPanel";
+import CatTowerRoomDecoratePanel from "./CatTowerRoomDecoratePanel";
 import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
-import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import type { RoomPlacement } from "../../../utils/minihome/cat-tower/catTowerRoomCatalog";
 
 type CatTowerRoomDecorateModalProps = {
   open: boolean;
-  selected: RoomBackgroundId;
-  saved: RoomBackgroundId;
+  selectedBg: RoomBackgroundId;
+  savedBg: RoomBackgroundId;
+  items: RoomPlacement[];
+  ownedIds: Set<string>;
   isDirty: boolean;
   saving?: boolean;
   error?: string | null;
-  growthStage?: GrowthStage;
-  onSelect: (id: RoomBackgroundId) => void;
+  onSelectBg: (id: RoomBackgroundId) => void;
+  onToggleItem: (itemId: string) => void;
+  onRemoveItem: (itemId: string) => void;
+  onMoveItem: (itemId: string, x: number, y: number) => void;
   onSave: () => void;
   onCatDecorate: () => void;
   onClose: () => void;
 };
 
-/** 방 배경·Go냥이 꾸미기 — 메인에서 분리된 모달 */
+/** 내 방 꾸미기 — 배경·가구·장식 탭 모달 */
 export default function CatTowerRoomDecorateModal({
   open,
-  selected,
-  saved,
+  selectedBg,
+  savedBg,
+  items,
+  ownedIds,
   isDirty,
   saving,
   error,
-  growthStage,
-  onSelect,
+  onSelectBg,
+  onToggleItem,
+  onRemoveItem,
+  onMoveItem,
   onSave,
   onCatDecorate,
   onClose,
@@ -40,7 +48,7 @@ export default function CatTowerRoomDecorateModal({
       role="presentation"
     >
       <div
-        className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-emerald-100/90 bg-white shadow-2xl sm:rounded-3xl"
+        className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-emerald-100/90 bg-white shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -65,14 +73,18 @@ export default function CatTowerRoomDecorateModal({
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <CatTowerRoomBackgroundPanel
-            selected={selected}
-            saved={saved}
+          <CatTowerRoomDecoratePanel
+            selectedBg={selectedBg}
+            savedBg={savedBg}
+            items={items}
+            ownedIds={ownedIds}
             isDirty={isDirty}
             saving={saving}
             error={error}
-            growthStage={growthStage}
-            onSelect={onSelect}
+            onSelectBg={onSelectBg}
+            onToggleItem={onToggleItem}
+            onRemoveItem={onRemoveItem}
+            onMoveItem={onMoveItem}
             onSave={onSave}
             onCatDecorate={() => {
               onClose();
