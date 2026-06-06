@@ -168,9 +168,8 @@ function ParticipantSlot({
 }
 
 // ── 입장 알림 행 ────────────────────────────────────────────
-function JoinNoticeRow({ msg, groupTitle }: { msg: PublicChatMsg; groupTitle?: string }) {
+function JoinNoticeRow({ msg }: { msg: PublicChatMsg }) {
     const nickname = msg.user || msg.senderEmail?.split('@')[0] || '누군가'
-    const roomName = groupTitle ? `${groupTitle} 공개 채팅방` : '공개 채팅방'
     return (
         <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -182,7 +181,7 @@ function JoinNoticeRow({ msg, groupTitle }: { msg: PublicChatMsg; groupTitle?: s
                 backgroundColor: '#FFF4ED', border: '1px solid rgba(212,122,85,0.3)',
                 borderRadius: '20px', padding: '3px 10px', whiteSpace: 'nowrap',
             }}>
-                🐾 <strong>{nickname}</strong>님이 {roomName}에 입장하였습니다.
+                🐾 <strong>{nickname}</strong>님이 공개 채팅방에 입장하였습니다.
             </span>
             <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(212,122,85,0.2)' }} />
         </div>
@@ -410,7 +409,7 @@ export default function GroupPublicChatSection({ groupId, groupTitle }: Props) {
                 ) : (
                     messages.map((msg, i) =>
                         msg.type === 'JOIN'
-                            ? <JoinNoticeRow key={i} msg={msg} groupTitle={groupTitle} />
+                            ? <JoinNoticeRow key={i} msg={msg} />
                             : <MessageRow
                                 key={i}
                                 msg={msg}
