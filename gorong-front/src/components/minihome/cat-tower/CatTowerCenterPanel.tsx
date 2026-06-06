@@ -3,6 +3,7 @@ import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
+import type { RoomDecorItem } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
 import CatTowerRoomStage from "./CatTowerRoomStage";
 import CatTowerRecentActivityCards from "./CatTowerRecentActivityCards";
@@ -18,6 +19,7 @@ type CatTowerCenterPanelProps = {
   activityCount: number;
   equipped: EquipPreview;
   roomBackground: RoomBackgroundId;
+  roomDecorItems?: RoomDecorItem[];
   catName: string;
   isReadOnly?: boolean;
   activities: ActivityItem[];
@@ -61,6 +63,7 @@ function CatTowerCenterPanel({
   activityCount,
   equipped,
   roomBackground,
+  roomDecorItems = [],
   catName,
   isReadOnly = false,
   activities,
@@ -81,6 +84,7 @@ function CatTowerCenterPanel({
         activityCount={activityCount}
         equipped={equipped}
         roomBackground={roomBackground}
+        roomDecorItems={roomDecorItems}
         catName={catName}
         interactive
         readOnly={isReadOnly}

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import CatTowerDailyQuote from "./CatTowerDailyQuote";
+import CatTowerParticipatingEvents from "./CatTowerParticipatingEvents";
 
 type CatTowerProfilePanelProps = {
   nickname: string;
@@ -10,6 +11,8 @@ type CatTowerProfilePanelProps = {
   isPublic: boolean;
   galleryCount?: number;
   loading?: boolean;
+  showParticipatingEvents?: boolean;
+  refreshToken?: number;
 };
 
 /** 왼쪽 — 싸이월드/동물농장 스타일 프로필 카드 */
@@ -20,6 +23,8 @@ export default function CatTowerProfilePanel({
   isPublic,
   galleryCount = 0,
   loading,
+  showParticipatingEvents = false,
+  refreshToken = 0,
 }: CatTowerProfilePanelProps) {
   return (
     <aside className="flex flex-col gap-3">
@@ -100,6 +105,10 @@ export default function CatTowerProfilePanel({
       </motion.div>
 
       <CatTowerDailyQuote catName={catName} />
+
+      {showParticipatingEvents ? (
+        <CatTowerParticipatingEvents enabled refreshToken={refreshToken} />
+      ) : null}
     </aside>
   );
 }
