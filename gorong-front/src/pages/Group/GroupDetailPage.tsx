@@ -6,6 +6,7 @@ import axiosInstance from '../../api/axiosInstance';
 import { useChatRoom } from '../../hooks/useChatRoom';
 import GroupPublicChatSection from '../../components/GroupPublicChatSection'
 import { useCatTowerPreview } from '../../contexts/CatTowerPreviewContext'
+import { useChatNotification } from '../../contexts/ChatNotificationContext'; // ✅ [추가]
 
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
 
@@ -62,11 +63,11 @@ export default function GroupDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { openCatTower } = useCatTowerPreview();
+    const { addGroupSubscription } = useChatNotification(); // ✅ [추가]
 
     const [post, setPost]               = useState<GroupPost | null>(null);
     const [isJoining, setIsJoining]     = useState(false);
     const [isJoined, setIsJoined]       = useState(false);
-    // ✅ 인라인 미니맵 + 풀스크린 모달 상태 분리
     const [miniMapReady, setMiniMapReady]   = useState(false);
     const [miniMapError, setMiniMapError]   = useState('');
     const [miniMapLoading, setMiniMapLoading] = useState(false);
@@ -76,12 +77,10 @@ export default function GroupDetailPage() {
     const [routeTarget, setRouteTarget]     = useState<{ lat: number; lng: number; name: string } | null>(null);
     const [userRouteProfile, setUserRouteProfile] = useState<UserRouteProfile | null>(null);
 
-    // ✅ 인라인 미니맵용 ref, 풀스크린 맵용 ref 별도
     const miniMapContainerRef = useRef<HTMLDivElement>(null);
     const fullMapContainerRef = useRef<HTMLDivElement>(null);
     const miniMapMarkerRef    = useRef<any>(null);
     const fullMapMarkerRef    = useRef<any>(null);
-    // 지오코딩 결과를 캐시해서 중복 요청 방지
     const resolvedPosRef      = useRef<any>(null);
 
     const { isMyGroup } = useChatRoom();
@@ -92,7 +91,6 @@ export default function GroupDetailPage() {
 
     useEffect(() => {
         if (!id) return;
-        // 그룹 상세 + 참여 여부를 동시에 요청 (순차→병렬 최적화)
         Promise.all([
             axiosInstance.get<GroupPost>(`/groups/${id}`),
             axiosInstance.get<number[]>('/groups/joined-ids'),
@@ -146,6 +144,12 @@ export default function GroupDetailPage() {
                 ? { ...prev, currentCapacity: (prev.currentCapacity ?? 0) + 1 }
                 : prev
             );
+
+            // ✅ [추가] 참여 신청 완료 후 해당 그룹 채팅 토픽 즉시 구독
+            if (post?.id && post?.title) {
+                await addGroupSubscription(post.id, post.title);
+            }
+
             if (post?.event) {
                 try {
                     await axiosInstance.post(`/event-participation/group/${id}`, {
@@ -161,7 +165,7 @@ export default function GroupDetailPage() {
         } finally {
             setIsJoining(false);
         }
-    }, [id, post]);
+    }, [id, post, addGroupSubscription]); // ✅ [추가] addGroupSubscription 의존성 추가
 
     const handleDelete = useCallback(async () => {
         if (!canEdit) return;
@@ -192,7 +196,6 @@ export default function GroupDetailPage() {
         });
     }, []);
 
-    // ✅ 공통 지오코딩 (캐시)
     const resolvePosition = useCallback(async (loc: string) => {
         if (resolvedPosRef.current) return resolvedPosRef.current;
         await loadKakaoSdk();
@@ -213,7 +216,6 @@ export default function GroupDetailPage() {
         return pos;
     }, [loadKakaoSdk]);
 
-    // ✅ 인라인 미니맵 렌더 (post.location 변경 시 자동 실행)
     useEffect(() => {
         if (!post?.location || !miniMapContainerRef.current) return;
         let cancelled = false;
@@ -231,7 +233,7 @@ export default function GroupDetailPage() {
                 const map = new window.kakao.maps.Map(miniMapContainerRef.current, {
                     center: pos,
                     level: 3,
-                    draggable: false,   // 미니맵은 인터랙션 제한
+                    draggable: false,
                     scrollwheel: false,
                     disableDoubleClickZoom: true,
                 });
@@ -252,7 +254,6 @@ export default function GroupDetailPage() {
         return () => { cancelled = true; };
     }, [post?.location, resolvePosition, post?.title]);
 
-    // ✅ 풀스크린 지도 모달 렌더
     useEffect(() => {
         if (!showFullMap || !post?.location || !fullMapContainerRef.current) return;
         let cancelled = false;
@@ -503,10 +504,9 @@ export default function GroupDetailPage() {
                         ))}
                     </div>
 
-                    {/* ✅ 인라인 미니맵 카드 (항상 표시, 클릭 시 풀스크린) */}
+                    {/* 인라인 미니맵 카드 */}
                     {post.location && (
                         <div style={{ backgroundColor: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', position: 'relative' }}>
-                            {/* 미니맵 헤더 */}
                             <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                                     <span style={{ fontSize: '14px' }}>🗺️</span>
@@ -522,7 +522,6 @@ export default function GroupDetailPage() {
                                 </button>
                             </div>
 
-                            {/* 미니맵 본체 — 클릭하면 풀스크린 오픈 */}
                             <div
                                 onClick={() => setShowFullMap(true)}
                                 style={{ position: 'relative', cursor: 'pointer' }}
@@ -531,7 +530,6 @@ export default function GroupDetailPage() {
                                     ref={miniMapContainerRef}
                                     style={{ width: '100%', height: '200px', backgroundColor: '#f8fafc' }}
                                 />
-                                {/* 로딩 오버레이 */}
                                 {miniMapLoading && (
                                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b', fontSize: '13px', gap: '8px' }}>
                                         <span style={{ fontSize: '18px' }}>⏳</span> 지도 불러오는 중...
@@ -542,7 +540,6 @@ export default function GroupDetailPage() {
                                         {miniMapError}
                                     </div>
                                 )}
-                                {/* 클릭 힌트 오버레이 (지도 준비된 경우만) */}
                                 {miniMapReady && !miniMapLoading && !miniMapError && (
                                     <div style={{
                                         position: 'absolute', bottom: '10px', right: '10px',
@@ -556,7 +553,6 @@ export default function GroupDetailPage() {
                                 )}
                             </div>
 
-                            {/* 길찾기 버튼 */}
                             <div style={{ padding: '12px 14px' }}>
                                 <button
                                     type="button"
@@ -607,7 +603,7 @@ export default function GroupDetailPage() {
                 </div>
             </div>
 
-            {/* ✅ 풀스크린 지도 모달 */}
+            {/* 풀스크린 지도 모달 */}
             {showFullMap && (
                 <div
                     onClick={() => setShowFullMap(false)}
@@ -617,7 +613,6 @@ export default function GroupDetailPage() {
                         onClick={e => e.stopPropagation()}
                         style={{ width: '800px', maxWidth: '96vw', maxHeight: '90vh', backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(15,23,42,0.3)', display: 'flex', flexDirection: 'column' }}
                     >
-                        {/* 모달 헤더 */}
                         <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexShrink: 0 }}>
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontSize: '16px', fontWeight: '900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.title}</div>
@@ -632,7 +627,6 @@ export default function GroupDetailPage() {
                             </button>
                         </div>
 
-                        {/* 풀사이즈 지도 */}
                         <div style={{ position: 'relative', flex: 1, minHeight: '400px' }}>
                             <div ref={fullMapContainerRef} style={{ width: '100%', height: '460px', backgroundColor: '#f8fafc' }} />
                             {fullMapLoading && (
@@ -647,7 +641,6 @@ export default function GroupDetailPage() {
                             )}
                         </div>
 
-                        {/* 길찾기 버튼 */}
                         <div style={{ padding: '14px 16px', borderTop: '1px solid #f1f5f9', flexShrink: 0 }}>
                             <button
                                 type="button"
