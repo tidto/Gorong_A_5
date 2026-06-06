@@ -36,7 +36,7 @@ public class AppGroupService {
         // 현재 사용자 기준 참가한 그룹 ID를 미리 조회해 joined 플래그를 계산한다.
         Set<Long> joinedGroupIds = currentUser == null
                 ? Set.of()
-                : participantRepository.findByUserId(currentUser.getId()).stream()
+                : participantRepository.findByUser_Id(currentUser.getId()).stream()
                 .map(GroupParticipant::getGroupPost)
                 .map(GroupPost::getId)
                 .collect(Collectors.toSet());
