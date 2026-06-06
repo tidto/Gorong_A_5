@@ -85,12 +85,16 @@ export const gatherAppGroup = (groupId: number) =>
 
 export type UploadSourceType = 'APP_PHOTO' | 'TRAIL_ART' | 'POST_PHOTO'
 
+export const checkArrivalStatus = (venueId: string) =>
+  api.get<{ verified: boolean }>(`/app/arrivals/${venueId}/me`)
+
 // 앱 사진/러닝아트 업로드 공용 API
 export const uploadFileToS3 = async (
   uri: string,
   fileName: string,
   sourceType: UploadSourceType = 'APP_PHOTO',
   autoSaveToGallery = true,
+  referenceId?: string,
 ) => {
   const formData = new FormData()
   formData.append('file', {
@@ -100,7 +104,7 @@ export const uploadFileToS3 = async (
   } as any)
 
   return api.post('/files/upload', formData, {
-    params: { sourceType, autoSaveToGallery },
+    params: { sourceType, autoSaveToGallery, referenceId },
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }

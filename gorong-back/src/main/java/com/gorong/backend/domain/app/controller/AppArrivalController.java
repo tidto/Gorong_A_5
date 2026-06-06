@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/app/arrivals")
 @RequiredArgsConstructor
@@ -23,9 +25,19 @@ public class AppArrivalController {
                 requestDto.getVenueId(),
                 requestDto.getLat(),
                 requestDto.getLng(),
-                authentication.getName()  // email
+                authentication
         );
         if (verified) return ResponseEntity.ok("도착 인증 완료!");
         return ResponseEntity.badRequest().body("행사장 반경 밖입니다.");
+    }
+
+    @GetMapping("/{venueId}/me")
+    public ResponseEntity<Map<String, Boolean>> checkArrival(
+            @PathVariable String venueId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(Map.of(
+                "verified", appArrivalService.hasVerifiedArrival(authentication, venueId)
+        ));
     }
 }

@@ -1,17 +1,33 @@
+import * as ImagePicker from 'expo-image-picker'
 import React, { useCallback, useEffect, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { AppGroup } from '../types'
-import { fetchAppGroups, gatherAppGroup, joinAppGroup } from '../services/api'
+import { checkArrivalStatus, fetchAppGroups, gatherAppGroup, joinAppGroup, uploadFileToS3 } from '../services/api'
 
 export default function GroupScreen() {
   const [groups, setGroups] = useState<AppGroup[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [arrivalVerifiedByGroupId, setArrivalVerifiedByGroupId] = useState<Record<number, boolean>>({})
 
   const loadGroups = useCallback(async () => {
     try {
       const response = await fetchAppGroups()
-      setGroups(response.data)
+      const items = response.data
+      setGroups(items)
+
+      const statuses = await Promise.all(
+        items.map(async (group) => {
+          if (!group.event) return [group.id, false] as const
+          try {
+            const res = await checkArrivalStatus(group.event)
+            return [group.id, Boolean(res.data?.verified)] as const
+          } catch {
+            return [group.id, false] as const
+          }
+        })
+      )
+      setArrivalVerifiedByGroupId(Object.fromEntries(statuses))
     } catch (error) {
       console.error('그룹 목록 조회 실패:', error)
       Alert.alert('오류', '그룹 목록을 불러오지 못했습니다.')
@@ -47,6 +63,39 @@ export default function GroupScreen() {
     }
   }
 
+  const handleUploadPhoto = async (group: AppGroup) => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!permission.granted) {
+        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.')
+        return
+      }
+
+      if (!arrivalVerifiedByGroupId[group.id]) {
+        Alert.alert('안내', '지오펜싱 참여 인증이 완료된 행사만 사진을 올릴 수 있습니다.')
+        return
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: false,
+      })
+
+      if (result.canceled || !result.assets.length) return
+
+      const asset = result.assets[0]
+      const uri = asset.uri
+      const fileName = asset.fileName ?? `event-${group.event || group.id}-${Date.now()}.jpg`
+      const response = await uploadFileToS3(uri, fileName, 'APP_PHOTO', true, group.event)
+      Alert.alert('완료', response.data?.gallerySaved ? '행사 사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
+      loadGroups()
+    } catch (error) {
+      console.error('사진 업로드 실패:', error)
+      Alert.alert('안내', '사진 업로드에 실패했습니다. 지오펜싱 인증 여부를 확인해주세요.')
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -68,13 +117,10 @@ export default function GroupScreen() {
     >
       {groups.map((group) => {
         const isFull = group.currentMembers >= group.maxMembers
-        const isSolo = group.maxMembers <= 1 || group.currentMembers < 2
         return (
           <View key={group.id} style={styles.card}>
             <View style={styles.badgeRow}>
-              <Text style={[styles.badge, isSolo && styles.badgeSolo]}>
-                {isSolo ? '혼자참여' : '모임'}
-              </Text>
+              <Text style={styles.badge}>모임</Text>
               <Text style={styles.statusBadge}>
                 {group.gathered ? '모임 완료' : group.status}
               </Text>
@@ -89,11 +135,6 @@ export default function GroupScreen() {
             <Text style={styles.meta}>
               인원: {group.currentMembers}/{group.maxMembers}
             </Text>
-            {isSolo && (
-              <Text style={styles.notice}>
-                혼자참여는 모임 채팅방을 만들지 않습니다.
-              </Text>
-            )}
 
             <View style={styles.row}>
               <TouchableOpacity
@@ -112,6 +153,16 @@ export default function GroupScreen() {
                 <Text style={styles.buttonText}>{group.gathered ? '인증 완료' : '모였다 인증'}</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, (!group.joined || !arrivalVerifiedByGroupId[group.id]) && styles.buttonDisabled]}
+              disabled={!group.joined || !arrivalVerifiedByGroupId[group.id]}
+              onPress={() => handleUploadPhoto(group)}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {arrivalVerifiedByGroupId[group.id] ? '행사 사진 올리기' : '지오펜싱 인증 후 업로드'}
+              </Text>
+            </TouchableOpacity>
           </View>
         )
       })}
@@ -149,10 +200,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     overflow: 'hidden',
   },
-  badgeSolo: {
-    backgroundColor: '#EDE9FE',
-    color: '#6D28D9',
-  },
   statusBadge: {
     alignSelf: 'flex-start',
     backgroundColor: '#F3F4F6',
@@ -167,12 +214,6 @@ const styles = StyleSheet.create({
   eventTitle: { fontSize: 18, fontWeight: '800', marginBottom: 4, color: '#111827' },
   groupTitle: { fontSize: 13, fontWeight: '700', marginBottom: 8, color: '#FF6B35' },
   meta: { fontSize: 13, color: '#374151', marginBottom: 3 },
-  notice: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#6d28d9',
-    fontWeight: '700',
-  },
   row: { marginTop: 10, flexDirection: 'row', gap: 8 },
   button: {
     flex: 1,
@@ -183,4 +224,12 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: '#C9CDD5' },
   buttonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  secondaryButton: {
+    marginTop: 10,
+    backgroundColor: '#111827',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  secondaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
 })

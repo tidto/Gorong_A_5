@@ -12,4 +12,5 @@ public class GalleryCreateRequestDto {
     @Size(max = 100, message = "title은 100자 이하여야 합니다.")
     private String title;
     private String description;
+    private String referenceId;
 }

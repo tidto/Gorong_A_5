@@ -26,14 +26,14 @@ public class GalleryAutoSaveService {
     private final MiniHomeGalleryRepository miniHomeGalleryRepository;
 
     @Transactional
-    public void append(Long userId, String fileUrl, UploadSourceType sourceType) {
+    public void append(Long userId, String fileUrl, UploadSourceType sourceType, String referenceId) {
         // 미니홈이 없으면 생성해서 자동 저장 동작이 항상 동일하게 유지되도록 한다.
         miniHomeService.getOrCreateMiniHomePage(userId);
 
         MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
                 .orElseThrow(() -> new IllegalStateException("미니홈을 찾을 수 없습니다."));
 
-        Long galleryId = resolveGalleryId(miniHome);
+        Long galleryId = resolveGalleryId(miniHome, referenceId);
 
         GalleryImageCreateRequestDto req = new GalleryImageCreateRequestDto();
         req.setImageUrl(fileUrl);
@@ -42,11 +42,14 @@ public class GalleryAutoSaveService {
         miniHomeService.addGalleryImage(galleryId, req);
     }
 
-    private Long resolveGalleryId(MiniHome miniHome) {
+    private Long resolveGalleryId(MiniHome miniHome, String referenceId) {
+        String normalizedReferenceId = referenceId == null ? null : referenceId.trim();
         Optional<MiniHomeGallery> found = miniHomeGalleryRepository
                 .findByMiniHomeIdOrderByCreateAtDesc(miniHome.getMiniHomeId())
                 .stream()
-                .filter(gallery -> AUTO_GALLERY_TITLE.equals(gallery.getTitle()))
+                .filter(gallery -> normalizedReferenceId == null
+                        ? AUTO_GALLERY_TITLE.equals(gallery.getTitle())
+                        : normalizedReferenceId.equals(gallery.getReferenceId()))
                 .findFirst();
 
         if (found.isPresent()) {
@@ -54,8 +57,11 @@ public class GalleryAutoSaveService {
         }
 
         GalleryCreateRequestDto createRequestDto = new GalleryCreateRequestDto();
-        createRequestDto.setTitle(AUTO_GALLERY_TITLE);
-        createRequestDto.setDescription("앱/웹 업로드에서 자동 저장된 이미지");
+        createRequestDto.setTitle(normalizedReferenceId == null ? AUTO_GALLERY_TITLE : "행사 사진");
+        createRequestDto.setDescription(normalizedReferenceId == null
+                ? "앱/웹 업로드에서 자동 저장된 이미지"
+                : "행사 식별자: " + normalizedReferenceId);
+        createRequestDto.setReferenceId(normalizedReferenceId);
         return miniHomeService.createGallery(miniHome.getUserId(), createRequestDto).getGalleryId();
     }
 }

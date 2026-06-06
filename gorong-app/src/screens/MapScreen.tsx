@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import * as Location from 'expo-location'
 import MapView, { Circle, Marker, Polyline } from 'react-native-maps'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useGeofence } from '../hooks/useGeofence'
 import { fetchNearbyVenues, fetchPublicEvents, uploadFileToS3 } from '../services/api'
 import { useAuthStore } from '../store/authStore'
@@ -64,6 +65,7 @@ export default function MapScreen() {
   const [outsideTimer, setOutsideTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   const mapRef = useRef<MapView | null>(null)
+  const insets = useSafeAreaInsets()
   const { setInsideVenueId } = useAuthStore()
   const geofenceVenues = useMemo(
     () => venues.filter((venue) => venue.geofenceEnabled !== false && venue.radius > 0),
@@ -71,6 +73,12 @@ export default function MapScreen() {
   )
   const { insideVenueId, isVerified } = useGeofence(geofenceVenues)
   const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
+  const selectedVenue = useMemo(
+    () => venues.find((venue) => venue.id === selectedVenueId) ?? null,
+    [venues, selectedVenueId],
+  )
+  const buttonRowBottom = 150 + insets.bottom
+  const eventSheetBottomPadding = 18 + insets.bottom
 
   useEffect(() => {
     setInsideVenueId(insideVenueId)
@@ -222,7 +230,7 @@ export default function MapScreen() {
       >
         {venues.map(venue => (
           <React.Fragment key={venue.id}>
-            <Marker
+              <Marker
               coordinate={{ latitude: venue.lat, longitude: venue.lng }}
               title={venue.name}
               description={venue.address}
@@ -261,7 +269,28 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      <View style={styles.eventSheet}>
+      {selectedVenue && (
+        <View style={[styles.previewCard, { top: 84 + insets.top }]}>
+          <Image
+            source={
+              selectedVenue.imageUrl
+                ? { uri: selectedVenue.imageUrl }
+                : require('../../assets/icon.png')
+            }
+            style={styles.previewImage}
+          />
+          <View style={styles.previewText}>
+            <Text style={styles.previewTitle} numberOfLines={1}>
+              {selectedVenue.name}
+            </Text>
+            <Text style={styles.previewSub} numberOfLines={2}>
+              {selectedVenue.address}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <View style={[styles.eventSheet, { paddingBottom: eventSheetBottomPadding }]}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>주변 행사</Text>
           <Text style={styles.sheetSub}>
@@ -308,7 +337,7 @@ export default function MapScreen() {
         </ScrollView>
       </View>
 
-      <View style={styles.buttonRow}>
+      <View style={[styles.buttonRow, { bottom: buttonRowBottom }]}>
         <TouchableOpacity
           style={[styles.btn, isRecording && styles.btnActive]}
           onPress={isRecording ? () => handleStopRecording('manual') : startRecording}
@@ -345,7 +374,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   buttonRow: {
     position: 'absolute',
-    bottom: 154,
     left: 16,
     right: 16,
     flexDirection: 'row',
@@ -378,6 +406,41 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   badgeText: { fontWeight: '700', fontSize: 14 },
+  previewCard: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 18,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  previewImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: '#f3f4f6',
+  },
+  previewText: {
+    flex: 1,
+  },
+  previewTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  previewSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 16,
+  },
   eventSheet: {
     position: 'absolute',
     left: 0,
@@ -387,7 +450,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingTop: 12,
-    paddingBottom: 18,
     paddingHorizontal: 16,
     shadowColor: '#000',
     shadowOpacity: 0.12,

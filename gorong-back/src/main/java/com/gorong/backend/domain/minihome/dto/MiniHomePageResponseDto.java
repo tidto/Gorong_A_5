@@ -73,6 +73,7 @@ public class MiniHomePageResponseDto {
         private Long galleryId;
         private String title;
         private String description;
+        private String referenceId;
         private OffsetDateTime createAt;
         private List<GalleryImageDto> images;
 
@@ -81,6 +82,7 @@ public class MiniHomePageResponseDto {
                     .galleryId(g.getGalleryId())
                     .title(g.getTitle())
                     .description(g.getDescription())
+                    .referenceId(g.getReferenceId())
                     .createAt(g.getCreateAt())
                     .images(images.stream().map(GalleryImageDto::from).toList())
                     .build();
@@ -133,4 +135,3 @@ public class MiniHomePageResponseDto {
         }
     }
 }
-

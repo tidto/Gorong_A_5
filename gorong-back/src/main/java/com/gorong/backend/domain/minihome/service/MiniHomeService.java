@@ -378,6 +378,7 @@ public class MiniHomeService {
                 .miniHomeId(miniHome.getMiniHomeId())
                 .title(req.getTitle())
                 .description(req.getDescription())
+                .referenceId(req.getReferenceId())
                 .build());
 
         return MiniHomePageResponseDto.GalleryDto.from(gallery, List.of());
@@ -705,4 +706,3 @@ public class MiniHomeService {
         return slotType == null ? "" : slotType.trim().toUpperCase();
     }
 }
-

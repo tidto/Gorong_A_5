@@ -87,7 +87,12 @@ export default function Login() {
         })
       }
     } catch (error: any) {
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+        toast('비밀번호가 틀렸습니다.', 'error')
+        return
+      }
+
+      if (error.code === 'auth/user-not-found') {
         const signInMethods = await fetchSignInMethodsForEmail(auth, email)
         if (signInMethods.length > 0 && signInMethods.includes('password')) {
           toast('비밀번호가 틀렸습니다.', 'error')
