@@ -48,6 +48,11 @@ interface ChatNotificationContextType {
     markGroupRead: (groupId: number) => void
     /** 알림 1개만 읽음 처리 (id 기준 개별 삭제) */
     markRead: (id: number) => void
+    /**
+     * ✅ [추가] 새 그룹 생성 또는 참여 신청 완료 후 호출
+     * — STOMP 연결이 살아있으면 즉시 구독, 끊겨있으면 재연결 후 구독
+     */
+    addGroupSubscription: (groupId: number, groupTitle: string) => void
 }
 
 const ChatNotificationContext = createContext<ChatNotificationContextType | undefined>(undefined)
@@ -65,23 +70,20 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
     const [toastNotification, setToastNotification] = useState<ChatNotification | null>(null)
 
     const stompRef = useRef<Client | null>(null)
-    const subsRef  = useRef<Map<number, Subscription>>(new Map())
+    const subsRef  = useRef<Map<string, Subscription>>(new Map())
     const idRef    = useRef(0)
     const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // 현재 열려있는 채팅 그룹 ID (중복 알림 방지용)
-    // /chat/:id  → 모임 채팅 (Chat.tsx)
-    // /groups/:id → 공개 채팅 (GroupDetailPage)
     const getActiveChatGroupId = (): number | null => {
-        const chatMatch   = window.location.pathname.match(/^\/chat\/(\d+)/)
-        const groupMatch  = window.location.pathname.match(/^\/groups\/(\d+)/)
+        const chatMatch  = window.location.pathname.match(/^\/chat\/(\d+)/)
+        const groupMatch = window.location.pathname.match(/^\/groups\/(\d+)/)
         const m = chatMatch ?? groupMatch
         return m ? Number(m[1]) : null
     }
 
     // ── 알림 push ──────────────────────────────────────────────
     const pushNotification = useCallback((notif: Omit<ChatNotification, 'id' | 'receivedAt'>) => {
-        // 현재 그 채팅방을 보고 있으면 무시
         if (getActiveChatGroupId() === notif.groupId) return
 
         const newNotif: ChatNotification = {
@@ -90,9 +92,8 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
             receivedAt: Date.now(),
         }
 
-        setNotifications(prev => [newNotif, ...prev].slice(0, 50)) // 최대 50개 유지
+        setNotifications(prev => [newNotif, ...prev].slice(0, 50))
 
-        // 3초 오버레이 — 이전 타이머 취소 후 새 알림 표시
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
         setToastNotification(newNotif)
         toastTimerRef.current = setTimeout(() => {
@@ -105,7 +106,6 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
         try {
             const msg = JSON.parse(frame.body)
             const myEmail = auth.currentUser?.email ?? ''
-            // 내가 보낸 메시지는 알림 제외
             const senderEmail = msg.senderEmail ?? msg.sender ?? ''
             if (senderEmail && senderEmail === myEmail) return
 
@@ -121,26 +121,28 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
 
     // ── 구독 등록/해제 ─────────────────────────────────────────
     const subscribeGroup = useCallback((groupId: number, groupTitle: string) => {
-        if (!stompRef.current) return
+        if (!stompRef.current?.connected) return
 
-        // /topic/group/{id}  — Chat.tsx 모임 채팅
-        if (!subsRef.current.has(`group-${groupId}`)) {
+        // /topic/group/{id}  — 모임 채팅
+        const groupKey = `group-${groupId}`
+        if (!subsRef.current.has(groupKey)) {
             const sub = stompRef.current.subscribe(
                 `/topic/group/${groupId}`,
                 (frame) => handleIncoming(frame, groupId, groupTitle, 'group')
             )
-            subsRef.current.set(`group-${groupId}`, sub)
+            subsRef.current.set(groupKey, sub)
         }
 
-        // /topic/public/{id} — GroupDetailPage 공개 채팅
-        if (!subsRef.current.has(`public-${groupId}`)) {
+        // /topic/public/{id} — 공개 채팅
+        const publicKey = `public-${groupId}`
+        if (!subsRef.current.has(publicKey)) {
             const sub = stompRef.current.subscribe(
                 `/topic/public/${groupId}`,
                 (frame) => handleIncoming(frame, groupId, groupTitle, 'public')
             )
-            subsRef.current.set(`public-${groupId}`, sub)
+            subsRef.current.set(publicKey, sub)
         }
-    }, [handleIncoming]) // handleIncoming는 위에 정의
+    }, [handleIncoming])
 
     const unsubscribeAll = useCallback(() => {
         subsRef.current.forEach(sub => {
@@ -162,7 +164,7 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
 
         const socket = new SockJS(`${API_BASE_URL}/ws-chat`)
         const client: Client = Stomp.over(socket)
-        client.debug = () => {} // 디버그 로그 비활성화
+        client.debug = () => {}
 
         client.connect(
             { Authorization: `Bearer ${token}` },
@@ -220,6 +222,18 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
         }
     }, [connect, disconnect])
 
+    // ── ✅ [추가] 새 그룹 생성·참여 후 외부에서 호출하는 함수 ──────
+    // 연결이 살아있으면 즉시 구독, 끊겨있으면 재연결 후 구독합니다.
+    const addGroupSubscription = useCallback(async (groupId: number, groupTitle: string) => {
+        if (stompRef.current?.connected) {
+            // 이미 연결된 상태 → 바로 구독 추가
+            subscribeGroup(groupId, groupTitle)
+        } else {
+            // 연결이 끊긴 상태 → 재연결하면서 구독
+            await connect([{ id: groupId, title: groupTitle }])
+        }
+    }, [subscribeGroup, connect])
+
     // ── 읽음 처리 ──────────────────────────────────────────────
     const markAllRead = useCallback(() => {
         setNotifications([])
@@ -229,7 +243,6 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
         setNotifications(prev => prev.filter(n => n.groupId !== groupId))
     }, [])
 
-    /** 알림 1개만 삭제 (id 기준) */
     const markRead = useCallback((id: number) => {
         setNotifications(prev => prev.filter(n => n.id !== id))
     }, [])
@@ -244,6 +257,7 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
             markAllRead,
             markGroupRead,
             markRead,
+            addGroupSubscription, // ✅ [추가]
         }}>
             {children}
         </ChatNotificationContext.Provider>

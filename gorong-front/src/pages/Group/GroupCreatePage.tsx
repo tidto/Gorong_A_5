@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import { useAuth } from '../../contexts/AuthContext';
+import { useChatNotification } from '../../contexts/ChatNotificationContext'; // ✅ [추가]
 
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
 const TOUR_API_KEY  = import.meta.env.VITE_TOUR_API_KEY  || '';
@@ -66,6 +67,7 @@ const toEventCenter = (event: { title: string; addr1?: string; mapx?: string; ma
 const GroupCreatePage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { addGroupSubscription } = useChatNotification(); // ✅ [추가]
 
     // ─── 폼 데이터 ──────────────────────────────────────────────
     const [formData, setFormData] = useState({
@@ -99,7 +101,7 @@ const GroupCreatePage = () => {
     const [placeKeyword, setPlaceKeyword] = useState('');
     const [placeResults, setPlaceResults] = useState<KakaoPlace[]>([]);
     const [selectedPlace, setSelectedPlace] = useState<KakaoPlace | null>(null);
-    const [userBaseAddress, setUserBaseAddress] = useState('');   // 회원가입 주소
+    const [userBaseAddress, setUserBaseAddress] = useState('');
     const [selectedEventCenter, setSelectedEventCenter] = useState<MapCenter | null>(null);
     const mapRef = useRef<HTMLDivElement>(null);
     const kakaoMapRef = useRef<any>(null);
@@ -151,14 +153,12 @@ const GroupCreatePage = () => {
         const timer = setTimeout(() => {
             if (!mapRef.current) return;
 
-            // 기본 중심: 서울 → 유저 주소가 있으면 지오코딩으로 덮어씀
             const defaultCenter = selectedEventCenter
                 ? new window.kakao.maps.LatLng(selectedEventCenter.lat, selectedEventCenter.lng)
                 : new window.kakao.maps.LatLng(37.5665, 126.9780);
             const map = new window.kakao.maps.Map(mapRef.current, { center: defaultCenter, level: selectedEventCenter ? 4 : 5 });
             kakaoMapRef.current = map;
 
-            // ✅ 회원가입 주소가 있으면 지오코딩 → 지도 중심 이동
             if (selectedEventCenter) {
                 const eventPosition = new window.kakao.maps.LatLng(selectedEventCenter.lat, selectedEventCenter.lng);
                 map.setCenter(eventPosition);
@@ -174,7 +174,6 @@ const GroupCreatePage = () => {
                 });
             }
 
-            // 지도 클릭 → 역지오코딩으로 주소 추출
             window.kakao.maps.event.addListener(map, 'click', (mouseEvent: any) => {
                 const latlng = mouseEvent.latLng;
                 placeMarker(latlng, map);
@@ -312,7 +311,6 @@ const GroupCreatePage = () => {
     const handleSubmit = async (e: any) => {
         e.preventDefault();
 
-        // 날짜·시간 필수 체크
         const missingDate = !formData.meetingDate;
         const missingTime = !formData.meetingTime;
         setDateError(missingDate);
@@ -323,7 +321,15 @@ const GroupCreatePage = () => {
         }
 
         try {
-            await axiosInstance.post('/groups', formData);
+            // ✅ [수정] 응답값에서 생성된 그룹 id·title을 받아 구독 추가
+            const res = await axiosInstance.post('/groups', formData);
+            const created = res.data;
+
+            // 새로 만든 그룹의 채팅 토픽을 즉시 구독
+            if (created?.id) {
+                await addGroupSubscription(created.id, created.title ?? formData.title);
+            }
+
             alert('모집글이 성공적으로 등록되었습니다! 🐈');
             navigate('/group');
         } catch (err) {
@@ -334,7 +340,6 @@ const GroupCreatePage = () => {
 
     const fmtDate = (d: string) => d ? `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}` : '';
 
-    // DB 행사 필터링 (검색어)
     const filteredDbEvents = dbEvents.filter(ev =>
         !eventSearch || ev.title.toLowerCase().includes(eventSearch.toLowerCase()) || ev.addr1.toLowerCase().includes(eventSearch.toLowerCase())
     );
@@ -463,7 +468,6 @@ const GroupCreatePage = () => {
                 <ModalOverlay onClose={() => { setShowEventModal(false); setEventSearch(''); setTourEvents([]); }}>
                     <div style={{ width: '580px', maxWidth: '95vw', backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
 
-                        {/* 모달 헤더 */}
                         <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff6b1a 100%)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                             <div>
                                 <div style={{ color: 'white', fontWeight: '800', fontSize: '17px' }}>🎟️ 행사 선택</div>
@@ -472,7 +476,6 @@ const GroupCreatePage = () => {
                             <button onClick={() => setShowEventModal(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer' }}>닫기</button>
                         </div>
 
-                        {/* 탭 */}
                         <div style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
                             {(['db', 'tour'] as const).map(tab => (
                                 <button key={tab} onClick={() => setEventTab(tab)}
@@ -482,7 +485,6 @@ const GroupCreatePage = () => {
                             ))}
                         </div>
 
-                        {/* ── DB 행사 탭 ── */}
                         {eventTab === 'db' && (
                             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                                 <div style={{ padding: '16px 20px 8px', flexShrink: 0 }}>
@@ -515,7 +517,6 @@ const GroupCreatePage = () => {
                             </div>
                         )}
 
-                        {/* ── TourAPI 탭 ── */}
                         {eventTab === 'tour' && (
                             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                                 <div style={{ padding: '16px 20px 8px', display: 'flex', gap: '10px', flexShrink: 0 }}>
