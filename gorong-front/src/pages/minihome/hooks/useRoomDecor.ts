@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type RoomDecorItem,
   type RoomDecorType,
+  type RoomDecorUnlockContext,
   parseStoredRoomDecor,
   removeRoomDecorById,
   removeRoomDecorByType,
+  sanitizeRoomDecorItems,
   upsertRoomDecorItem,
 } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 
@@ -33,9 +35,22 @@ function saveRoomDecorToStorage(items: RoomDecorItem[]): boolean {
   }
 }
 
-/** 방 꾸미기 — localStorage 영속 (드래그는 다음 단계) */
-export function useRoomDecor() {
+/** 방 가구·장식 — localStorage 영속 + 해금 조건 반영 */
+export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
   const [items, setItems] = useState<RoomDecorItem[]>(() => loadRoomDecorFromStorage());
+
+  const safeItems = useMemo(
+    () => (unlockContext ? sanitizeRoomDecorItems(items, unlockContext) : items),
+    [items, unlockContext]
+  );
+
+  useEffect(() => {
+    if (!unlockContext) return;
+    setItems((prev) => {
+      const next = sanitizeRoomDecorItems(prev, unlockContext);
+      return next.length === prev.length ? prev : next;
+    });
+  }, [unlockContext]);
 
   useEffect(() => {
     saveRoomDecorToStorage(items);
@@ -66,9 +81,17 @@ export function useRoomDecor() {
   }, []);
 
   const hasType = useCallback(
-    (type: RoomDecorType) => items.some((i) => i.type === type),
-    [items]
+    (type: RoomDecorType) => safeItems.some((i) => i.type === type),
+    [safeItems]
   );
 
-  return { items, addItem, removeItem, removeItemById, toggleItem, clearAll, hasType };
+  return {
+    items: safeItems,
+    addItem,
+    removeItem,
+    removeItemById,
+    toggleItem,
+    clearAll,
+    hasType,
+  };
 }

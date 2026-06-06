@@ -10,7 +10,10 @@ import {
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import { useNotification } from "../../../contexts/NotificationContext";
 
-type DecorateTab = "background" | "cat";
+import CatTowerRoomDecorPanel from "./CatTowerRoomDecorPanel";
+import type { RoomDecorType, RoomDecorUnlockContext } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
+
+type DecorateTab = "background" | "furniture" | "cat";
 
 type CatTowerRoomBackgroundPanelProps = {
   selected: RoomBackgroundId;
@@ -19,6 +22,10 @@ type CatTowerRoomBackgroundPanelProps = {
   saving?: boolean;
   error?: string | null;
   growthStage?: GrowthStage;
+  decorUnlockContext: RoomDecorUnlockContext;
+  placedDecorTypes: Set<RoomDecorType>;
+  onToggleDecor: (type: RoomDecorType) => void;
+  onResetDecor?: () => void;
   onSelect: (id: RoomBackgroundId) => void;
   onSave: () => void;
   onCatDecorate?: () => void;
@@ -31,6 +38,10 @@ export default function CatTowerRoomBackgroundPanel({
   saving,
   error,
   growthStage = "BASIC",
+  decorUnlockContext,
+  placedDecorTypes,
+  onToggleDecor,
+  onResetDecor,
   onSelect,
   onSave,
   onCatDecorate,
@@ -48,7 +59,7 @@ export default function CatTowerRoomBackgroundPanel({
       <div className="border-b border-emerald-100/80 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 px-3 py-3 text-center">
         <p className="text-[11px] font-extrabold text-white">🏡 내 공간 꾸미기</p>
         <p className="mt-0.5 text-[9px] font-medium text-white/80">
-          성장 단계에 따라 배경·슬롯이 열려요
+          성장·행사 참여에 따라 배경·가구가 열려요
         </p>
       </div>
 
@@ -56,6 +67,7 @@ export default function CatTowerRoomBackgroundPanel({
         {(
           [
             { id: "background" as const, label: "배경", emoji: "🖼️" },
+            { id: "furniture" as const, label: "가구", emoji: "🪴" },
             { id: "cat" as const, label: "Go냥이", emoji: "👕" },
           ] as const
         ).map((t) => {
@@ -186,6 +198,22 @@ export default function CatTowerRoomBackgroundPanel({
                   {saving ? "저장 중…" : "✨ 배경 저장하기"}
                 </button>
               </div>
+            </motion.div>
+          ) : tab === "furniture" ? (
+            <motion.div
+              key="furniture"
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <CatTowerRoomDecorPanel
+                placedTypes={placedDecorTypes}
+                unlockContext={decorUnlockContext}
+                onToggleItem={onToggleDecor}
+                onResetRoom={onResetDecor}
+                onCatDecorate={onCatDecorate}
+              />
             </motion.div>
           ) : (
             <motion.div

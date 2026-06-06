@@ -1,8 +1,10 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import { useRoomBackground } from "../../../pages/minihome/hooks/useRoomBackground";
+import { useRoomDecor } from "../../../pages/minihome/hooks/useRoomDecor";
+import { buildRoomDecorUnlockContext } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 import { useNotification } from "../../../contexts/NotificationContext";
 import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
 import CatTowerProfilePanel from "./CatTowerProfilePanel";
@@ -80,6 +82,18 @@ function CatTowerDashboard({
     useLocalStorage: canEdit,
   });
 
+  const decorUnlockContext = useMemo(
+    () => buildRoomDecorUnlockContext(growth.stage, growth.activityCount, activities),
+    [growth.stage, growth.activityCount, activities]
+  );
+
+  const roomDecor = useRoomDecor(canEdit ? decorUnlockContext : undefined);
+
+  const placedDecorTypes = useMemo(
+    () => new Set(roomDecor.items.map((item) => item.type)),
+    [roomDecor.items]
+  );
+
   const handleSaveRoomBackground = useCallback(async () => {
     const ok = await roomBg.saveBackground();
     if (ok) {
@@ -134,6 +148,8 @@ function CatTowerDashboard({
           isPublic={isPublic}
           galleryCount={galleryCount}
           loading={loading}
+          showParticipatingEvents={!isReadOnly}
+          refreshToken={refreshToken}
         />
 
         <CatTowerCenterPanel
@@ -142,6 +158,7 @@ function CatTowerDashboard({
           activityCount={activityCount}
           equipped={equipped}
           roomBackground={roomBg.background}
+          roomDecorItems={canEdit ? roomDecor.items : []}
           catName={catName}
           isReadOnly={isReadOnly}
           activities={activities}
@@ -213,6 +230,10 @@ function CatTowerDashboard({
           saving={roomBg.saving}
           error={roomBg.error}
           growthStage={growth.stage}
+          decorUnlockContext={decorUnlockContext}
+          placedDecorTypes={placedDecorTypes}
+          onToggleDecor={roomDecor.toggleItem}
+          onResetDecor={roomDecor.clearAll}
           onSelect={roomBg.selectBackground}
           onSave={handleSaveRoomBackground}
           onCatDecorate={onDecorate}

@@ -10,7 +10,9 @@ import {
 } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import CatTowerRoomAmbience from "./CatTowerRoomAmbience";
 import CatTowerRoomStickers from "./CatTowerRoomStickers";
+import CatTowerRoomDecorLayer from "./CatTowerRoomDecorLayer";
 import CatTowerSpeechBubble from "./CatTowerSpeechBubble";
+import type { RoomDecorItem } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 import GoCatVisual from "../mini-home/GoCatVisual";
 
 type CatTowerRoomStageProps = {
@@ -18,6 +20,7 @@ type CatTowerRoomStageProps = {
   activityCount: number;
   equipped?: EquipPreview | null;
   roomBackground?: RoomBackgroundId;
+  roomDecorItems?: RoomDecorItem[];
   catName?: string;
   interactive?: boolean;
   readOnly?: boolean;
@@ -33,6 +36,7 @@ function CatTowerRoomStage({
   activityCount,
   equipped,
   roomBackground = "BASIC_ROOM",
+  roomDecorItems = [],
   catName = "Go냥이",
   interactive = true,
   readOnly = false,
@@ -72,6 +76,8 @@ function CatTowerRoomStage({
       <div
         className={`pointer-events-none absolute inset-x-0 bottom-0 h-[22%] bg-gradient-to-t ${bg.floorClass} to-transparent`}
       />
+
+      <CatTowerRoomDecorLayer items={roomDecorItems} isDark={bg.isDark} />
 
       {/* room title */}
       <div
