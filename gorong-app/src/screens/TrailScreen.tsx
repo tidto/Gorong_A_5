@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTrailStore } from '../store/trailStore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
@@ -8,6 +9,7 @@ const TRAIL_ARCHIVE_KEY = 'gorong-trail-archive-count'
 export default function TrailScreen() {
   const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
   const [archiveCount, setArchiveCount] = React.useState(0)
+  const insets = useSafeAreaInsets()
 
   React.useEffect(() => {
     ;(async () => {
@@ -26,7 +28,7 @@ export default function TrailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: 76 + insets.top }]}>
         <Text style={styles.headerTitle}>🐾 나의 동선 기록</Text>
         <Text style={styles.headerSub}>행사장에서의 경로를 기록해보세요</Text>
       </View>
@@ -78,7 +80,7 @@ export default function TrailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f8f8' },
   header: {
-    backgroundColor: '#FF6B35', paddingTop: 76,
+    backgroundColor: '#FF6B35',
     paddingBottom: 16, paddingHorizontal: 16,
   },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },

@@ -27,6 +27,7 @@ import { useAuthStore } from '../store/authStore'
 import { auth } from '../config/firebaseConfig'
 import { AppGroup } from '../types'
 import { fetchAppGroups } from '../services/api'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ensureGroupRoom,
   markGroupGathered,
@@ -50,6 +51,7 @@ export default function ChatScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [groupRoomReady, setGroupRoomReady] = useState(false)
   const [loadingGroups, setLoadingGroups] = useState(true)
+  const insets = useSafeAreaInsets()
 
   const { insideVenueId, user } = useAuthStore()
 
@@ -228,7 +230,7 @@ export default function ChatScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: 16 + insets.top }]}>
         <Text style={styles.headerTitle}>💬 현장 채팅</Text>
         <Text style={styles.headerSub}>
           {mode === 'anonymous'
@@ -405,7 +407,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
     paddingBottom: 10,
     backgroundColor: '#fff',
     borderBottomWidth: 1,

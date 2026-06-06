@@ -1,6 +1,8 @@
 import * as ImagePicker from 'expo-image-picker'
 import React, { useCallback, useEffect, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { auth } from '../config/firebaseConfig'
 import { AppGroup } from '../types'
 import { checkArrivalStatus, fetchAppGroups, gatherAppGroup, joinAppGroup, uploadFileToS3 } from '../services/api'
 
@@ -9,25 +11,32 @@ export default function GroupScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [arrivalVerifiedByGroupId, setArrivalVerifiedByGroupId] = useState<Record<number, boolean>>({})
+  const insets = useSafeAreaInsets()
+
+  const waitForAuthReady = useCallback(async () => {
+    if (auth.currentUser) return
+
+    await new Promise<void>((resolve) => {
+      const unsub = auth.onAuthStateChanged((user) => {
+        if (user) {
+          unsub()
+          resolve()
+        }
+      })
+
+      setTimeout(() => {
+        unsub()
+        resolve()
+      }, 3000)
+    })
+  }, [])
 
   const loadGroups = useCallback(async () => {
     try {
+      await waitForAuthReady()
       const response = await fetchAppGroups()
       const items = response.data
       setGroups(items)
-
-      const statuses = await Promise.all(
-        items.map(async (group) => {
-          if (!group.event) return [group.id, false] as const
-          try {
-            const res = await checkArrivalStatus(group.event)
-            return [group.id, Boolean(res.data?.verified)] as const
-          } catch {
-            return [group.id, false] as const
-          }
-        })
-      )
-      setArrivalVerifiedByGroupId(Object.fromEntries(statuses))
     } catch (error) {
       console.error('그룹 목록 조회 실패:', error)
       Alert.alert('오류', '그룹 목록을 불러오지 못했습니다.')
@@ -35,11 +44,42 @@ export default function GroupScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [waitForAuthReady])
 
   useEffect(() => {
     loadGroups()
   }, [loadGroups])
+
+  useEffect(() => {
+    if (!groups.length) return
+
+    let cancelled = false
+
+    ;(async () => {
+      const statuses = await Promise.allSettled(
+        groups.map(async (group) => {
+          if (!group.event) return [group.id, false] as const
+          const res = await checkArrivalStatus(group.event)
+          return [group.id, Boolean(res.data?.verified)] as const
+        })
+      )
+
+      if (cancelled) return
+
+      const next: Record<number, boolean> = {}
+      for (const item of statuses) {
+        if (item.status === 'fulfilled') {
+          const [groupId, verified] = item.value
+          next[groupId] = verified
+        }
+      }
+      setArrivalVerifiedByGroupId(next)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [groups])
 
   const handleJoin = async (groupId: number) => {
     try {
@@ -105,9 +145,9 @@ export default function GroupScreen() {
   }
 
   return (
-      <ScrollView
+    <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: 16 + insets.top }]}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={() => {
           setRefreshing(true)

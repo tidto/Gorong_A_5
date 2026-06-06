@@ -16,6 +16,13 @@ const publicApi = axios.create({
   timeout: 10000,
 })
 
+let unauthorizedHandler: (() => Promise<void> | void) | null = null
+let lastUnauthorizedHandledAt = 0
+
+export const setUnauthorizedHandler = (handler: (() => Promise<void> | void) | null) => {
+  unauthorizedHandler = handler
+}
+
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
   new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`timeout:${ms}`)), ms)
@@ -58,6 +65,26 @@ publicApi.interceptors.request.use(async (config) => {
   }
   return config
 })
+
+const handleUnauthorized = async () => {
+  const now = Date.now()
+  if (now - lastUnauthorizedHandledAt < 2000) return
+  lastUnauthorizedHandledAt = now
+  if (unauthorizedHandler) {
+    await unauthorizedHandler()
+  }
+}
+
+const handleResponseError = async (error: any) => {
+  const status = error?.response?.status
+  if (status === 401) {
+    await handleUnauthorized()
+  }
+  return Promise.reject(error)
+}
+
+api.interceptors.response.use((response) => response, handleResponseError)
+publicApi.interceptors.response.use((response) => response, handleResponseError)
 
 // 주변 행사 조회 (TourAPI는 백엔드가 처리)
 export const fetchNearbyVenues = (lat: number, lng: number, radius = 5000) =>

@@ -77,8 +77,8 @@ export default function MapScreen() {
     () => venues.find((venue) => venue.id === selectedVenueId) ?? null,
     [venues, selectedVenueId],
   )
-  const buttonRowBottom = 150 + insets.bottom
-  const eventSheetBottomPadding = 18 + insets.bottom
+  const buttonRowBottom = 220 + insets.bottom
+  const eventSheetBottomPadding = 24 + insets.bottom
 
   useEffect(() => {
     setInsideVenueId(insideVenueId)
@@ -270,7 +270,7 @@ export default function MapScreen() {
       </MapView>
 
       {selectedVenue && (
-        <View style={[styles.previewCard, { top: 84 + insets.top }]}>
+        <View style={[styles.previewCard, { top: 96 + insets.top }]}>
           <Image
             source={
               selectedVenue.imageUrl
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   btnText: { fontWeight: '600', color: '#333' },
   badge: {
     position: 'absolute',
-    top: 76,
+    top: 92,
     alignSelf: 'center',
     backgroundColor: '#fff',
     borderRadius: 20,

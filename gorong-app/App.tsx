@@ -13,22 +13,24 @@
 // ──────────────────────────────────────────────────────────────
 
 import React, { useEffect, useState } from 'react'
-import { View, ActivityIndicator, Alert } from 'react-native'
+import { View, ActivityIndicator, Alert, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { onAuthStateChanged } from 'firebase/auth'
 
 import { auth } from './src/config/firebaseConfig'
 import { useAuthStore } from './src/store/authStore'
 import { AuthNavigator, MainNavigator } from './src/navigation/AppNavigator'
+import { setUnauthorizedHandler } from './src/services/api'
 
 const queryClient = new QueryClient()
 
 function AppContent() {
   const [authBootstrapped, setAuthBootstrapped] = useState(false)
+  const insets = useSafeAreaInsets()
   const {
     user,
     isHydrated,
@@ -38,6 +40,7 @@ function AppContent() {
     loadFromStorage,
     checkBackendLogin,
     resetLocalSession,
+    logout,
   } = useAuthStore()
 
   useEffect(() => {
@@ -80,6 +83,15 @@ function AppContent() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    setUnauthorizedHandler(async () => {
+      await logout()
+    })
+    return () => {
+      setUnauthorizedHandler(null)
+    }
+  }, [logout])
+
+  useEffect(() => {
     if (accessRestricted && accessRestrictedMessage) {
       Alert.alert('이용 제한', accessRestrictedMessage)
     }
@@ -98,10 +110,22 @@ function AppContent() {
   const isAuthenticated = !!user && !needsSignup
 
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
-    </NavigationContainer>
+    <View style={{ flex: 1 }}>
+      <NavigationContainer>
+        <StatusBar style="auto" />
+        {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
+      </NavigationContainer>
+
+      {isAuthenticated && (
+        <TouchableOpacity
+          style={[styles.logoutPill, { top: insets.top + 10 }]}
+          onPress={logout}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.logoutText}>로그아웃</Text>
+        </TouchableOpacity>
+      )}
+    </View>
   )
 }
 
@@ -117,3 +141,24 @@ export default function App() {
     </GestureHandlerRootView>
   )
 }
+
+const styles = StyleSheet.create({
+  logoutPill: {
+    position: 'absolute',
+    right: 14,
+    zIndex: 50,
+    backgroundColor: 'rgba(17,24,39,0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+})
