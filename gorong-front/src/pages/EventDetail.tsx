@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import axiosInstance from '../api/axiosInstance';
+import LazyImage from '../components/common/LazyImage';
 import MapView from '../components/MapView';
 import IconLabel from '../components/IconLabel';
 import AccessibilityBadge from '../components/AccessibilityBadge';
@@ -26,6 +26,20 @@ interface EventData {
   route?: string;
   eventStartDate?: string;
   eventEndDate?: string;
+
+  // 무장애 추가 필드
+  wheelchair?: string;
+  exit?: string;
+  publicTransport?: string;
+  braileBlock?: string;
+  audioGuide?: string;
+  helpDog?: string;
+  signGuide?: string;
+  videoGuide?: string;
+  stroller?: string;
+
+  // 관광사진 추가 이미지 (쉼표 구분)
+  galleryImages?: string;
 }
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -95,13 +109,7 @@ export default function EventDetail() {
       if (!id) return;
       try {
         setLoading(true);
-        const headers: Record<string, string> = {};
-        const firebaseUser = auth.user as { getIdToken?: () => Promise<string> } | null;
-        if (firebaseUser && typeof firebaseUser.getIdToken === 'function') {
-          const token = await firebaseUser.getIdToken();
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        const response = await axios.get(`/api/public/map/${id}`, { headers });
+        const response = await axiosInstance.get(`/public/map/${id}`);
         setEvent(response.data);
 
         try {
@@ -229,20 +237,39 @@ export default function EventDetail() {
     );
   }
 
-  const parkingOk  = isAccessible(event.parking);
-  const elevatorOk = isAccessible(event.elevator);
-  const restroomOk = isAccessible(event.restroom);
-  const routeOk    = isAccessible(event.route);
-  const hasAnyAccessibilityData = parkingOk || elevatorOk || restroomOk || routeOk;
+  const parkingOk       = isAccessible(event.parking);
+  const elevatorOk      = isAccessible(event.elevator);
+  const restroomOk      = isAccessible(event.restroom);
+  const routeOk         = isAccessible(event.route);
+  const wheelchairOk    = isAccessible(event.wheelchair);
+  const exitOk          = isAccessible(event.exit);
+  const publicTransOk   = isAccessible(event.publicTransport);
+  const braileOk        = isAccessible(event.braileBlock);
+  const audioOk         = isAccessible(event.audioGuide);
+  const helpDogOk       = isAccessible(event.helpDog);
+  const signOk          = isAccessible(event.signGuide);
+  const videoOk         = isAccessible(event.videoGuide);
+  const strollerOk      = isAccessible(event.stroller);
+
+  const hasAnyAccessibilityData =
+      parkingOk || elevatorOk || restroomOk || routeOk ||
+      wheelchairOk || exitOk || publicTransOk || braileOk ||
+      audioOk || helpDogOk || signOk || videoOk || strollerOk;
 
   const supportsGuideDog =
+      helpDogOk ||
       event.title.includes('배리어프리') ||
-      event.overview?.includes('안내건') ||
+      event.overview?.includes('안내견') ||
       event.overview?.includes('시각장애인');
 
   // 이미지 슬라이더용 배열 (있는 것만)
-  const images = [event.firstimage, event.firstimage2]
-      .filter((img): img is string => !!img && img.trim() !== '');
+  const galleryList = event.galleryImages
+      ? event.galleryImages.split(',').map(u => u.trim()).filter(Boolean)
+      : []
+  const images = [...new Set(
+      [event.firstimage, event.firstimage2, ...galleryList]
+          .filter((img): img is string => !!img && img.trim() !== '')
+  )]
 
   const mapData = [{
     title: event.title,
@@ -326,8 +353,9 @@ export default function EventDetail() {
             >
               {images.length > 0 ? images.map((src, idx) => (
                   <div key={idx} style={{ width: `${100 / images.length}%`, flexShrink: 0, height: '100%' }}>
-                    <img
+                    <LazyImage
                         src={src}
+                        wrapperClassName="w-full h-full"
                         className="w-full h-full object-cover"
                         alt={`${event.title} ${idx + 1}`}
                         onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_IMAGE; }}
@@ -335,7 +363,7 @@ export default function EventDetail() {
                   </div>
               )) : (
                   <div style={{ width: '100%', flexShrink: 0, height: '100%' }}>
-                    <img src={DEFAULT_IMAGE} className="w-full h-full object-cover" alt={event.title} />
+                    <LazyImage src={DEFAULT_IMAGE} wrapperClassName="w-full h-full" className="w-full h-full object-cover" alt={event.title} />
                   </div>
               )}
             </div>
@@ -453,18 +481,54 @@ export default function EventDetail() {
                     </div>
                 )}
 
-                <div className="space-y-2">
-                  {parkingOk && (
-                      <AccessibilityBadge type="verified" label="주차 가능" description={event.parking!} />
+                <div className="space-y-4">
+                  {/* 이동 편의 */}
+                  {(parkingOk || elevatorOk || restroomOk || routeOk || wheelchairOk || exitOk || publicTransOk) && (
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">🦽 이동 편의</p>
+                        <div className="space-y-2">
+                          {parkingOk    && <AccessibilityBadge type="verified" label="주차 가능"       description={event.parking!} />}
+                          {elevatorOk   && <AccessibilityBadge type="verified" label="엘리베이터"      description={event.elevator!} />}
+                          {restroomOk   && <AccessibilityBadge type="verified" label="장애인 화장실"   description={event.restroom!} />}
+                          {routeOk      && <AccessibilityBadge type="info"    label="접근 경로"        description={event.route!} />}
+                          {wheelchairOk && <AccessibilityBadge type="verified" label="휠체어 대여"     description={event.wheelchair!} />}
+                          {exitOk       && <AccessibilityBadge type="verified" label="출입통로 경사로" description={event.exit!} />}
+                          {publicTransOk && <AccessibilityBadge type="info"   label="대중교통 접근"   description={event.publicTransport!} />}
+                        </div>
+                      </div>
                   )}
-                  {elevatorOk && (
-                      <AccessibilityBadge type="verified" label="엘리베이터" description={event.elevator!} />
+
+                  {/* 시각 지원 */}
+                  {(braileOk || audioOk || helpDogOk) && (
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">👁 시각 지원</p>
+                        <div className="space-y-2">
+                          {braileOk  && <AccessibilityBadge type="verified" label="점자블록"      description={event.braileBlock!} />}
+                          {audioOk   && <AccessibilityBadge type="verified" label="오디오 가이드" description={event.audioGuide!} />}
+                          {helpDogOk && <AccessibilityBadge type="verified" label="보조견 동반"   description={event.helpDog!} />}
+                        </div>
+                      </div>
                   )}
-                  {restroomOk && (
-                      <AccessibilityBadge type="verified" label="장애인 화장실" description={event.restroom!} />
+
+                  {/* 청각 지원 */}
+                  {(signOk || videoOk) && (
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">👂 청각 지원</p>
+                        <div className="space-y-2">
+                          {signOk  && <AccessibilityBadge type="verified" label="수화 안내"    description={event.signGuide!} />}
+                          {videoOk && <AccessibilityBadge type="verified" label="자막 영상"    description={event.videoGuide!} />}
+                        </div>
+                      </div>
                   )}
-                  {routeOk && (
-                      <AccessibilityBadge type="info" label="접근 경로" description={event.route!} />
+
+                  {/* 영유아 */}
+                  {strollerOk && (
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">👶 영유아 가족</p>
+                        <div className="space-y-2">
+                          <AccessibilityBadge type="verified" label="유모차 대여" description={event.stroller!} />
+                        </div>
+                      </div>
                   )}
 
                   {!hasAnyAccessibilityData && !supportsGuideDog && (

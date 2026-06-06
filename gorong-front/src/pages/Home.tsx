@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import MapView from '../components/MapView'
+import LazyImage from '../components/common/LazyImage'
 import Card from '../components/Card'
 import { useAuth } from '../contexts/AuthContext'
 import axiosInstance from '../api/axiosInstance'
@@ -79,9 +80,10 @@ function EventCard({ event, rank, onClick }: { event: any; rank?: number; onClic
             }}
         >
             <div style={{ position: 'relative', height: 170, overflow: 'hidden', background: '#f0f0f0' }}>
-                <img
+                <LazyImage
                     src={img}
                     alt={event.title}
+                    wrapperClassName="w-full h-full"
                     style={{
                         width: '100%', height: '100%', objectFit: 'cover',
                         transform: hov ? 'scale(1.07)' : 'scale(1)',
@@ -257,64 +259,9 @@ export default function Home() {
     }), [events, searchQuery])
 
     const recommendedEvents = useMemo(() => {
-        //추가
-        console.log('auth.user 전체:', JSON.stringify(auth.user, null, 2))
-
         const wt = RECOMMEND_BY_WEATHER[weatherState] || []
         const tt = RECOMMEND_BY_TIME[timeState] || []
         const ic = (auth.user?.interests || []).map((i: string) => CATEGORY_MAP[i]).filter(Boolean)
-
-        // 추가
-        console.log('추천 행사 점수 분포:',
-            [...displayEvents]
-                .map(ev => {
-                    let s = 0
-                    const c = (ev.cat1 || '').toUpperCase()
-                    if (ic.some((x: string) => c.startsWith(x))) s += 3
-                    if (wt.some(x => c.startsWith(x))) s += 2
-                    if (tt.some(x => c.startsWith(x))) s += 1
-                    return s
-                })
-                .reduce((acc: any, score) => {
-                    acc[score] = (acc[score] || 0) + 1
-                    return acc
-                }, {})
-        )
-
-        // 또 점수 확인 콘솔 추가
-        console.log('3점 행사 목록:',
-            [...displayEvents]
-                .filter(ev => {
-                    const c = (ev.cat1 || '').toUpperCase()
-                    return ic.some((x: string) => c.startsWith(x))
-                })
-                .slice(0, 5)
-                .map(ev => ({ title: ev.title, cat1: ev.cat1 }))
-        )
-
-        // 카테고리 콘솔 확인 추가
-        console.log('A01 행사 수:', displayEvents.filter(ev => ev.cat1 === 'A01').length)
-        console.log('A02 행사 수:', displayEvents.filter(ev => ev.cat1 === 'A02').length)
-        console.log('cat1 없는 행사 수:', displayEvents.filter(ev => !ev.cat1).length)
-
-        //추가
-        console.log('=== 추천 디버그 ===')
-        console.log('날씨 상태:', weatherState, '→ 날씨 카테고리:', wt)
-        console.log('시간 상태:', timeState, '→ 시간 카테고리:', tt)
-        console.log('사용자 관심사:', auth.user?.interests, '→ 변환 카테고리:', ic)
-        console.log('샘플 행사 cat1:', displayEvents.slice(0, 5).map(ev => ({
-            title: ev.title,
-            cat1: ev.cat1,
-            tourCategoryCode: ev.tourCategoryCode,
-            score: (() => {
-                let s = 0
-                const c = (ev.cat1 || ev.tourCategoryCode || ev.cat3 || '').toUpperCase()
-                if (ic.some((x: string) => c.startsWith(x))) s += 3
-                if (wt.some(x => c.startsWith(x))) s += 2
-                if (tt.some(x => c.startsWith(x))) s += 1
-                return s
-            })()
-        })))
 
         return [...displayEvents]
             .map(ev => {
