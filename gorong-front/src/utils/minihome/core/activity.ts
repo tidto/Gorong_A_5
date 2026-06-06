@@ -32,6 +32,13 @@ export function formatActivityDate(iso?: string | null): string {
   }
 }
 
+export function countEventParticipations(activities: ActivityItem[]): number {
+  return (activities ?? []).filter((a) => {
+    const key = (a.activityType ?? "").trim().toUpperCase();
+    return key.includes("EVENT");
+  }).length;
+}
+
 /** API는 createAt 내림차순 — 최신 N개 활동 */
 export function getRecentActivities(
   activities: ActivityItem[],

@@ -2,6 +2,10 @@ import { X } from "lucide-react";
 import CatTowerRoomBackgroundPanel from "./CatTowerRoomBackgroundPanel";
 import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import type {
+  RoomDecorType,
+  RoomDecorUnlockContext,
+} from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 
 type CatTowerRoomDecorateModalProps = {
   open: boolean;
@@ -11,13 +15,17 @@ type CatTowerRoomDecorateModalProps = {
   saving?: boolean;
   error?: string | null;
   growthStage?: GrowthStage;
+  decorUnlockContext: RoomDecorUnlockContext;
+  placedDecorTypes: Set<RoomDecorType>;
+  onToggleDecor: (type: RoomDecorType) => void;
+  onResetDecor?: () => void;
   onSelect: (id: RoomBackgroundId) => void;
   onSave: () => void;
   onCatDecorate: () => void;
   onClose: () => void;
 };
 
-/** 방 배경·Go냥이 꾸미기 — 메인에서 분리된 모달 */
+/** 방 배경·가구·Go냥이 꾸미기 — 메인에서 분리된 모달 */
 export default function CatTowerRoomDecorateModal({
   open,
   selected,
@@ -26,6 +34,10 @@ export default function CatTowerRoomDecorateModal({
   saving,
   error,
   growthStage,
+  decorUnlockContext,
+  placedDecorTypes,
+  onToggleDecor,
+  onResetDecor,
   onSelect,
   onSave,
   onCatDecorate,
@@ -72,6 +84,10 @@ export default function CatTowerRoomDecorateModal({
             saving={saving}
             error={error}
             growthStage={growthStage}
+            decorUnlockContext={decorUnlockContext}
+            placedDecorTypes={placedDecorTypes}
+            onToggleDecor={onToggleDecor}
+            onResetDecor={onResetDecor}
             onSelect={onSelect}
             onSave={onSave}
             onCatDecorate={() => {
