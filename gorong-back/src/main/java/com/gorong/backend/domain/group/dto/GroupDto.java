@@ -9,6 +9,7 @@ public class GroupDto {
     private String title;
     private String content;
     private String event;       // 행사명
+    private String eventContentId; // TourAPI contentId (행사 선택 시)
     private String location;    // 상세 장소 (프론트에서 event와 동일하게 보낼 예정)
     private Integer maxCapacity;
     private String meetingDate;

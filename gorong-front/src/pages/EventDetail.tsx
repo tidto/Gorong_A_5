@@ -101,6 +101,16 @@ export default function EventDetail() {
   const [showDateModal,  setShowDateModal]  = useState(false);
   const [selectedDate,   setSelectedDate]   = useState('');
 
+  // 토스트 상태
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const toastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ msg, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+  };
+
   const DEFAULT_IMAGE = '/images/default-event.png';
 
   // 1. 상세 데이터 + 혼자참여 여부 확인
@@ -156,8 +166,8 @@ export default function EventDetail() {
       setSoloApplied(false);
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 401) alert('로그인이 필요합니다.');
-      else alert('참여 취소 중 오류가 발생했습니다.');
+      if (status === 401) showToast('로그인이 필요합니다.', 'error');
+      else showToast('참여 취소 중 오류가 발생했습니다.', 'error');
     }
   };
 
@@ -170,7 +180,7 @@ export default function EventDetail() {
 
   // 날짜 확정 후 API 호출
   const handleSoloApplyConfirm = async () => {
-    if (!selectedDate) { alert('방문 예정 날짜를 선택해주세요.'); return; }
+    if (!selectedDate) { showToast('방문 예정 날짜를 선택해주세요.', 'error'); return; }
     setShowDateModal(false);
     setSoloLoading(true);
     try {
@@ -180,12 +190,12 @@ export default function EventDetail() {
         visitDate: selectedDate,
       });
       setSoloApplied(true);
-      alert('혼자 참여 신청이 완료되었습니다! 🎉');
+      showToast('혼자 참여 신청이 완료되었습니다! 🎉', 'success');
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 401) alert('로그인이 필요합니다.');
-      else if (status === 409) alert('이미 이 행사에 혼자 참여 신청하셨습니다.');
-      else alert('참여 신청 중 오류가 발생했습니다.');
+      if (status === 401) showToast('로그인이 필요합니다.', 'error');
+      else if (status === 409) showToast('이미 이 행사에 혼자 참여 신청하셨습니다.', 'error');
+      else showToast('참여 신청 중 오류가 발생했습니다.', 'error');
     } finally {
       setSoloLoading(false);
     }
@@ -202,7 +212,7 @@ export default function EventDetail() {
     const eventLat = Number(event.mapy);
     const eventLng = Number(event.mapx);
     if (!isValidLocation({ lat: eventLat, lng: eventLng })) {
-      alert('행사 위치 정보가 없어 카카오맵을 열 수 없습니다.');
+      showToast('행사 위치 정보가 없어 카카오맵을 열 수 없습니다.', 'error');
       return;
     }
     const destinationName = toKakaoLinkName(event.title);
@@ -295,6 +305,18 @@ export default function EventDetail() {
   return (
       <div className="max-w-6xl mx-auto px-4 py-8">
 
+        {/* ── 토스트 알림 ── */}
+        {toast && (
+            <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 px-5 py-3 rounded-2xl shadow-lg text-sm font-semibold transition-all duration-300 ${
+                toast.type === 'success' ? 'bg-emerald-500 text-white' :
+                    toast.type === 'error'   ? 'bg-red-500 text-white' :
+                        'bg-gray-800 text-white'
+            }`}>
+              {toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'}
+              <span>{toast.msg}</span>
+            </div>
+        )}
+
         {/* ── 날짜 선택 팝업 모달 ── */}
         {showDateModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -304,7 +326,12 @@ export default function EventDetail() {
                 <input
                     type="date"
                     value={selectedDate}
-                    min={new Date().toISOString().split('T')[0]}
+                    min={event?.eventStartDate
+                        ? `${event.eventStartDate.slice(0,4)}-${event.eventStartDate.slice(4,6)}-${event.eventStartDate.slice(6,8)}`
+                        : new Date().toISOString().split('T')[0]}
+                    max={event?.eventEndDate
+                        ? `${event.eventEndDate.slice(0,4)}-${event.eventEndDate.slice(4,6)}-${event.eventEndDate.slice(6,8)}`
+                        : undefined}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full border-2 border-gray-200 focus:border-orange-400 rounded-xl px-4 py-3 text-base outline-none transition-colors"
                 />

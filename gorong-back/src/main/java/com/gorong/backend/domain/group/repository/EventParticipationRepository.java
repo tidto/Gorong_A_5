@@ -33,4 +33,16 @@ public interface EventParticipationRepository extends JpaRepository<EventPartici
     /** 특정 행사에 대한 유저의 참여 기록 조회 */
     Optional<EventParticipation> findByUserIdAndEventContentIdAndParticipationType(
             Long userId, String eventContentId, ParticipationType type);
+
+    /**
+     * 참여 수 기준 인기 행사 TOP N 조회.
+     * SOLO + GROUP 모두 집계 → eventContentId별 count 내림차순.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT ep.eventContentId, COUNT(ep) AS cnt " +
+                    "FROM EventParticipation ep " +
+                    "GROUP BY ep.eventContentId " +
+                    "ORDER BY cnt DESC"
+    )
+    List<Object[]> findTopEventContentIds(org.springframework.data.domain.Pageable pageable);
 }

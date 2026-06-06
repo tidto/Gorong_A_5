@@ -113,11 +113,15 @@ public class GroupController {
 
             // ✅ 주최자도 event_participation에 그룹 참여로 기록
             try {
-                if (saved.getEvent() != null && !saved.getEvent().isBlank()) {
+                // eventContentId(TourAPI contentId) 우선, 없으면 event 텍스트로 fallback
+                String participationContentId = (saved.getEventContentId() != null && !saved.getEventContentId().isBlank())
+                        ? saved.getEventContentId()
+                        : saved.getEvent();
+                if (participationContentId != null && !participationContentId.isBlank()) {
                     eventParticipationService.applyGroup(
                             currentUser.getId(),
+                            participationContentId,
                             saved.getEvent(),
-                            saved.getTitle(),
                             saved.getId()
                     );
                 }

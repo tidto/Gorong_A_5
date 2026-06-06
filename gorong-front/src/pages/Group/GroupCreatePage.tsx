@@ -69,7 +69,7 @@ const GroupCreatePage = () => {
 
     // ─── 폼 데이터 ──────────────────────────────────────────────
     const [formData, setFormData] = useState({
-        title: '', event: '', location: '', content: '',
+        title: '', event: '', eventContentId: '', location: '', content: '',
         maxCapacity: 4, meetingDate: '', meetingTime: '', condition: '',
     });
 
@@ -263,7 +263,7 @@ const GroupCreatePage = () => {
 
     // ─── 행사 선택 ────────────────────────────────────────────────
     const handleDbEventSelect = (ev: DbEvent) => {
-        setFormData(prev => ({ ...prev, event: ev.title }));
+        setFormData(prev => ({ ...prev, event: ev.title, eventContentId: ev.id?.toString() || '' }));
         setSelectedEventCenter(toEventCenter(ev));
         setPlaceResults([]);
         setSelectedPlace(null);
@@ -273,7 +273,7 @@ const GroupCreatePage = () => {
     };
 
     const handleTourEventSelect = (ev: TourEvent) => {
-        setFormData(prev => ({ ...prev, event: ev.title }));
+        setFormData(prev => ({ ...prev, event: ev.title, eventContentId: ev.contentid?.toString() || '' }));
         setSelectedEventCenter(toEventCenter(ev));
         setPlaceResults([]);
         setSelectedPlace(null);

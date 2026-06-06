@@ -27,7 +27,6 @@ const CATEGORY_MAP: Record<string, string> = {
   A02: '문화/역사',
   A03: '레포츠',
   A04: '쇼핑',
-  A05: '음식',
   C01: '추천코스',
   ETC: '기타',
 }
@@ -37,7 +36,6 @@ const CATEGORY_OPTIONS = [
   { value: 'A02', label: '문화/역사' },
   { value: 'A01', label: '자연관광' },
   { value: 'A03', label: '레포츠' },
-  { value: 'A05', label: '음식' },
   { value: 'A04', label: '쇼핑' },
 ]
 
@@ -50,6 +48,9 @@ type SortKey = 'default' | 'title_asc' | 'title_desc' | 'barrier_first' | 'dista
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'default',       label: '기본순' },
   { value: 'distance',      label: '가까운순' },
+  { value: 'title_asc',     label: '이름 오름차순' },
+  { value: 'title_desc',    label: '이름 내림차순' },
+  { value: 'barrier_first', label: '배리어프리 우선' },
 ]
 
 const calcDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
