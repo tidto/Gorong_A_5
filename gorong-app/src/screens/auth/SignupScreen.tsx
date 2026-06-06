@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   inner: {
     flexGrow: 1,
     paddingHorizontal: 28,
-    paddingTop: 60,
+    paddingTop: 76,
     paddingBottom: 40,
   },
 

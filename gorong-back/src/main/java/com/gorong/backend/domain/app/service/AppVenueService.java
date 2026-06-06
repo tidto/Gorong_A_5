@@ -76,7 +76,7 @@ public class AppVenueService {
                     String id = String.valueOf(item.get("contentid"));
                     double venueLat = Double.parseDouble(String.valueOf(item.get("mapy")));
                     double venueLng = Double.parseDouble(String.valueOf(item.get("mapx")));
-                    int geofenceRadius = 150;
+                    int geofenceRadius = 300;
 
                     venueGeoCache.put(id, new VenueGeo(id, venueLat, venueLng, geofenceRadius));
 

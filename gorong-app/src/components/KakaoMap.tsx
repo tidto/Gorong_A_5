@@ -8,6 +8,7 @@ interface Venue {
   lat: number
   lng: number
   radius: number
+  geofenceEnabled?: boolean
 }
 
 interface Props {
@@ -49,7 +50,7 @@ export default function KakaoMap({ lat, lng, venues, onVenueSelect }: Props) {
       map: map
     });
 
-    // 행사장 마커 + 지오펜스 원
+    // 행사장 마커 + 필요할 때만 지오펜스 원
     var venues = ${JSON.stringify(venues)};
     venues.forEach(function(venue) {
       var pos = new kakao.maps.LatLng(venue.lat, venue.lng);
@@ -59,17 +60,18 @@ export default function KakaoMap({ lat, lng, venues, onVenueSelect }: Props) {
         content: '<div style="padding:5px;font-size:12px;">' + venue.name + '</div>'
       });
 
-      // 지오펜스 원
-      new kakao.maps.Circle({
-        map: map,
-        center: pos,
-        radius: venue.radius,
-        strokeWeight: 2,
-        strokeColor: '#0055FF',
-        strokeOpacity: 0.6,
-        fillColor: '#0055FF',
-        fillOpacity: 0.1
-      });
+      if (venue.geofenceEnabled !== false && venue.radius > 0) {
+        new kakao.maps.Circle({
+          map: map,
+          center: pos,
+          radius: venue.radius,
+          strokeWeight: 2,
+          strokeColor: '#0055FF',
+          strokeOpacity: 0.6,
+          fillColor: '#0055FF',
+          fillOpacity: 0.1
+        });
+      }
 
       kakao.maps.event.addListener(marker, 'click', function() {
         infowindow.open(map, marker);

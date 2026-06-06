@@ -21,6 +21,7 @@ export interface Venue {
   lat: number
   lng: number
   radius: number           // 지오펜스 반경 (미터)
+  geofenceEnabled?: boolean // 지오펜싱 대상 여부
   address: string
   category: string          // TourAPI 카테고리
   barrierFreeInfo?: string  // 무장애 정보

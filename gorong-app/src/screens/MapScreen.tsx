@@ -38,13 +38,21 @@ function mapPublicEventToVenue(item: PublicEvent): Venue {
     name: item.title,
     lat: Number(item.mapy),
     lng: Number(item.mapx),
-    radius: 180,
+    radius: 0,
+    geofenceEnabled: false,
     address: item.addr1,
     category: item.cat1 ?? 'EVENT',
     imageUrl: item.firstimage,
     eventStartDate: item.eventStartDate,
     eventEndDate: item.eventEndDate,
     overview: item.overview,
+  }
+}
+
+function mapNearbyVenueToVenue(item: Venue): Venue {
+  return {
+    ...item,
+    geofenceEnabled: true,
   }
 }
 
@@ -57,7 +65,11 @@ export default function MapScreen() {
 
   const mapRef = useRef<MapView | null>(null)
   const { setInsideVenueId } = useAuthStore()
-  const { insideVenueId, isVerified } = useGeofence(venues)
+  const geofenceVenues = useMemo(
+    () => venues.filter((venue) => venue.geofenceEnabled !== false && venue.radius > 0),
+    [venues],
+  )
+  const { insideVenueId, isVerified } = useGeofence(geofenceVenues)
   const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
 
   useEffect(() => {
@@ -130,20 +142,39 @@ export default function MapScreen() {
       setUserLocation({ lat: latitude, lng: longitude })
 
       try {
-        const publicResponse = await fetchPublicEvents()
-        const mapped = publicResponse.data
+        const [publicResponse, nearbyResponse] = await Promise.all([
+          fetchPublicEvents(),
+          fetchNearbyVenues(latitude, longitude),
+        ])
+
+        const publicVenues = publicResponse.data
           .map(mapPublicEventToVenue)
           .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
 
-        if (mapped.length > 0) {
-          setVenues(mapped)
-          setSelectedVenueId((current) => current ?? mapped[0].id)
-          return
-        }
+        const nearbyVenues = nearbyResponse.data
+          .map(mapNearbyVenueToVenue)
+          .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
 
-        const response = await fetchNearbyVenues(latitude, longitude)
-        setVenues(response.data)
-        setSelectedVenueId((current) => current ?? response.data[0]?.id ?? null)
+        const nearbyById = new Map(nearbyVenues.map((venue) => [venue.id, venue]))
+        const mergedVenues = publicVenues.map((venue) => {
+          const nearbyVenue = nearbyById.get(venue.id)
+          if (!nearbyVenue) return venue
+          return {
+            ...venue,
+            ...nearbyVenue,
+            radius: nearbyVenue.radius,
+            geofenceEnabled: true,
+          }
+        })
+
+        nearbyVenues.forEach((venue) => {
+          if (!mergedVenues.some((item) => item.id === venue.id)) {
+            mergedVenues.push(venue)
+          }
+        })
+
+        setVenues(mergedVenues)
+        setSelectedVenueId((current) => current ?? mergedVenues[0]?.id ?? null)
       } catch (err) {
         console.error('주변 행사 조회 실패:', err)
         Alert.alert('오류', '주변 행사 정보를 불러오지 못했습니다.')
@@ -198,17 +229,19 @@ export default function MapScreen() {
               pinColor={insideVenueId === venue.id ? 'green' : 'red'}
               onPress={() => setSelectedVenueId(venue.id)}
             />
-            <Circle
-              center={{ latitude: venue.lat, longitude: venue.lng }}
-              radius={venue.radius}
-              strokeWidth={insideVenueId === venue.id ? 4 : 2}
-              strokeColor={insideVenueId === venue.id
-                ? 'rgba(255, 107, 53, 0.95)'
-                : 'rgba(59, 130, 246, 0.75)'}
-              fillColor={insideVenueId === venue.id
-                ? 'rgba(255, 107, 53, 0.30)'
-                : 'rgba(59, 130, 246, 0.16)'}
-            />
+            {venue.geofenceEnabled !== false && venue.radius > 0 && (
+              <Circle
+                center={{ latitude: venue.lat, longitude: venue.lng }}
+                radius={venue.radius}
+                strokeWidth={insideVenueId === venue.id ? 4 : 2}
+                strokeColor={insideVenueId === venue.id
+                  ? 'rgba(255, 107, 53, 0.95)'
+                  : 'rgba(59, 130, 246, 0.75)'}
+                fillColor={insideVenueId === venue.id
+                  ? 'rgba(255, 107, 53, 0.30)'
+                  : 'rgba(59, 130, 246, 0.16)'}
+              />
+            )}
           </React.Fragment>
         ))}
 
@@ -262,7 +295,11 @@ export default function MapScreen() {
                   {venue.address}
                 </Text>
                 <View style={styles.eventCardFooter}>
-                  <Text style={styles.eventCardRadius}>반경 {venue.radius}m</Text>
+                  <Text style={styles.eventCardRadius}>
+                    {venue.geofenceEnabled === false || venue.radius <= 0
+                      ? '지오펜싱 없음'
+                      : `반경 ${venue.radius}m`}
+                  </Text>
                   {isInside && <Text style={styles.eventCardBadge}>진입 중</Text>}
                 </View>
               </TouchableOpacity>
@@ -329,7 +366,7 @@ const styles = StyleSheet.create({
   btnText: { fontWeight: '600', color: '#333' },
   badge: {
     position: 'absolute',
-    top: 60,
+    top: 76,
     alignSelf: 'center',
     backgroundColor: '#fff',
     borderRadius: 20,

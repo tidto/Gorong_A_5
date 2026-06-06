@@ -40,6 +40,7 @@ export function useGeofence(venues: Venue[]) {
           let enteredId: string | null = null
           let enteredVenue: Venue | null = null
           for (const venue of venues) {
+            if (venue.geofenceEnabled === false || venue.radius <= 0) continue
             const dist = getDistance(latitude, longitude, venue.lat, venue.lng)
             if (dist <= venue.radius) {
               enteredId = venue.id

@@ -78,7 +78,7 @@ export default function TrailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f8f8' },
   header: {
-    backgroundColor: '#FF6B35', paddingTop: 60,
+    backgroundColor: '#FF6B35', paddingTop: 76,
     paddingBottom: 16, paddingHorizontal: 16,
   },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
