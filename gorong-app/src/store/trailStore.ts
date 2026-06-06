@@ -1,9 +1,21 @@
 import { create } from 'zustand'
 import * as Location from 'expo-location'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { saveTrail } from '../services/api'
 
 type Coordinate = { latitude: number; longitude: number }
 type StopReason = 'manual' | 'max_duration' | 'left_venue_timeout'
+
+export type TrailHistoryEntry = {
+  id: string
+  startedAt: number
+  endedAt: number
+  reason: StopReason
+  venueId: string
+  pointCount: number
+  serverSaved: boolean
+  localSaved: boolean
+}
 
 interface TrailStore {
   trail: Coordinate[]
@@ -16,6 +28,19 @@ interface TrailStore {
 let subscription: Location.LocationSubscription | null = null
 let maxDurationTimer: ReturnType<typeof setTimeout> | null = null
 const MAX_RECORDING_MS = 60 * 60 * 1000
+export const TRAIL_HISTORY_KEY = 'gorong-trail-history'
+const TRAIL_SESSION_PREFIX = 'gorong-trail-session-'
+const TRAIL_HISTORY_LIMIT = 20
+
+async function appendTrailHistory(entry: TrailHistoryEntry, snapshot: Coordinate[]) {
+  const sessionKey = `${TRAIL_SESSION_PREFIX}${entry.id}`
+  const current = await AsyncStorage.getItem(TRAIL_HISTORY_KEY)
+  const history = current ? (JSON.parse(current) as TrailHistoryEntry[]) : []
+
+  await AsyncStorage.setItem(sessionKey, JSON.stringify(snapshot))
+  const nextHistory = [entry, ...history].slice(0, TRAIL_HISTORY_LIMIT)
+  await AsyncStorage.setItem(TRAIL_HISTORY_KEY, JSON.stringify(nextHistory))
+}
 
 export const useTrailStore = create<TrailStore>((set) => ({
   trail: [],
@@ -56,21 +81,41 @@ export const useTrailStore = create<TrailStore>((set) => ({
     }
 
     const snapshot = useTrailStore.getState().trail
+    const startedAt = useTrailStore.getState().startedAt ?? Date.now()
+    const endedAt = Date.now()
     set({ isRecording: false, startedAt: null })
 
     if (snapshot.length < 2) return
 
+    const resolvedVenueId = venueId ?? 'UNKNOWN_VENUE'
+    let serverSaved = false
+
     try {
-      const resolvedVenueId = venueId ?? 'UNKNOWN_VENUE'
       const payload = snapshot.map((p, index) => ({
         lat: p.latitude,
         lng: p.longitude,
         timestamp: Date.now() + index,
       }))
       await saveTrail(resolvedVenueId, payload)
+      serverSaved = true
       console.log(`트레일 저장 완료. reason=${reason}, points=${payload.length}`)
     } catch (error) {
       console.error('트레일 저장 실패:', error)
+    }
+
+    try {
+      await appendTrailHistory({
+        id: `${endedAt}`,
+        startedAt,
+        endedAt,
+        reason,
+        venueId: resolvedVenueId,
+        pointCount: snapshot.length,
+        serverSaved,
+        localSaved: true,
+      }, snapshot)
+    } catch (error) {
+      console.error('트레일 히스토리 저장 실패:', error)
     }
   },
 }))
