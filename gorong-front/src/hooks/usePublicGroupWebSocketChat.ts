@@ -249,10 +249,14 @@ export function usePublicGroupWebSocketChat(groupId: string | number) {
             `/app/public.send/${groupId}`,
             {},
             JSON.stringify({
-                senderEmail: currentUser.email,
-                senderId:    myCat?.userId,
-                text:        '',
-                type:        'JOIN',
+                senderEmail:   currentUser.email,
+                senderId:      myCat?.userId,
+                nickname:      (myCat as any)?.nickname ?? currentUser.email?.split('@')[0] ?? '',
+                catName:       myCat?.catName       ?? '',
+                characterType: myCat?.characterType ?? 'BASIC',
+                catColor:      myCat?.catColor      ?? 'CREAM',
+                text:          '',
+                type:          'JOIN',
             })
         )
     }, [groupId, myCat])
