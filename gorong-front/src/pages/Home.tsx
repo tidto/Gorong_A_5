@@ -315,7 +315,7 @@ export default function Home() {
                 if (tt.some(x => c.startsWith(x))) s += 1
                 return { ...ev, score: s }
             })
-            .sort((a, b) => b.score !== a.score ? b.score - a.score : Math.random() - .5)
+            .sort((a, b) => b.score !== a.score ? b.score - a.score : a.id.localeCompare(b.id))
             .slice(0, 9)
     }, [displayEvents, auth.user, weatherState, timeState])
 
