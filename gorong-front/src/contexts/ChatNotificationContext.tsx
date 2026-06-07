@@ -109,11 +109,19 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
             const senderEmail = msg.senderEmail ?? msg.sender ?? ''
             if (senderEmail && senderEmail === myEmail) return
 
+            const senderName = msg.user || msg.nickname || msg.senderEmail || msg.sender || '알 수 없음'
+
+            // 공개 채팅방 입장 알림은 "OOO님이 공개 채팅방에 입장하였습니다."로 표시
+            const isJoin = source === 'public' && (msg.type === 'JOIN' || msg.messageType === 'JOIN')
+            const notifText = isJoin
+                ? `${senderName}님이 공개 채팅방에 입장하였습니다.`
+                : msg.text || msg.content || ''
+
             pushNotification({
                 groupId,
                 groupTitle,
-                sender: msg.user || msg.nickname || msg.senderEmail || msg.sender || '알 수 없음',
-                text:   msg.text || msg.content || '',
+                sender: senderName,
+                text:   notifText,
                 source,
             })
         } catch { /* 파싱 실패 무시 */ }
