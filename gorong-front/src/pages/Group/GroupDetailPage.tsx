@@ -604,7 +604,6 @@ export default function GroupDetailPage() {
                                 { icon: '📍', label: '모임 장소', value: post.location || '미정', accent: true },
                                 { icon: '📅', label: '모임 날짜', value: post.meetingDate || '미정', accent: false },
                                 { icon: '⏰', label: '모임 시간', value: post.meetingTime || '미정', accent: false },
-                                { icon: '📋', label: '참여 조건', value: post.condition || '제한 없음', accent: false },
                             ].map(({ icon, label, value, accent }) => (
                                 <div key={label} style={{
                                     padding: '18px 20px',
@@ -620,6 +619,44 @@ export default function GroupDetailPage() {
                                     </div>
                                 </div>
                             ))}
+                            {/* 참여 조건 — 태그 칩 */}
+                            <div style={{
+                                padding: '18px 20px',
+                                backgroundColor: '#faf9f7',
+                                borderRadius: '14px',
+                                border: '1.5px solid #ebe8e3',
+                            }}>
+                                <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '700', marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    📋 참여 조건
+                                </div>
+                                {(() => {
+                                    const tags = (post.condition || '').split(' ').map(t => t.trim()).filter(Boolean);
+                                    if (tags.length === 0) {
+                                        return (
+                                            <div style={{ fontSize: '16px', color: '#1e293b', fontWeight: '800', lineHeight: 1.35 }}>
+                                                제한 없음
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                            {tags.map((tag, i) => (
+                                                <span key={i} style={{
+                                                    display: 'inline-block',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '20px',
+                                                    backgroundColor: '#fff0e6',
+                                                    color: '#ff5e00',
+                                                    fontSize: '12px',
+                                                    fontWeight: '700',
+                                                }}>
+                                                    {tag.startsWith('#') ? tag : `#${tag}`}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
                         </div>
                     </div>
 
