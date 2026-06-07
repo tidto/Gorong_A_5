@@ -85,6 +85,7 @@ public class TourApiService {
             if (dto.getContentid() == null || dto.getContentid().isEmpty()) continue;
             try {
                 fillBarrierFreeDetail(dto);
+                fillGalleryImages(dto);
                 Long eventId = Long.parseLong(dto.getContentid());
                 eventRepository.findById(eventId)
                         .ifPresentOrElse(
@@ -107,13 +108,13 @@ public class TourApiService {
         List<TourItemDto> totalList = new ArrayList<>();
 
         double[][] centers = {
-                {128.6225, 35.8714},  // 대구 중심
-                {128.5911, 35.8019},  // 대구 서구
-                {129.0756, 35.5665},  // 경주
-                {128.7322, 36.5760},  // 안동
-                {128.9963, 35.9078},  // 포항
-                {128.3445, 35.7300},  // 고령/성주
-                {128.6922, 36.0390},  // 영천
+                {128.6225, 35.8714},
+                {128.5911, 35.8019},
+                {129.0756, 35.5665},
+                {128.7322, 36.5760},
+                {128.9963, 35.9078},
+                {128.3445, 35.7300},
+                {128.6922, 36.0390},
         };
 
         for (double[] center : centers) {
@@ -181,10 +182,54 @@ public class TourApiService {
                     dto.setRestroom(detail.optString("restroom"));
                     dto.setRoute(detail.optString("route"));
                     dto.setOverview(detail.optString("overview"));
+
+                    // 무장애 추가 필드
+                    dto.setWheelchair(detail.optString("wheelchair"));
+                    dto.setExit(detail.optString("exit"));
+                    dto.setPublicTransport(detail.optString("publictransport"));
+                    dto.setBraileBlock(detail.optString("braileblock"));
+                    dto.setAudioGuide(detail.optString("audioguide"));
+                    dto.setHelpDog(detail.optString("helpdog"));
+                    dto.setSignGuide(detail.optString("signguide"));
+                    dto.setVideoGuide(detail.optString("videoguide"));
+                    dto.setStroller(detail.optString("stroller"));
                 }
             }
         } catch (Exception e) {
             System.err.println("🚨 상세 정보 호출 실패 (ID: " + dto.getContentid() + ")");
+        }
+    }
+
+    private void fillGalleryImages(TourItemDto dto) {
+        String galleryUrl = "https://apis.data.go.kr/B551011/KorService2/detailImage2"
+                + "?serviceKey=" + tourApiConfig.getServiceKey()
+                + "&contentId=" + dto.getContentid()
+                + "&imageYN=Y&subImageYN=Y&numOfRows=5"
+                + "&MobileOS=ETC&MobileApp=Gorong&_type=json";
+
+        try {
+            String res = restTemplate.getForObject(galleryUrl, String.class);
+            if (res == null || res.startsWith("<")) return;
+
+            JSONObject json = new JSONObject(res);
+            JSONObject body = json.optJSONObject("response").optJSONObject("body");
+            Object itemsObj = body.opt("items");
+
+            if (itemsObj instanceof JSONObject) {
+                JSONArray itemArr = ((JSONObject) itemsObj).optJSONArray("item");
+                if (itemArr != null && itemArr.length() > 0) {
+                    List<String> urls = new ArrayList<>();
+                    for (int i = 0; i < itemArr.length(); i++) {
+                        String imgUrl = itemArr.getJSONObject(i).optString("originimgurl", "").trim();
+                        if (!imgUrl.isEmpty()) urls.add(imgUrl);
+                    }
+                    if (!urls.isEmpty()) {
+                        dto.setGalleryImages(String.join(",", urls));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("🚨 관광사진 호출 실패 (ID: " + dto.getContentid() + "): " + e.getMessage());
         }
     }
 
@@ -240,6 +285,18 @@ public class TourApiService {
         dto.setEventStartDate(event.getEventStartDate());
         dto.setEventEndDate(event.getEventEndDate());
         dto.setTel(event.getTel());
+
+        // 무장애 추가 필드
+        dto.setWheelchair(event.getWheelchair());
+        dto.setExit(event.getExit());
+        dto.setPublicTransport(event.getPublicTransport());
+        dto.setBraileBlock(event.getBraileBlock());
+        dto.setAudioGuide(event.getAudioGuide());
+        dto.setHelpDog(event.getHelpDog());
+        dto.setSignGuide(event.getSignGuide());
+        dto.setVideoGuide(event.getVideoGuide());
+        dto.setStroller(event.getStroller());
+        dto.setGalleryImages(event.getGalleryImages());
 
         String code = event.getTourCategoryCode();
         if (code != null) {

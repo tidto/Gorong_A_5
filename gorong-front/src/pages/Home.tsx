@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-
 import MapView from '../components/MapView'
-import Card from '../components/Card'
+import LazyImage from '../components/common/LazyImage'
 import { useAuth } from '../contexts/AuthContext'
 import axiosInstance from '../api/axiosInstance'
-import { Search, Trophy, CloudSun, Target, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Target, ChevronLeft, ChevronRight, CloudSun, MapPin, CalendarDays, X } from 'lucide-react'
 
+// ─── 상수 ─────────────────────────────────────────────────────────
 const CATEGORY_MAP: Record<string, string> = {
     NA: 'A01', VE: 'A02', LS: 'A03', SH: 'A04', FD: 'A05', C01: 'C01',
 }
@@ -20,151 +20,175 @@ const RECOMMEND_BY_TIME: Record<'DAY' | 'NIGHT', string[]> = {
 const REGION_BOUNDARY = { LAT_MIN: 34.0, LAT_MAX: 38.5, LNG_MIN: 126.0, LNG_MAX: 131.0 }
 const DEFAULT_LOCATION = { lat: 35.8956, lng: 128.6224 }
 
+const WEATHER_ICON: Record<string, string> = {
+    Clear: '☀️', Clouds: '☁️', Rain: '🌧️', Snow: '❄️',
+}
+const WEATHER_TEXT: Record<string, string> = {
+    Clear: '맑고 선선한 오늘',
+    Clouds: '흐린 하늘인 오늘',
+    Rain: '비가 내리는 오늘',
+    Snow: '눈이 내리는 오늘',
+}
+
+// ─── 유틸 훅 ──────────────────────────────────────────────────────
 function useCarousel(items: any[], perPage: number) {
     const [page, setPage] = useState(0)
     const totalPages = Math.max(1, Math.ceil(items.length / perPage))
+
+    // items가 새로 로드되면 page를 0으로 리셋
+    const prevLenRef = React.useRef(items.length)
+    if (prevLenRef.current !== items.length) {
+        prevLenRef.current = items.length
+        if (page !== 0) setPage(0)
+    }
+
+    // page가 범위를 벗어난 경우 보정
+    const safePage = Math.min(page, totalPages - 1)
+
     const prev = () => setPage(p => Math.max(0, p - 1))
     const next = () => setPage(p => Math.min(totalPages - 1, p + 1))
-    const visible = items.slice(page * perPage, page * perPage + perPage)
-    return { page, totalPages, prev, next, visible, canPrev: page > 0, canNext: page < totalPages - 1 }
+    const visible = items.slice(safePage * perPage, safePage * perPage + perPage)
+    return { page: safePage, totalPages, prev, next, visible, canPrev: safePage > 0, canNext: safePage < totalPages - 1 }
 }
 
-function ArrowBtn({ dir, onClick, disabled }: { dir: 'left' | 'right'; onClick: () => void; disabled: boolean }) {
-    const [hov, setHov] = useState(false)
+// ─── 서브 컴포넌트 ────────────────────────────────────────────────
+
+function CarouselNav({
+                         page, totalPages, canPrev, canNext, onPrev, onNext,
+                     }: {
+    page: number; totalPages: number
+    canPrev: boolean; canNext: boolean
+    onPrev: () => void; onNext: () => void
+}) {
     return (
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            onMouseEnter={() => setHov(true)}
-            onMouseLeave={() => setHov(false)}
-            style={{
-                width: 38, height: 38, borderRadius: '50%',
-                border: 'none',
-                background: disabled ? '#f5f5f5' : hov ? '#f97316' : '#fff',
-                color: disabled ? '#ccc' : hov ? '#fff' : '#555',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all .2s ease',
-                flexShrink: 0,
-                boxShadow: disabled ? 'none' : hov
-                    ? '0 4px 14px rgba(249,115,22,.35)'
-                    : '0 2px 10px rgba(0,0,0,.1)',
-            }}
-        >
-            {dir === 'left' ? <ChevronLeft size={17} /> : <ChevronRight size={17} />}
-        </button>
+        <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-300 font-medium tabular-nums">{page + 1} / {totalPages}</span>
+            <button
+                onClick={onPrev} disabled={!canPrev}
+                className="w-9 h-9 rounded-full flex items-center justify-center border-none
+                           bg-white shadow-sm disabled:opacity-30 disabled:cursor-not-allowed
+                           hover:bg-orange-500 hover:text-white hover:shadow-md
+                           transition-all duration-200 text-gray-500"
+            >
+                <ChevronLeft size={16} />
+            </button>
+            <button
+                onClick={onNext} disabled={!canNext}
+                className="w-9 h-9 rounded-full flex items-center justify-center border-none
+                           bg-white shadow-sm disabled:opacity-30 disabled:cursor-not-allowed
+                           hover:bg-orange-500 hover:text-white hover:shadow-md
+                           transition-all duration-200 text-gray-500"
+            >
+                <ChevronRight size={16} />
+            </button>
+        </div>
+    )
+}
+
+function DotTrack({ total, current }: { total: number; current: number }) {
+    return (
+        <div className="flex justify-center gap-1.5 mt-5">
+            {Array.from({ length: total }).map((_, i) => (
+                <span
+                    key={i}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                        i === current ? 'w-5 bg-orange-500' : 'w-1.5 bg-gray-200'
+                    }`}
+                />
+            ))}
+        </div>
+    )
+}
+
+function CategoryBadge({ cat }: { cat?: string }) {
+    if (!cat) return null
+    const map: Record<string, { label: string; color: string }> = {
+        A01: { label: '자연', color: 'bg-emerald-50 text-emerald-600' },
+        A02: { label: '문화', color: 'bg-purple-50 text-purple-600' },
+        A03: { label: '레저', color: 'bg-blue-50 text-blue-600' },
+        A04: { label: '쇼핑', color: 'bg-pink-50 text-pink-600' },
+        A05: { label: '음식', color: 'bg-yellow-50 text-yellow-700' },
+        C01: { label: '추천', color: 'bg-orange-50 text-orange-600' },
+    }
+    const prefix = (cat || '').toUpperCase().slice(0, 3)
+    const info = map[prefix]
+    if (!info) return null
+    return (
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${info.color}`}>
+            {info.label}
+        </span>
     )
 }
 
 function EventCard({ event, rank, onClick }: { event: any; rank?: number; onClick: () => void }) {
-    const [hov, setHov] = useState(false)
-    const img = event.image || '/images/default-event.png'
+    const img = event.image || event.firstimage || ''
+    const cat = event.cat1 || event.tourCategoryCode || ''
 
     return (
-        <div
+        <article
             onClick={onClick}
-            onMouseEnter={() => setHov(true)}
-            onMouseLeave={() => setHov(false)}
-            style={{
-                background: '#fff',
-                borderRadius: 18,
-                overflow: 'hidden',
-                cursor: 'pointer',
-                boxShadow: hov
-                    ? '0 16px 40px rgba(0,0,0,.13)'
-                    : '0 2px 12px rgba(0,0,0,.06)',
-                transform: hov ? 'translateY(-6px)' : 'translateY(0)',
-                transition: 'box-shadow .28s ease, transform .28s ease',
-                position: 'relative',
-            }}
+            className="group bg-white rounded-2xl overflow-hidden cursor-pointer
+                       border border-gray-100 hover:border-orange-200
+                       shadow-sm hover:shadow-xl hover:-translate-y-1.5
+                       transition-all duration-300"
         >
-            <div style={{ position: 'relative', height: 170, overflow: 'hidden', background: '#f0f0f0' }}>
-                <img
-                    src={img}
-                    alt={event.title}
-                    style={{
-                        width: '100%', height: '100%', objectFit: 'cover',
-                        transform: hov ? 'scale(1.07)' : 'scale(1)',
-                        transition: 'transform .38s ease',
-                        display: 'block',
-                    }}
-                    onError={e => { (e.target as HTMLImageElement).src = '/images/default-event.png' }}
-                />
+            {/* 이미지 */}
+            <div className="relative h-44 overflow-hidden bg-gray-100">
+                {img ? (
+                    <LazyImage
+                        src={img}
+                        alt={event.title}
+                        wrapperClassName="w-full h-full"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        className="group-hover:scale-105 transition-transform duration-500"
+                        onError={(e: any) => { e.target.style.display = 'none' }}
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-50">
+                        <span className="text-4xl opacity-40">🎪</span>
+                    </div>
+                )}
+                {/* 그라데이션 오버레이 */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                {/* 순위 뱃지 */}
                 {rank !== undefined && (
-                    <div style={{
-                        position: 'absolute', top: 12, left: 12,
-                        width: 32, height: 32, borderRadius: 9,
-                        background: 'rgba(0,0,0,.55)',
-                        backdropFilter: 'blur(6px)',
-                        color: '#fff', fontWeight: 800, fontSize: 14,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
+                    <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-black/60 backdrop-blur-sm
+                                    flex items-center justify-center text-white font-black text-sm">
                         {rank}
                     </div>
                 )}
-                <div style={{
-                    position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to top, rgba(0,0,0,.22) 0%, transparent 55%)',
-                    opacity: hov ? 1 : 0,
-                    transition: 'opacity .28s ease',
-                }} />
+
+                {/* 카테고리 뱃지 */}
+                <div className="absolute top-3 right-3">
+                    <CategoryBadge cat={cat} />
+                </div>
             </div>
-            <div style={{ padding: '14px 16px 18px' }}>
-                <p style={{
-                    margin: 0, fontSize: 14, fontWeight: 700,
-                    color: '#111', lineHeight: 1.45,
-                    overflow: 'hidden', display: '-webkit-box',
-                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
-                    minHeight: 41,
-                }}>
+
+            {/* 텍스트 */}
+            <div className="p-4">
+                <p className="font-bold text-[14px] text-gray-900 leading-snug line-clamp-2 min-h-[40px]">
                     {event.title}
                 </p>
-                <p style={{
-                    margin: '7px 0 0', fontSize: 12, color: '#999',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                }}>
-                    <span style={{ flexShrink: 0 }}>📍</span>
+                <p className="mt-2 text-[12px] text-gray-400 flex items-center gap-1 truncate">
+                    <MapPin size={11} className="shrink-0 text-orange-400" />
                     {event.addr1 || event.address || '위치 정보 없음'}
                 </p>
-            </div>
-        </div>
-    )
-}
-
-function SectionHeader({
-                           icon, title, badge, subtitle,
-                           canPrev, canNext, onPrev, onNext, page, totalPages,
-                       }: {
-    icon: React.ReactNode; title: string; badge?: string; subtitle?: string;
-    canPrev: boolean; canNext: boolean; onPrev: () => void; onNext: () => void;
-    page: number; totalPages: number;
-}) {
-    return (
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22 }}>
-            <div>
-                <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: '#111', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {icon}{title}
-                    {badge && <span style={{ color: '#f97316' }}>{badge}</span>}
-                </h2>
-                {subtitle && (
-                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#aaa', display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <CloudSun size={13} color="#f97316" />{subtitle}
+                {(event.eventStartDate || event.eventEndDate) && (
+                    <p className="mt-1 text-[11px] text-gray-400 flex items-center gap-1">
+                        <CalendarDays size={11} className="shrink-0 text-orange-400" />
+                        {event.eventStartDate ?? '?'} ~ {event.eventEndDate ?? '?'}
                     </p>
                 )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2, flexShrink: 0 }}>
-                <span style={{ fontSize: 12, color: '#bbb', fontWeight: 500 }}>{page + 1} / {totalPages}</span>
-                <ArrowBtn dir="left"  onClick={onPrev} disabled={!canPrev} />
-                <ArrowBtn dir="right" onClick={onNext} disabled={!canNext} />
-            </div>
-        </div>
+        </article>
     )
 }
 
+// ─── 메인 페이지 ──────────────────────────────────────────────────
 export default function Home() {
     const navigate = useNavigate()
-    const auth     = useAuth()
+    const auth = useAuth()
 
     const [events,     setEvents]     = useState<any[]>([])
     const [topEvents,  setTopEvents]  = useState<any[]>([])
@@ -183,7 +207,9 @@ export default function Home() {
 
     const handleSearch = useCallback(() => setSearchQuery(searchInput.trim()), [searchInput])
     const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch() }
+    const handleClearSearch = () => { setSearchQuery(''); setSearchInput('') }
 
+    // 위치 초기화
     useEffect(() => {
         if (!auth.user) { setUserLocation(null); return }
         if (navigator.geolocation) {
@@ -196,11 +222,12 @@ export default function Home() {
                         else { const l = { lat: d.latitude, lng: d.longitude }; setUserLocation(l); setMapCenter(l) }
                     } catch { setUserLocation(DEFAULT_LOCATION); setMapCenter(DEFAULT_LOCATION) }
                 },
-                { timeout: 5000 }
+                { timeout: 5000 },
             )
         } else { setUserLocation(DEFAULT_LOCATION); setMapCenter(DEFAULT_LOCATION) }
     }, [auth.user])
 
+    // 날씨/시간
     useEffect(() => {
         const h = new Date().getHours()
         setTimeState(h >= 18 || h < 6 ? 'NIGHT' : 'DAY')
@@ -214,30 +241,47 @@ export default function Home() {
             .catch(() => {})
     }, [userLocation])
 
+    // 행사 목록 로드
     useEffect(() => {
         const fetchAll = async () => {
             setIsLoading(true)
             const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
             try {
-                const r = await fetch(`${base}/public/map`)
-                if (!r.ok) throw new Error()
-                const data = await r.json()
-                const mapped = Array.isArray(data) ? data.map(item => ({
+                // 일반 행사 목록 + 인기 TOP10 병렬 요청
+                const [allRes, popularRes] = await Promise.all([
+                    fetch(`${base}/public/map`),
+                    fetch(`${base}/public/map/popular?limit=10`),
+                ])
+                if (!allRes.ok) throw new Error()
+
+                const allData  = await allRes.json()
+                const popData  = popularRes.ok ? await popularRes.json() : []
+
+                const normalize = (item: any) => ({
                     ...item,
                     id:    item.contentid?.toString() || item.id?.toString(),
                     mapx:  item.mapx  || item.mapX,
                     mapy:  item.mapy  || item.mapY,
                     addr1: item.addr1 || item.address,
-                    image: item.firstimage || item.firstImage || '/images/default-event.png',
-                })) : []
+                    image: item.firstimage || item.firstImage || '',
+                })
+
+                const mapped = Array.isArray(allData) ? allData.map(normalize) : []
                 setEvents(mapped)
-                if (mapped.length) setTopEvents(mapped.slice(0, 10))
+
+                // 인기 TOP10: 참여 수 기반 API 결과 사용, 실패 시 전체 목록 앞 10개로 fallback
+                if (Array.isArray(popData) && popData.length > 0) {
+                    setTopEvents(popData.map(normalize))
+                } else if (mapped.length) {
+                    setTopEvents(mapped.slice(0, 10))
+                }
             } catch { setEvents([]); setTopEvents([]) }
             finally  { setIsLoading(false) }
         }
         fetchAll()
     }, [])
 
+    // 이용 제한 정보
     useEffect(() => {
         if (!auth.loggedIn) { setBanInfo(null); return }
         axiosInstance.get('/v1/users/me/ban')
@@ -245,6 +289,7 @@ export default function Home() {
             .catch(() => setBanInfo(null))
     }, [auth.loggedIn])
 
+    // 필터링된 행사
     const displayEvents = useMemo(() => events.filter(ev => {
         const lat = parseFloat(ev.mapy ?? ''), lng = parseFloat(ev.mapx ?? '')
         if (isNaN(lat) || isNaN(lng)) return false
@@ -256,66 +301,11 @@ export default function Home() {
         return ev.title.toLowerCase().includes(q) || (ev.addr1 || '').toLowerCase().includes(q)
     }), [events, searchQuery])
 
+    // 맞춤 추천
     const recommendedEvents = useMemo(() => {
-        //추가
-        console.log('auth.user 전체:', JSON.stringify(auth.user, null, 2))
-
         const wt = RECOMMEND_BY_WEATHER[weatherState] || []
         const tt = RECOMMEND_BY_TIME[timeState] || []
         const ic = (auth.user?.interests || []).map((i: string) => CATEGORY_MAP[i]).filter(Boolean)
-
-        // 추가
-        console.log('추천 행사 점수 분포:',
-            [...displayEvents]
-                .map(ev => {
-                    let s = 0
-                    const c = (ev.cat1 || '').toUpperCase()
-                    if (ic.some((x: string) => c.startsWith(x))) s += 3
-                    if (wt.some(x => c.startsWith(x))) s += 2
-                    if (tt.some(x => c.startsWith(x))) s += 1
-                    return s
-                })
-                .reduce((acc: any, score) => {
-                    acc[score] = (acc[score] || 0) + 1
-                    return acc
-                }, {})
-        )
-
-        // 또 점수 확인 콘솔 추가
-        console.log('3점 행사 목록:',
-            [...displayEvents]
-                .filter(ev => {
-                    const c = (ev.cat1 || '').toUpperCase()
-                    return ic.some((x: string) => c.startsWith(x))
-                })
-                .slice(0, 5)
-                .map(ev => ({ title: ev.title, cat1: ev.cat1 }))
-        )
-
-        // 카테고리 콘솔 확인 추가
-        console.log('A01 행사 수:', displayEvents.filter(ev => ev.cat1 === 'A01').length)
-        console.log('A02 행사 수:', displayEvents.filter(ev => ev.cat1 === 'A02').length)
-        console.log('cat1 없는 행사 수:', displayEvents.filter(ev => !ev.cat1).length)
-
-        //추가
-        console.log('=== 추천 디버그 ===')
-        console.log('날씨 상태:', weatherState, '→ 날씨 카테고리:', wt)
-        console.log('시간 상태:', timeState, '→ 시간 카테고리:', tt)
-        console.log('사용자 관심사:', auth.user?.interests, '→ 변환 카테고리:', ic)
-        console.log('샘플 행사 cat1:', displayEvents.slice(0, 5).map(ev => ({
-            title: ev.title,
-            cat1: ev.cat1,
-            tourCategoryCode: ev.tourCategoryCode,
-            score: (() => {
-                let s = 0
-                const c = (ev.cat1 || ev.tourCategoryCode || ev.cat3 || '').toUpperCase()
-                if (ic.some((x: string) => c.startsWith(x))) s += 3
-                if (wt.some(x => c.startsWith(x))) s += 2
-                if (tt.some(x => c.startsWith(x))) s += 1
-                return s
-            })()
-        })))
-
         return [...displayEvents]
             .map(ev => {
                 let s = 0
@@ -350,152 +340,69 @@ export default function Home() {
         } finally { setIsAppealSubmitting(false) }
     }
 
-    const weatherText = useMemo(() => {
-        const m: Record<string, string> = {
-            Clear:  '☀️ 맑고 선선한 오늘, 야외 축제나 야외 활동',
-            Rain:   '🌧️ 비가 내리는 오늘, 포근한 실내 전시회나 문화 공간',
-            Clouds: '☁️ 흐린 하늘인 오늘, 부담 없이 걷기 좋은 행사',
-            Snow:   '❄️ 하얀 눈이 내리는 오늘, 감성 가득한 실내 문화 행사',
-        }
-        return `${m[weatherState] || '☀️ 오늘 날씨에 딱 맞는'} 추천 카드를 조합해 보았어요.`
-    }, [weatherState])
+    const weatherIcon = WEATHER_ICON[weatherState] || '☀️'
+    const weatherText = WEATHER_TEXT[weatherState] || '오늘 날씨에 딱 맞는'
 
     return (
         <>
-            <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(14px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .s-anim { animation: fadeUp .4s ease both; }
-        .s-anim:nth-child(2) { animation-delay: .07s; }
-        .s-anim:nth-child(3) { animation-delay: .14s; }
-        .s-anim:nth-child(4) { animation-delay: .21s; }
-
-        .search-wrap-inner { transition: box-shadow .2s ease; }
-        .search-wrap-inner.focused {
-          box-shadow: 0 0 0 3px rgba(249,115,22,.18) !important;
-        }
-
-        .map-exp-btn {
-          background: rgba(255,255,255,.92);
-          backdrop-filter: blur(6px);
-          border: none;
-          border-radius: 22px;
-          padding: 7px 16px;
-          font-size: 12px; font-weight: 700;
-          color: #444; cursor: pointer;
-          box-shadow: 0 2px 10px rgba(0,0,0,.1);
-          transition: background .2s, color .2s, transform .15s;
-        }
-        .map-exp-btn:hover { background: #fff; color: #f97316; transform: scale(1.03); }
-
-        .recenter-btn {
-          position: absolute; bottom: 16px; right: 16px; z-index: 20;
-          width: 42px; height: 42px; border-radius: 50%;
-          background: rgba(255,255,255,.92); backdrop-filter: blur(6px);
-          border: none; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 4px 16px rgba(0,0,0,.14);
-          transition: transform .2s, background .2s;
-        }
-        .recenter-btn:hover { transform: scale(1.1); background: #fff7ed; }
-
-        .dot-track { display: flex; justify-content: center; gap: 5px; margin-top: 18px; }
-        .dot { height: 5px; border-radius: 3px; background: #e0e0e0; transition: all .25s ease; }
-        .dot.on  { width: 20px; background: #f97316; }
-        .dot.off { width: 5px; }
-      `}</style>
-
-            {/* 제재 오버레이 */}
+            {/* 이용 제한 오버레이 */}
             {banInfo && (
-                <div style={{
-                    position: 'fixed', inset: 0, zIndex: 200,
-                    background: 'rgba(255,255,255,.8)', backdropFilter: 'blur(4px)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-                }}>
-                    <div style={{
-                        width: '100%', maxWidth: 500,
-                        background: '#fff', borderRadius: 22,
-                        padding: 36,
-                        boxShadow: '0 24px 64px rgba(0,0,0,.16)',
-                    }}>
-                        <h2 style={{ margin: 0, color: '#dc2626', fontSize: 21, fontWeight: 800 }}>서비스 이용 제한 중</h2>
-                        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-sm flex items-center justify-center p-6">
+                    <div className="w-full max-w-md bg-white rounded-2xl p-8 shadow-2xl">
+                        <h2 className="text-xl font-black text-red-600">서비스 이용 제한 중</h2>
+                        <div className="mt-4 space-y-1.5">
                             {[`신고 누적: ${banInfo.reportCount ?? 0}회`, `사유: ${banInfo.banReason}`, `반론 상태: ${banInfo.appealStatus}`].map(t => (
-                                <p key={t} style={{ margin: 0, fontSize: 14, color: '#555' }}>{t}</p>
+                                <p key={t} className="text-sm text-gray-600">{t}</p>
                             ))}
                             {banInfo.appealStatus === 'RESOLVED' && banInfo.banStatus === 'ACTIVE' && banInfo.appealReviewNote && (
-                                <p style={{ margin: 0, fontSize: 14, color: '#991b1b', fontWeight: 600 }}>
-                                    소명 기각 사유: {banInfo.appealReviewNote}
-                                </p>
+                                <p className="text-sm text-red-700 font-semibold">소명 기각 사유: {banInfo.appealReviewNote}</p>
                             )}
                         </div>
                         {banInfo.appealStatus === 'NONE' ? (
-                            <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <textarea
-                    value={appealText}
-                    onChange={e => setAppealText(e.target.value)}
-                    rows={4}
-                    style={{ width: '100%', borderRadius: 12, border: 'none', background: '#f7f7f7', padding: '11px 14px', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
-                    placeholder="반론은 1회만 제출할 수 있습니다."
-                />
+                            <div className="mt-5 space-y-3">
+                                <textarea
+                                    value={appealText}
+                                    onChange={e => setAppealText(e.target.value)}
+                                    rows={4}
+                                    className="w-full rounded-xl bg-gray-50 p-3 text-sm resize-none outline-none border-none"
+                                    placeholder="반론은 1회만 제출할 수 있습니다."
+                                />
                                 <button
                                     onClick={handleSubmitAppeal}
                                     disabled={!appealText.trim() || isAppealSubmitting}
-                                    style={{
-                                        background: '#111', color: '#fff', border: 'none',
-                                        borderRadius: 12, padding: '11px 20px',
-                                        fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                                        opacity: (!appealText.trim() || isAppealSubmitting) ? .45 : 1,
-                                        transition: 'opacity .2s',
-                                    }}
+                                    className="w-full bg-gray-900 text-white rounded-xl py-3 text-sm font-bold
+                                               disabled:opacity-40 hover:bg-gray-700 transition-colors"
                                 >
                                     반론 제출
                                 </button>
                             </div>
                         ) : (
-                            <p style={{ marginTop: 14, fontSize: 13, color: '#aaa' }}>반론이 이미 제출되어 추가 제출이 불가합니다.</p>
+                            <p className="mt-4 text-xs text-gray-400">반론이 이미 제출되어 추가 제출이 불가합니다.</p>
                         )}
                     </div>
                 </div>
             )}
 
-            <div style={{
-                maxWidth: 1140, margin: '0 auto',
-                padding: '36px 24px 72px',
-                opacity: banInfo ? .25 : 1,
-                pointerEvents: banInfo ? 'none' : 'auto',
-            }}>
+            <div className={`max-w-6xl mx-auto px-6 py-10 pb-20 space-y-16 ${banInfo ? 'opacity-25 pointer-events-none' : ''}`}>
 
-                {/* ── 히어로 ── */}
-                <section className="s-anim" style={{
-                    background: '#fafafa',
-                    borderRadius: 28,
-                    padding: '40px 44px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: 32, marginBottom: 52,
-                    boxShadow: '0 2px 24px rgba(0,0,0,.06)',
-                }}>
-                    <div style={{ flex: 1 }}>
-                        <p style={{ margin: '0 0 5px', fontSize: 11, fontWeight: 700, color: '#f97316', letterSpacing: '.8px', textTransform: 'uppercase' }}>
+                {/* ── 히어로 ─────────────────────────────────────── */}
+                <section className="bg-gradient-to-br from-orange-50 via-white to-amber-50
+                                    rounded-3xl p-10 flex flex-col md:flex-row items-center
+                                    justify-between gap-10 shadow-sm border border-orange-100/60
+                                    animate-[fadeUp_.4s_ease_both]">
+                    <div className="flex-1">
+                        <p className="text-[11px] font-bold text-orange-500 tracking-widest uppercase mb-2">
                             대구 · 경북 로컬 문화 가이드
                         </p>
-                        <h1 style={{ margin: '0 0 26px', fontSize: 30, fontWeight: 900, color: '#111', lineHeight: 1.2 }}>
+                        <h1 className="text-3xl font-black text-gray-900 leading-tight mb-6">
                             안녕, {auth.user?.nickname || 'Go냥이'}! 👋
                         </h1>
 
-                        {/* 검색창 — 테두리 없이 그림자만 */}
-                        <div
-                            className={`search-wrap-inner ${searchFocused ? 'focused' : ''}`}
-                            style={{
-                                display: 'flex', alignItems: 'stretch',
-                                background: '#fff', borderRadius: 14, overflow: 'hidden',
-                                maxWidth: 460,
-                                boxShadow: '0 4px 20px rgba(0,0,0,.09)',
-                            }}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', padding: '0 14px', color: '#bbb', flexShrink: 0 }}>
+                        {/* 검색창 */}
+                        <div className={`flex items-stretch bg-white rounded-2xl overflow-hidden max-w-md
+                                         shadow-md transition-shadow duration-200
+                                         ${searchFocused ? 'ring-2 ring-orange-400/40 shadow-orange-100' : ''}`}>
+                            <div className="flex items-center px-4 text-gray-300 shrink-0">
                                 <Search size={17} />
                             </div>
                             <input
@@ -506,103 +413,119 @@ export default function Home() {
                                 onFocus={() => setSearchFocused(true)}
                                 onBlur={() => setSearchFocused(false)}
                                 placeholder="대구/경북 행사를 검색해보세요"
-                                style={{
-                                    flex: 1, border: 'none', outline: 'none',
-                                    fontSize: 14, padding: '14px 4px', color: '#111',
-                                    background: 'transparent',
-                                }}
+                                className="flex-1 border-none outline-none text-sm py-4 text-gray-800 bg-transparent placeholder-gray-300"
                             />
+                            {searchInput && (
+                                <button onClick={() => setSearchInput('')}
+                                        className="flex items-center px-3 text-gray-300 hover:text-gray-500 transition-colors">
+                                    <X size={15} />
+                                </button>
+                            )}
                             <button
                                 onClick={handleSearch}
-                                style={{
-                                    background: '#f97316', color: '#fff', border: 'none',
-                                    padding: '0 22px', fontSize: 13, fontWeight: 700,
-                                    cursor: 'pointer', flexShrink: 0,
-                                    transition: 'background .2s',
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#ea580c')}
-                                onMouseLeave={e => (e.currentTarget.style.background = '#f97316')}
+                                className="bg-orange-500 hover:bg-orange-600 text-white px-6 text-sm font-bold shrink-0 transition-colors"
                             >
                                 검색
                             </button>
                         </div>
 
+                        {/* 검색 결과 태그 */}
                         {searchQuery && (
-                            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{
-                    fontSize: 12, fontWeight: 600, color: '#c2410c',
-                    background: '#fff7ed', borderRadius: 20, padding: '4px 13px',
-                }}>
-                  🔍 "{searchQuery}" — {displayEvents.length}개 결과
-                </span>
-                                <button
-                                    onClick={() => { setSearchQuery(''); setSearchInput('') }}
-                                    style={{ background: 'none', border: 'none', fontSize: 12, color: '#bbb', cursor: 'pointer', padding: 0 }}
-                                >
+                            <div className="mt-3 flex items-center gap-2">
+                                <span className="text-xs font-semibold text-orange-700 bg-orange-50 rounded-full px-3 py-1">
+                                    🔍 "{searchQuery}" — {displayEvents.length}개 결과
+                                </span>
+                                <button onClick={handleClearSearch}
+                                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
                                     초기화
                                 </button>
                             </div>
                         )}
                     </div>
+
+                    {/* 히어로 우측 — 날씨 카드 */}
+                    <div className="shrink-0">
+                        <div className="bg-white rounded-2xl px-5 py-4 shadow-sm border border-gray-100 min-w-[180px]">
+                            <p className="text-2xl mb-1">{weatherIcon}</p>
+                            <p className="text-sm font-bold text-gray-700">{weatherText}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                                {timeState === 'NIGHT' ? '🌙 야간 추천 활성화' : '🌤 주간 추천 활성화'}
+                            </p>
+                        </div>
+                    </div>
                 </section>
 
-                {/* ── 지도 ── */}
-                <section className="s-anim" style={{ marginBottom: 60 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                        <h2 style={{ margin: 0, fontSize: 21, fontWeight: 800, color: '#111', display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ color: '#f97316' }}></span>
-                            {searchQuery ? `"${searchQuery}" 검색 결과` : '대구/경북 주변 행사'}
-                            <span style={{ fontSize: 13, fontWeight: 500, color: '#bbb', marginLeft: 2 }}>
-                {displayEvents.length}개
-              </span>
-                        </h2>
+                {/* ── 지도 ───────────────────────────────────────── */}
+                <section className="animate-[fadeUp_.4s_.07s_ease_both]">
+                    <div className="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                                <span className="text-orange-500">📍</span>
+                                {searchQuery ? `"${searchQuery}" 검색 결과` : '대구/경북 주변 행사'}
+                                <span className="text-sm font-medium text-gray-400">{displayEvents.length}개</span>
+                            </h2>
+                            <p className="text-xs text-gray-400 mt-1">마커를 클릭하면 행사 상세로 이동합니다</p>
+                        </div>
+                        <button
+                            onClick={() => setMapExpanded(v => !v)}
+                            className="text-xs font-bold text-gray-500 bg-white border border-gray-200
+                                       rounded-xl px-4 py-2 hover:text-orange-500 hover:border-orange-300
+                                       transition-all shadow-sm"
+                        >
+                            {mapExpanded ? '지도 줄이기' : '지도 크게 보기'}
+                        </button>
                     </div>
 
-                    <div style={{
-                        position: 'relative',
-                        height: mapExpanded ? 580 : 400,
-                        borderRadius: 22, overflow: 'hidden',
-                        boxShadow: '0 4px 28px rgba(0,0,0,.1)',
-                        transition: 'height .35s ease',
-                    }}>
+                    <div
+                        className="relative rounded-2xl overflow-hidden shadow-lg transition-all duration-500"
+                        style={{ height: mapExpanded ? 580 : 400 }}
+                    >
                         <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
 
-                        {/* 지도 우상단 — 토글 버튼 */}
-                        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 20 }}>
-                            <button className="map-exp-btn" onClick={() => setMapExpanded(v => !v)}>
-                                {mapExpanded ? '지도 줄이기' : '지도 크게 보기'}
-                            </button>
-                        </div>
-
-                        <button className="recenter-btn" onClick={handleRecenter} title="내 위치로 이동">
-                            <Target size={19} color="#f97316" />
+                        {/* 내 위치로 */}
+                        <button
+                            onClick={handleRecenter}
+                            title="내 위치로 이동"
+                            className="absolute bottom-4 right-4 z-20 w-11 h-11 rounded-full
+                                       bg-white/90 backdrop-blur-sm shadow-lg
+                                       flex items-center justify-center
+                                       hover:scale-110 hover:bg-orange-50 transition-all"
+                        >
+                            <Target size={19} className="text-orange-500" />
                         </button>
 
                         {isLoading && (
-                            <div style={{
-                                position: 'absolute', inset: 0,
-                                background: 'rgba(255,255,255,.7)', backdropFilter: 'blur(2px)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontWeight: 700, color: '#f97316', fontSize: 14,
-                            }}>
+                            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm
+                                            flex items-center justify-center
+                                            text-sm font-bold text-orange-500">
                                 데이터 로딩 중...
                             </div>
                         )}
                     </div>
                 </section>
 
-                {/* ── 인기 행사 TOP 10 ── */}
+                {/* ── 인기 행사 TOP 10 ────────────────────────────── */}
                 {topEvents.length > 0 && (
-                    <section className="s-anim" style={{ marginBottom: 60 }}>
-                        <SectionHeader
-                            //icon={<Trophy size={21} color="#f59e0b" />}
-                            title="지금 가장 핫한 인기 행사"
-                            badge=" TOP 10"
-                            canPrev={topCarousel.canPrev} canNext={topCarousel.canNext}
-                            onPrev={topCarousel.prev} onNext={topCarousel.next}
-                            page={topCarousel.page} totalPages={topCarousel.totalPages}
-                        />
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 22 }}>
+                    <section className="animate-[fadeUp_.4s_.14s_ease_both]">
+                        <div className="flex items-start justify-between gap-4 mb-6">
+                            <div>
+                                <h2 className="text-xl font-black text-gray-900">
+                                    지금 가장 인기 있는 행사
+                                    <span className="text-orange-500 ml-2">TOP 10</span>
+                                </h2>
+                                <p className="text-xs text-gray-400 mt-1">참여 신청이 가장 많은 행사를 모아봤어요</p>
+                            </div>
+                            <CarouselNav
+                                page={topCarousel.page}
+                                totalPages={topCarousel.totalPages}
+                                canPrev={topCarousel.canPrev}
+                                canNext={topCarousel.canNext}
+                                onPrev={topCarousel.prev}
+                                onNext={topCarousel.next}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                             {topCarousel.visible.map((ev, i) => (
                                 <EventCard
                                     key={`top-${ev.id}`}
@@ -612,39 +535,51 @@ export default function Home() {
                                 />
                             ))}
                         </div>
-                        <div className="dot-track">
-                            {Array.from({ length: topCarousel.totalPages }).map((_, i) => (
-                                <span key={i} className={`dot ${i === topCarousel.page ? 'on' : 'off'}`} />
-                            ))}
-                        </div>
+                        <DotTrack total={topCarousel.totalPages} current={topCarousel.page} />
                     </section>
                 )}
 
-                {/* ── 맞춤 추천 ── */}
+                {/* ── 맞춤 추천 ───────────────────────────────────── */}
                 {recommendedEvents.length > 0 && (
-                    <section className="s-anim">
-                        <SectionHeader
-                            icon={<span style={{ fontSize: 20 }}></span>}
-                            title={`${auth.user?.nickname || 'Go냥이'}님을 위한 맞춤 추천`}
-                            subtitle={weatherText}
-                            canPrev={recCarousel.canPrev} canNext={recCarousel.canNext}
-                            onPrev={recCarousel.prev} onNext={recCarousel.next}
-                            page={recCarousel.page} totalPages={recCarousel.totalPages}
-                        />
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 22 }}>
+                    <section className="animate-[fadeUp_.4s_.21s_ease_both]">
+                        <div className="flex items-start justify-between gap-4 mb-6">
+                            <div>
+                                <h2 className="text-xl font-black text-gray-900">
+                                    <span className="mr-1">✨</span>
+                                    {auth.user?.nickname || 'Go냥이'}님을 위한 맞춤 추천
+                                </h2>
+                                <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                                    <CloudSun size={12} className="text-orange-400" />
+                                    {weatherIcon} {weatherText}, 딱 맞는 행사 카드를 조합해 보았어요.
+                                </p>
+                            </div>
+                            <CarouselNav
+                                page={recCarousel.page}
+                                totalPages={recCarousel.totalPages}
+                                canPrev={recCarousel.canPrev}
+                                canNext={recCarousel.canNext}
+                                onPrev={recCarousel.prev}
+                                onNext={recCarousel.next}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                             {recCarousel.visible.map(ev => (
                                 <EventCard key={`rec-${ev.id}`} event={ev} onClick={() => handleNav(ev.id)} />
                             ))}
                         </div>
-                        <div className="dot-track">
-                            {Array.from({ length: recCarousel.totalPages }).map((_, i) => (
-                                <span key={i} className={`dot ${i === recCarousel.page ? 'on' : 'off'}`} />
-                            ))}
-                        </div>
+                        <DotTrack total={recCarousel.totalPages} current={recCarousel.page} />
                     </section>
                 )}
 
             </div>
+
+            <style>{`
+                @keyframes fadeUp {
+                    from { opacity: 0; transform: translateY(14px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
         </>
     )
 }

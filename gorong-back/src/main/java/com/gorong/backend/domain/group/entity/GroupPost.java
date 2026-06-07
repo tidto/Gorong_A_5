@@ -27,6 +27,11 @@ public class GroupPost {
     private String location;
     private Integer maxCapacity;
     private String event;
+
+    /** TourAPI contentId (행사 선택 시 저장, 직접 입력 시 null) */
+    @Column(name = "event_content_id")
+    private String eventContentId;
+
     private String condition;
     private String meetingDate;
     private String meetingTime;

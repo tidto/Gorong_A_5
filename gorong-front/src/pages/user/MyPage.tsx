@@ -16,7 +16,7 @@ const INTERESTS = [
   { id: 3, code: 'VE', name: '문화/역사', emoji: '🏛️', desc: '박물관, 미술관, 유적지, 사찰, 예술 공연' }, // A02 -> VE
   { id: 4, code: 'LS', name: '레포츠', emoji: '🧗', desc: '등산, 낚시, 서핑, 골프, 스키, 번지점프' },     // A03 -> LS
   { id: 5, code: 'SH', name: '쇼핑', emoji: '🛍️', desc: '전통시장, 면세점, 백화점, 공예품' },         // A04 -> SH
-  { id: 6, code: 'FD', name: '음식', emoji: '🍜', desc: '맛집, 카페거리, 전통주 체험, 사찰음식' },       // A05 -> FD
+  //{ id: 6, code: 'FD', name: '음식', emoji: '🍜', desc: '맛집, 카페거리, 전통주 체험, 사찰음식' },       // A05 -> FD
   { id: 7, code: 'C01', name: '추천코스', emoji: '🗺️', desc: '가족 코스, 나홀로 여행, 데이트 코스' },    // 변경 없음
 ]
 

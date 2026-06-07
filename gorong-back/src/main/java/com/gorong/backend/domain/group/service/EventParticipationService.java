@@ -72,12 +72,20 @@ public class EventParticipationService {
                 ? eventTitle
                 : groupPost.getEvent();
 
+        // eventContentId: 전달된 값이 TourAPI contentId면 그대로, 아니면 GroupPost에서 가져옴
+        String resolvedContentId = (eventContentId != null && !eventContentId.isBlank()
+                && eventContentId.matches("\\d+"))
+                ? eventContentId
+                : (groupPost.getEventContentId() != null && !groupPost.getEventContentId().isBlank()
+                   ? groupPost.getEventContentId()
+                   : eventContentId);
+
         // GroupPost.meetingDate (String "yyyy-MM-dd") → LocalDate 변환
         LocalDate visitDate = parseMeetingDate(groupPost.getMeetingDate());
 
         EventParticipation participation = EventParticipation.builder()
                 .user(user)
-                .eventContentId(eventContentId)
+                .eventContentId(resolvedContentId)
                 .eventTitle(resolvedTitle)
                 .groupPost(groupPost)
                 .participationType(ParticipationType.GROUP)

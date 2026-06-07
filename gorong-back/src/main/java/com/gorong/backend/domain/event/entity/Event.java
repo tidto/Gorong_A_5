@@ -14,7 +14,6 @@ import java.time.OffsetDateTime;
 @Builder
 public class Event {
 
-    // TourAPI의 contentId와 1:1 매칭이므로 @GeneratedValue를 쓰지 않습니다! (직접 삽입)
     @Id
     @Column(name = "event_id", nullable = false)
     private Long id;
@@ -73,6 +72,38 @@ public class Event {
     @Column(name = "route", columnDefinition = "TEXT")
     private String route;
 
+    // 무장애 추가 필드
+    @Column(name = "wheelchair", columnDefinition = "TEXT")
+    private String wheelchair;
+
+    @Column(name = "exit", columnDefinition = "TEXT")
+    private String exit;
+
+    @Column(name = "public_transport", columnDefinition = "TEXT")
+    private String publicTransport;
+
+    @Column(name = "braile_block", columnDefinition = "TEXT")
+    private String braileBlock;
+
+    @Column(name = "audio_guide", columnDefinition = "TEXT")
+    private String audioGuide;
+
+    @Column(name = "help_dog", columnDefinition = "TEXT")
+    private String helpDog;
+
+    @Column(name = "sign_guide", columnDefinition = "TEXT")
+    private String signGuide;
+
+    @Column(name = "video_guide", columnDefinition = "TEXT")
+    private String videoGuide;
+
+    @Column(name = "stroller", columnDefinition = "TEXT")
+    private String stroller;
+
+    // 관광사진 추가 이미지 (쉼표 구분)
+    @Column(name = "gallery_images", columnDefinition = "TEXT")
+    private String galleryImages;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -90,12 +121,21 @@ public class Event {
         this.restroom = dto.getRestroom();
         this.route = dto.getRoute();
 
-        // 행사 기간
         if (dto.getEventStartDate() != null) this.eventStartDate = dto.getEventStartDate();
         if (dto.getEventEndDate() != null)   this.eventEndDate   = dto.getEventEndDate();
-
-        // 문의 전화
         if (dto.getTel() != null) this.tel = dto.getTel();
+
+        // 무장애 추가 필드
+        if (dto.getWheelchair()      != null) this.wheelchair     = dto.getWheelchair();
+        if (dto.getExit()            != null) this.exit           = dto.getExit();
+        if (dto.getPublicTransport() != null) this.publicTransport = dto.getPublicTransport();
+        if (dto.getBraileBlock()     != null) this.braileBlock    = dto.getBraileBlock();
+        if (dto.getAudioGuide()      != null) this.audioGuide     = dto.getAudioGuide();
+        if (dto.getHelpDog()         != null) this.helpDog        = dto.getHelpDog();
+        if (dto.getSignGuide()       != null) this.signGuide      = dto.getSignGuide();
+        if (dto.getVideoGuide()      != null) this.videoGuide     = dto.getVideoGuide();
+        if (dto.getStroller()        != null) this.stroller       = dto.getStroller();
+        if (dto.getGalleryImages()   != null) this.galleryImages  = dto.getGalleryImages();
 
         String apiCat = dto.getCat1();
         if (apiCat != null) {
@@ -110,8 +150,6 @@ public class Event {
             }
         }
 
-        if (dto.getOverview() != null) {
-            this.description = dto.getOverview();
-        }
+        if (dto.getOverview() != null) this.description = dto.getOverview();
     }
 }
