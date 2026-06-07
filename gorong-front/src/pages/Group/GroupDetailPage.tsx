@@ -68,6 +68,9 @@ export default function GroupDetailPage() {
     const [post, setPost]               = useState<GroupPost | null>(null);
     const [isJoining, setIsJoining]     = useState(false);
     const [isJoined, setIsJoined]       = useState(false);
+    const [showPostReportModal, setShowPostReportModal] = useState(false);
+    const [postReportReason, setPostReportReason]       = useState('');
+    const [postReporting, setPostReporting]             = useState(false);
     const [miniMapReady, setMiniMapReady]   = useState(false);
     const [miniMapError, setMiniMapError]   = useState('');
     const [miniMapLoading, setMiniMapLoading] = useState(false);
@@ -166,6 +169,31 @@ export default function GroupDetailPage() {
             setIsJoining(false);
         }
     }, [id, post, addGroupSubscription]); // ✅ [추가] addGroupSubscription 의존성 추가
+
+    const handlePostReport = useCallback(async () => {
+        if (!post?.author?.id) {
+            alert('신고할 수 없는 게시글입니다.');
+            return;
+        }
+        if (!postReportReason.trim()) {
+            alert('신고 사유를 입력해주세요.');
+            return;
+        }
+        setPostReporting(true);
+        try {
+            await axiosInstance.post('/api/v1/users/report', {
+                reportedUserId: post.author.id,
+                reason: postReportReason.trim(),
+            });
+            alert('신고가 접수되었습니다. 관리자가 검토 후 처리합니다.');
+            setShowPostReportModal(false);
+            setPostReportReason('');
+        } catch (e: any) {
+            alert(e?.response?.data?.message || '신고 접수에 실패했습니다.');
+        } finally {
+            setPostReporting(false);
+        }
+    }, [post, postReportReason]);
 
     const handleDelete = useCallback(async () => {
         if (!canEdit) return;
@@ -452,11 +480,103 @@ export default function GroupDetailPage() {
                         </span>
                         {post.event && <span>🎟️ {post.event}</span>}
                         {post.meetingDate && <span>📅 {post.meetingDate}</span>}
+
+                        {/* 게시글 신고 버튼 – 자신의 게시글 제외 */}
+                        {post.author?.id && (
+                            <button
+                                type="button"
+                                onClick={() => setShowPostReportModal(true)}
+                                style={{
+                                    marginLeft: 'auto',
+                                    border: '1px solid rgba(255,255,255,0.4)',
+                                    borderRadius: '8px',
+                                    background: 'rgba(255,255,255,0.12)',
+                                    color: 'rgba(255,255,255,0.85)',
+                                    fontSize: '12px',
+                                    fontWeight: '700',
+                                    padding: '5px 12px',
+                                    cursor: 'pointer',
+                                    transition: 'background 0.2s',
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.5)' }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)' }}
+                            >
+                                🚨 신고
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* ── 2컬럼 메인 레이아웃 ── */}
+            {/* ── 게시글 신고 모달 ── */}
+            {showPostReportModal && (
+                <div
+                    style={{
+                        position: 'fixed', inset: 0, zIndex: 2000,
+                        background: 'rgba(0,0,0,0.45)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onClick={() => { setShowPostReportModal(false); setPostReportReason(''); }}
+                >
+                    <div
+                        style={{
+                            background: 'white', borderRadius: '20px', padding: '28px 24px',
+                            width: '340px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h3 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: '800', color: '#1e293b' }}>
+                            🚨 게시글 신고
+                        </h3>
+                        <p style={{ margin: '0 0 16px', fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
+                            <strong>{post?.authorName || '이 유저'}</strong>의 게시글을 신고합니다.<br />
+                            허위 신고 시 불이익이 생길 수 있습니다.
+                        </p>
+                        <textarea
+                            value={postReportReason}
+                            onChange={e => setPostReportReason(e.target.value)}
+                            placeholder="신고 사유를 입력해주세요 (필수)"
+                            maxLength={300}
+                            rows={4}
+                            style={{
+                                width: '100%', boxSizing: 'border-box',
+                                border: '1.5px solid #e2e8f0', borderRadius: '12px',
+                                padding: '10px 12px', fontSize: '13px',
+                                resize: 'none', outline: 'none', fontFamily: 'inherit',
+                                color: '#1e293b',
+                            }}
+                        />
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+                            <button
+                                onClick={() => { setShowPostReportModal(false); setPostReportReason(''); }}
+                                style={{
+                                    flex: 1, padding: '11px', borderRadius: '12px',
+                                    border: '1.5px solid #e2e8f0', background: 'white',
+                                    color: '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
+                                }}
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handlePostReport}
+                                disabled={postReporting || !postReportReason.trim()}
+                                style={{
+                                    flex: 1, padding: '11px', borderRadius: '12px',
+                                    border: 'none',
+                                    background: postReporting || !postReportReason.trim()
+                                        ? '#e2e8f0'
+                                        : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                                    color: postReporting || !postReportReason.trim() ? '#94a3b8' : 'white',
+                                    fontWeight: '800', fontSize: '13px',
+                                    cursor: postReporting || !postReportReason.trim() ? 'default' : 'pointer',
+                                }}
+                            >
+                                {postReporting ? '신고 중...' : '신고 접수'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div style={{
                 maxWidth: '1200px',
                 margin: '32px auto 0',

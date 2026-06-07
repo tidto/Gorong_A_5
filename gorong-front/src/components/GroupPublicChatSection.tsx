@@ -16,6 +16,7 @@ import {
 } from '../hooks/usePublicGroupWebSocketChat'
 import { auth } from '../firebase/firebaseConfig'
 import { useCatTowerPreview } from '../contexts/CatTowerPreviewContext'
+import axiosInstance from '../api/axiosInstance'
 
 const MAX_SLOTS = 6
 
@@ -193,24 +194,114 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
     const colorKey = msg.catColor?.toUpperCase() ?? 'CREAM'
     const stageKey = msg.characterType?.toUpperCase() ?? 'BASIC'
     const colors   = CAT_COLOR_MAP[colorKey] ?? CAT_COLOR_MAP.CREAM
-    const stage    = STAGE_MAP[stageKey]     ?? STAGE_MAP.BASIC
-    const faceSrc  = STAGE_TO_FACE[stageKey] ?? STAGE_TO_FACE.BASIC
     const isMasked = !!msg.masked
     const messageText = isMasked ? (msg.maskedLabel || '이용이 제한된 유저입니다.') : msg.text
 
+    // ✅ [추가] 신고 모달 state
+    const [showReportMenu, setShowReportMenu] = useState(false)
+    const [showReportModal, setShowReportModal] = useState(false)
+    const [reportReason, setReportReason] = useState('')
+    const [reporting, setReporting] = useState(false)
+
+    // ✅ [추가] 신고 가능 여부 – senderId 또는 senderEmail 중 하나라도 있으면 OK
+    const canReport = !isMe && !!(msg.senderId || msg.senderEmail)
+
+    // ✅ [추가] 신고 접수 핸들러
+    const handleReport = async () => {
+        if (!reportReason.trim()) {
+            alert('신고 사유를 입력해주세요.')
+            return
+        }
+        setReporting(true)
+        try {
+            await axiosInstance.post('/api/v1/users/report', {
+                reportedUserId: msg.senderId,
+                reason: reportReason.trim(),
+            })
+            alert('신고가 접수되었습니다. 관리자가 검토 후 처리합니다.')
+            setShowReportModal(false)
+            setShowReportMenu(false)
+            setReportReason('')
+        } catch (e: any) {
+            alert(e?.response?.data?.message || '신고 접수에 실패했습니다.')
+        } finally {
+            setReporting(false)
+        }
+    }
+
     return (
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: isMe ? 'row-reverse' : 'row', marginBottom: '10px' }}>
-            <div style={{
-                width: '34px', height: '34px', borderRadius: '10px',
-                backgroundColor: colors.bg, border: `2px solid ${colors.border}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, overflow: 'hidden',
-            }} title={`${msg.catName || msg.user} · ${msg.catName}`}>
+        // ✅ position: relative — 팝업 메뉴의 기준점
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexDirection: isMe ? 'row-reverse' : 'row', marginBottom: '10px', position: 'relative' }}>
+
+            {/* 프로필 아이콘 — overflow: hidden 제거, 팝업은 이 div 바깥에 렌더링 */}
+            <div
+                style={{
+                    width: '34px', height: '34px', borderRadius: '10px',
+                    backgroundColor: colors.bg, border: `2px solid ${colors.border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                    cursor: canReport ? 'pointer' : 'default',
+                }}
+                title={canReport ? `${msg.catName || msg.user} 신고` : undefined}
+                onClick={() => { if (canReport) setShowReportMenu(v => !v) }}
+            >
                 <svg width="20" height="20" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="18" cy="13" r="7" fill={colors.border} opacity="0.6"/>
                     <path d="M4 32c0-7.732 6.268-14 14-14s14 6.268 14 14" fill={colors.border} opacity="0.6"/>
                 </svg>
             </div>
+
+            {/* ✅ [추가] 팝업 메뉴 — 프로필 아이콘 div 밖에 위치해야 overflow 잘림 없음 */}
+            {showReportMenu && canReport && (
+                <>
+                    {/* 외부 클릭 시 닫기 */}
+                    <div
+                        style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                        onClick={() => setShowReportMenu(false)}
+                    />
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: '38px',
+                            left: 0,
+                            zIndex: 100,
+                            background: 'white',
+                            borderRadius: '10px',
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                            border: '1px solid #e2e8f0',
+                            minWidth: '120px',
+                            overflow: 'hidden',
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <button
+                            style={{
+                                display: 'block', width: '100%', textAlign: 'left',
+                                padding: '10px 14px', fontSize: '13px', fontWeight: '700',
+                                color: '#374151', background: 'none', border: 'none',
+                                cursor: 'pointer',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+                            onClick={() => { setShowReportMenu(false); setShowReportModal(true) }}
+                        >
+                            🚨 신고하기
+                        </button>
+                        <button
+                            style={{
+                                display: 'block', width: '100%', textAlign: 'left',
+                                padding: '10px 14px', fontSize: '13px', fontWeight: '700',
+                                color: '#94a3b8', background: 'none', border: 'none',
+                                cursor: 'pointer', borderTop: '1px solid #f1f5f9',
+                            }}
+                            onClick={() => setShowReportMenu(false)}
+                        >
+                            취소
+                        </button>
+                    </div>
+                </>
+            )}
+
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                 <div style={{ display: 'flex', gap: '5px', alignItems: 'baseline', marginBottom: '3px', flexDirection: isMe ? 'row-reverse' : 'row' }}>
                     <span style={{ fontSize: '11px', fontWeight: '700', color: isMe ? '#D47A55' : colors.text }}>
@@ -237,6 +328,76 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
                     {messageText}
                 </div>
             </div>
+
+            {/* ✅ [추가] 신고 모달 */}
+            {showReportModal && (
+                <div
+                    style={{
+                        position: 'fixed', inset: 0, zIndex: 1000,
+                        background: 'rgba(0,0,0,0.4)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onClick={() => { setShowReportModal(false); setReportReason('') }}
+                >
+                    <div
+                        style={{
+                            background: 'white', borderRadius: '20px', padding: '28px 24px',
+                            width: '320px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h3 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: '800', color: '#1e293b' }}>
+                            🚨 채팅 신고
+                        </h3>
+                        <p style={{ margin: '0 0 16px', fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
+                            <strong>{msg.nickname || msg.user || '이 유저'}</strong>를 신고합니다.<br/>
+                            허위 신고 시 불이익이 생길 수 있습니다.
+                        </p>
+                        <textarea
+                            value={reportReason}
+                            onChange={e => setReportReason(e.target.value)}
+                            placeholder="신고 사유를 입력해주세요 (필수)"
+                            maxLength={300}
+                            rows={4}
+                            style={{
+                                width: '100%', boxSizing: 'border-box',
+                                border: '1.5px solid #e2e8f0', borderRadius: '12px',
+                                padding: '10px 12px', fontSize: '13px',
+                                resize: 'none', outline: 'none', fontFamily: 'inherit',
+                                color: '#1e293b',
+                            }}
+                        />
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+                            <button
+                                onClick={() => { setShowReportModal(false); setReportReason('') }}
+                                style={{
+                                    flex: 1, padding: '11px', borderRadius: '12px',
+                                    border: '1.5px solid #e2e8f0', background: 'white',
+                                    color: '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
+                                }}
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleReport}
+                                disabled={reporting || !reportReason.trim()}
+                                style={{
+                                    flex: 1, padding: '11px', borderRadius: '12px',
+                                    border: 'none',
+                                    background: reporting || !reportReason.trim()
+                                        ? '#e2e8f0'
+                                        : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                                    color: reporting || !reportReason.trim() ? '#94a3b8' : 'white',
+                                    fontWeight: '800', fontSize: '13px',
+                                    cursor: reporting || !reportReason.trim() ? 'default' : 'pointer',
+                                }}
+                            >
+                                {reporting ? '신고 중...' : '신고 접수'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
