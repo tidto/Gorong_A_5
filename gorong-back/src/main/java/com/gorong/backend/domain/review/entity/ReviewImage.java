@@ -27,6 +27,15 @@ public class ReviewImage {
     @Column(name = "image_url", nullable = false, columnDefinition = "TEXT")
     private String imageUrl;
 
+    @Column(name = "originalimgname", columnDefinition = "TEXT")
+    private String originalImgName;
+
+    @Column(name = "saveimgname", columnDefinition = "TEXT")
+    private String saveImgName;
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

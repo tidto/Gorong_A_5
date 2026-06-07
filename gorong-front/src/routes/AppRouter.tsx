@@ -4,6 +4,7 @@ import EventList from '../pages/EventList'
 import EventDetail from '../pages/EventDetail'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
+import PostingDetail from '../pages/PostingDetail'
 import Chat from '../pages/Chat'
 import CatTower from '../pages/minihome/CatTower'
 import History from '../pages/History'
@@ -107,6 +108,7 @@ export default function AppRouter() {
                     <Route path="/error/:code" element={<ErrorPage />} />
                     <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
                     <Route path="/posting" element={<Navigate to="/reviews" replace />} />
+                    <Route path="/posting/:id" element={<ProtectedRoute><PostingDetail /></ProtectedRoute>} />
                     <Route path="/events/:id" element={<EventDetail />} />
 
                     {/* 리뷰페이지 라우팅 */}

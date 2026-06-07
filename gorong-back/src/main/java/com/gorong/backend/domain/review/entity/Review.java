@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.List;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
+@Setter(AccessLevel.PRIVATE)
 public class Review {
 
     @Id
@@ -26,6 +28,9 @@ public class Review {
 
     @Column(name = "title", nullable = false, length = 255)
     private String title;
+
+    @Column(name = "review_text", columnDefinition = "TEXT")
+    private String reviewText;
 
     @Column(name = "content", columnDefinition = "TEXT")
     private String content;
@@ -41,6 +46,11 @@ public class Review {
 
     @Column(name = "event_id", nullable = false)
     private Long eventId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 30)
+    @Builder.Default
+    private PostStatus status = PostStatus.REVIEW_ONLY;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -62,5 +72,31 @@ public class Review {
     public void removeReviewImage(ReviewImage reviewImage) {
         reviewImages.remove(reviewImage);
         reviewImage.setReview(null);
+    }
+
+    public void updateQuickReview(Integer rating, String reviewText) {
+        this.rating = rating;
+        this.reviewText = reviewText == null ? null : reviewText.trim();
+    }
+
+    public void updateContent(String title, String content) {
+        this.title = title;
+        this.content = content;
+    }
+
+    public void markPublished() {
+        this.status = PostStatus.PUBLISHED;
+    }
+
+    public boolean isReviewMetaEditable(OffsetDateTime now) {
+        if (createdAt == null) {
+            return true;
+        }
+        return !createdAt.plusDays(7).isBefore(now);
+    }
+
+    public enum PostStatus {
+        REVIEW_ONLY,
+        PUBLISHED
     }
 }

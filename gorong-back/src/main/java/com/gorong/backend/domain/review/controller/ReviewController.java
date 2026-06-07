@@ -1,16 +1,24 @@
 package com.gorong.backend.domain.review.controller;
 
+import com.google.firebase.auth.FirebaseToken;
 import com.gorong.backend.domain.review.entity.Review;
 import com.gorong.backend.domain.review.entity.ReviewImage;
 import com.gorong.backend.domain.review.service.ReviewService;
+import com.gorong.backend.domain.user.entity.User;
+import com.gorong.backend.domain.user.repository.UserRepository;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -20,268 +28,287 @@ import java.util.Map;
 public class ReviewController {
 
     private final ReviewService reviewService;
+    private final UserRepository userRepository;
 
-    // ─── 현재 로그인한 사용자 ID 추출 ───
-    private Long getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new IllegalArgumentException("인증되지 않은 사용자입니다.");
-        }
-        // Firebase 필터에서 userId를 principal로 설정했다고 가정
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof Long) {
-            return (Long) principal;
-        }
-        throw new IllegalArgumentException("유효하지 않은 사용자 정보입니다.");
+    @GetMapping("/posts")
+    public ResponseEntity<?> getPublishedPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Page<Review> posts = reviewService.getPublishedPosts(PageRequest.of(page, Math.min(size, 20)));
+        return ResponseEntity.ok(PageResponse.from(posts.map(review -> toSummary(review, true))));
     }
 
-    // ─── CREATE: 리뷰 작성 ───
-    @PostMapping
-    public ResponseEntity<?> createReview(@RequestBody ReviewCreateRequest request) {
-        try {
-            Long currentUserId = getCurrentUserId();
+    @GetMapping("/posts/{reviewId}")
+    public ResponseEntity<?> getPostingDetail(@PathVariable Long reviewId) {
+        Review review = reviewService.getPosting(reviewId);
+        return ResponseEntity.ok(toDetail(review));
+    }
 
-            Review review = reviewService.createReview(
-                    currentUserId,
-                    request.getEventId(),
-                    request.getRating(),
-                    request.getTitle(),
-                    request.getContent(),
-                    request.getAuthorName()
+    @PostMapping("/posts")
+    public ResponseEntity<?> publishPosting(@RequestBody PublishPostingRequest request, Authentication authentication) {
+        try {
+            User user = resolveUser(authentication);
+            Review saved = reviewService.publishPosting(
+                    user.getId(),
+                    new ReviewService.PostingPayload(
+                            request.getReviewId(),
+                            request.getEventId(),
+                            request.getTitle(),
+                            request.getReviewText(),
+                            request.getRating(),
+                            request.getContents(),
+                            request.getAuthorName(),
+                            toImagePayloads(request.getImages())
+                    )
             );
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(review);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 작성 중 오류가 발생했습니다."));
+            return ResponseEntity.status(HttpStatus.CREATED).body(toDetail(saved));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("error", exception.getMessage()));
         }
     }
 
-    // ─── CREATE: 리뷰에 이미지 추가 ───
-    @PostMapping("/{reviewId}/images")
-    public ResponseEntity<?> addImageToReview(
+    @PutMapping("/posts/{reviewId}")
+    public ResponseEntity<?> updatePosting(
             @PathVariable Long reviewId,
-            @RequestBody ReviewImageRequest request) {
+            @RequestBody PublishPostingRequest request,
+            Authentication authentication
+    ) {
         try {
-            Long currentUserId = getCurrentUserId();
-
-            // 권한 확인: 본인의 리뷰인지 체크
-            Review review = reviewService.getReviewById(reviewId);
-            if (!review.getUserId().equals(currentUserId)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("error", "본인의 리뷰에만 이미지를 추가할 수 있습니다."));
-            }
-
-            ReviewImage image = reviewService.addImageToReview(reviewId, request.getImageUrl());
-            return ResponseEntity.status(HttpStatus.CREATED).body(image);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "이미지 추가 중 오류가 발생했습니다."));
+            User user = resolveUser(authentication);
+            Review saved = reviewService.publishPosting(
+                    user.getId(),
+                    new ReviewService.PostingPayload(
+                            reviewId,
+                            request.getEventId(),
+                            request.getTitle(),
+                            request.getReviewText(),
+                            request.getRating(),
+                            request.getContents(),
+                            request.getAuthorName(),
+                            toImagePayloads(request.getImages())
+                    )
+            );
+            return ResponseEntity.ok(toDetail(saved));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("error", exception.getMessage()));
         }
     }
+    @DeleteMapping("/posts/{reviewId}")
+    public ResponseEntity<?> deleteReview(
+            @PathVariable Long reviewId,
+            Authentication authentication
+    ) {
+        User user = resolveUser(authentication);
 
-    // ─── READ: 행사별 리뷰 목록 (최신순) ───
+        reviewService.deleteReview(reviewId, user);
+
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/event/{eventId}")
-    public ResponseEntity<?> getReviewsByEventId(@PathVariable Long eventId) {
-        try {
-            List<Review> reviews = reviewService.getReviewsByEventId(eventId);
-            return ResponseEntity.ok(reviews);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 조회 중 오류가 발생했습니다."));
-        }
+    public ResponseEntity<?> getEventReviews(
+            @PathVariable Long eventId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Page<Review> reviews = reviewService.getEventReviews(eventId, PageRequest.of(page, Math.min(size, 20)));
+        return ResponseEntity.ok(PageResponse.from(reviews.map(review -> toSummary(review, false))));
     }
 
-    // ─── READ: 행사별 리뷰 목록 (별점 높은순) ───
-    @GetMapping("/event/{eventId}/rating-high")
-    public ResponseEntity<?> getReviewsByEventIdHighRating(@PathVariable Long eventId) {
+    @PostMapping("/event/{eventId}/quick")
+    public ResponseEntity<?> upsertQuickReview(
+            @PathVariable Long eventId,
+            @RequestBody QuickReviewRequest request,
+            Authentication authentication
+    ) {
         try {
-            List<Review> reviews = reviewService.getReviewsByEventIdHighRating(eventId);
-            return ResponseEntity.ok(reviews);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ─── READ: 행사별 리뷰 목록 (별점 낮은순) ───
-    @GetMapping("/event/{eventId}/rating-low")
-    public ResponseEntity<?> getReviewsByEventIdLowRating(@PathVariable Long eventId) {
-        try {
-            List<Review> reviews = reviewService.getReviewsByEventIdLowRating(eventId);
-            return ResponseEntity.ok(reviews);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ─── READ: 사용자별 리뷰 목록 ───
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<?> getReviewsByUserId(@PathVariable Long userId) {
-        try {
-            List<Review> reviews = reviewService.getReviewsByUserId(userId);
-            return ResponseEntity.ok(reviews);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ─── READ: 특정 리뷰 조회 ───
-    @GetMapping("/{reviewId}")
-    public ResponseEntity<?> getReviewById(@PathVariable Long reviewId) {
-        try {
-            Review review = reviewService.getReviewById(reviewId);
-            return ResponseEntity.ok(review);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ─── READ: 리뷰 이미지 조회 ───
-    @GetMapping("/{reviewId}/images")
-    public ResponseEntity<?> getImagesByReviewId(@PathVariable Long reviewId) {
-        try {
-            List<ReviewImage> images = reviewService.getImagesByReviewId(reviewId);
-            return ResponseEntity.ok(images);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "이미지 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ─── READ: 행사별 리뷰 개수 ───
-    @GetMapping("/event/{eventId}/count")
-    public ResponseEntity<?> getReviewCountByEventId(@PathVariable Long eventId) {
-        try {
-            Long count = reviewService.getReviewCountByEventId(eventId);
-            Map<String, Long> response = new HashMap<>();
-            response.put("count", count);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 개수 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ─── READ: 행사별 평균 별점 ───
-    @GetMapping("/event/{eventId}/average-rating")
-    public ResponseEntity<?> getAverageRatingByEventId(@PathVariable Long eventId) {
-        try {
-            Double avgRating = reviewService.getAverageRatingByEventId(eventId);
-            Map<String, Double> response = new HashMap<>();
-            response.put("averageRating", avgRating);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "평균 별점 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ─── UPDATE: 리뷰 수정 (권한 체크) ───
-    @PutMapping("/{reviewId}")
-    public ResponseEntity<?> updateReview(
-            @PathVariable Long reviewId,
-            @RequestBody ReviewUpdateRequest request) {
-        try {
-            Long currentUserId = getCurrentUserId();
-
-            Review updatedReview = reviewService.updateReview(
-                    reviewId,
-                    currentUserId,
+            User user = resolveUser(authentication);
+            Review saved = reviewService.upsertQuickReview(
+                    user.getId(),
+                    eventId,
                     request.getRating(),
-                    request.getTitle(),
-                    request.getContent()
+                    request.getReviewText(),
+                    request.getAuthorName(),
+                    toImagePayloads(request.getImages())
             );
-
-            return ResponseEntity.ok(updatedReview);
-        } catch (IllegalArgumentException e) {
-            if (e.getMessage().contains("본인의 리뷰만")) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("error", e.getMessage()));
-            }
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 수정 중 오류가 발생했습니다."));
+            return ResponseEntity.ok(toDetail(saved));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("error", exception.getMessage()));
         }
     }
 
-    // ─── DELETE: 리뷰 삭제 (권한 체크) ───
-    @DeleteMapping("/{reviewId}")
-    public ResponseEntity<?> deleteReview(@PathVariable Long reviewId) {
-        try {
-            Long currentUserId = getCurrentUserId();
-            reviewService.deleteReview(reviewId, currentUserId);
-            return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            if (e.getMessage().contains("본인의 리뷰만")) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("error", e.getMessage()));
-            }
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "리뷰 삭제 중 오류가 발생했습니다."));
+    @GetMapping("/template/{eventId}")
+    public ResponseEntity<?> getPostingTemplate(@PathVariable Long eventId, Authentication authentication) {
+        User user = resolveUser(authentication);
+        Review template = reviewService.getTemplate(user.getId(), eventId);
+        return ResponseEntity.ok(template == null ? null : toDetail(template));
+    }
+
+    @GetMapping("/my/events")
+    public ResponseEntity<?> getParticipatedEvents(Authentication authentication) {
+        User user = resolveUser(authentication);
+        return ResponseEntity.ok(reviewService.getParticipatedEvents(user.getId()));
+    }
+
+    @GetMapping("/{reviewId}/images")
+    public ResponseEntity<List<ReviewImageSummary>> getImagesByReviewId(@PathVariable Long reviewId) {
+        return ResponseEntity.ok(
+                reviewService.getImagesByReviewId(reviewId).stream()
+                        .map(this::toImageSummary)
+                        .toList()
+        );
+    }
+
+    private User resolveUser(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof FirebaseToken firebaseToken)) {
+            throw new IllegalArgumentException("로그인이 필요합니다.");
+        }
+
+        return userRepository.findByFirebaseUid(firebaseToken.getUid())
+                .orElseThrow(() -> new IllegalArgumentException("사용자 정보를 찾을 수 없습니다."));
+    }
+
+    private ReviewSummaryResponse toSummary(Review review, boolean includeContents) {
+        String eventTitle = reviewService.resolveEventTitle(review.getEventId());
+        return new ReviewSummaryResponse(
+                review.getId(),
+                review.getEventId(),
+                eventTitle,
+                review.getUserId(),
+                review.getAuthorName(),
+                review.getRating(),
+                review.getTitle(),
+                review.getReviewText(),
+                includeContents ? review.getContent() : null,
+                review.getStatus().name(),
+                reviewService.isReviewMetaEditable(review),
+                review.getStatus() == Review.PostStatus.PUBLISHED ? "/posting/" + review.getId() : null,
+                review.getCreatedAt(),
+                review.getUpdatedAt(),
+                review.getReviewImages().stream().map(this::toImageSummary).toList()
+        );
+    }
+
+    private ReviewDetailResponse toDetail(Review review) {
+        String eventTitle = reviewService.resolveEventTitle(review.getEventId());
+        return new ReviewDetailResponse(
+                review.getId(),
+                review.getEventId(),
+                eventTitle,
+                review.getUserId(),
+                review.getAuthorName(),
+                review.getRating(),
+                review.getTitle(),
+                review.getReviewText(),
+                review.getContent(),
+                review.getStatus().name(),
+                reviewService.isReviewMetaEditable(review),
+                review.getCreatedAt(),
+                review.getUpdatedAt(),
+                review.getReviewImages().stream().map(this::toImageSummary).toList()
+        );
+    }
+
+    private ReviewImageSummary toImageSummary(ReviewImage image) {
+        return new ReviewImageSummary(
+                image.getId(),
+                image.getImageUrl(),
+                image.getOriginalImgName(),
+                image.getSaveImgName(),
+                image.getDisplayOrder()
+        );
+    }
+
+    private List<ReviewService.ImagePayload> toImagePayloads(List<ImageRequest> images) {
+        if (images == null) {
+            return List.of();
+        }
+        return images.stream()
+                .map(image -> new ReviewService.ImagePayload(image.getImageUrl(), image.getOriginalImgName(), image.getSaveImgName()))
+                .toList();
+    }
+
+    public record ReviewImageSummary(Long id, String imageUrl, String originalImgName, String saveImgName, Integer displayOrder) {}
+
+    public record ReviewSummaryResponse(
+            Long id,
+            Long eventId,
+            String eventTitle,
+            Long userId,
+            String authorName,
+            Integer rating,
+            String title,
+            String reviewText,
+            String contents,
+            String status,
+            boolean reviewMetaEditable,
+            String postingPath,
+            OffsetDateTime createdAt,
+            OffsetDateTime updatedAt,
+            List<ReviewImageSummary> images
+    ) {}
+
+    public record ReviewDetailResponse(
+            Long id,
+            Long eventId,
+            String eventTitle,
+            Long userId,
+            String authorName,
+            Integer rating,
+            String title,
+            String reviewText,
+            String contents,
+            String status,
+            boolean reviewMetaEditable,
+            OffsetDateTime createdAt,
+            OffsetDateTime updatedAt,
+            List<ReviewImageSummary> images
+    ) {}
+
+    public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages, boolean last) {
+        public static <T> PageResponse<T> from(Page<T> page) {
+            return new PageResponse<>(
+                    page.getContent(),
+                    page.getNumber(),
+                    page.getSize(),
+                    page.getTotalElements(),
+                    page.getTotalPages(),
+                    page.isLast()
+            );
         }
     }
 
-    // ─── DELETE: 리뷰 이미지 삭제 (권한 체크) ───
-    @DeleteMapping("/{reviewId}/images/{imageId}")
-    public ResponseEntity<?> deleteImage(
-            @PathVariable Long reviewId,
-            @PathVariable Long imageId) {
-        try {
-            Long currentUserId = getCurrentUserId();
-            reviewService.deleteImage(imageId, reviewId, currentUserId);
-            return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            if (e.getMessage().contains("본인의 리뷰")) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("error", e.getMessage()));
-            }
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "이미지 삭제 중 오류가 발생했습니다."));
-        }
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ImageRequest {
+        private String imageUrl;
+        private String originalImgName;
+        private String saveImgName;
     }
 
-    // ─── DTO: 리뷰 생성 요청 ───
-    @lombok.Data
-    @lombok.NoArgsConstructor
-    @lombok.AllArgsConstructor
-    public static class ReviewCreateRequest {
-        private Integer rating; // 1~5
-        private String title; // 필수
-        private String content; // 선택
-        private String authorName; // 필수
-        private Long eventId; // FK (userId는 현재 로그인한 사용자에서 자동 추출)
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuickReviewRequest {
+        private Integer rating;
+        private String reviewText;
+        private String authorName;
+        private List<ImageRequest> images;
     }
 
-    // ─── DTO: 리뷰 수정 요청 ───
-    @lombok.Data
-    @lombok.NoArgsConstructor
-    @lombok.AllArgsConstructor
-    public static class ReviewUpdateRequest {
-        private Integer rating; // 1~5
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PublishPostingRequest {
+        private Long reviewId;
+        private Long eventId;
         private String title;
-        private String content;
-    }
-
-    // ─── DTO: 리뷰 이미지 요청 ───
-    @lombok.Data
-    @lombok.NoArgsConstructor
-    @lombok.AllArgsConstructor
-    public static class ReviewImageRequest {
-        private String imageUrl; // Firebase Storage URL 또는 Base64 데이터
+        private String reviewText;
+        private Integer rating;
+        private String contents;
+        private String authorName;
+        private List<ImageRequest> images;
     }
 }
