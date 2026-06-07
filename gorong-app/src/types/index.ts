@@ -76,6 +76,7 @@ export interface AppGroup {
   id: number
   title: string
   event: string
+  eventContentId?: string | null
   location: string
   meetingDate?: string
   meetingTime?: string

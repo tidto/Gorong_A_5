@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import React from 'react'
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { uploadFileToS3 } from '../services/api'
 import { TRAIL_HISTORY_KEY, TrailHistoryEntry, useTrailStore } from '../store/trailStore'
 
 type TrailSessionDetail = TrailHistoryEntry & {
@@ -30,6 +32,7 @@ export default function TrailScreen() {
   const { isRecording, trail, startRecording, stopRecording, startedAt } = useTrailStore()
   const [history, setHistory] = React.useState<TrailSessionDetail[]>([])
   const [refreshing, setRefreshing] = React.useState(false)
+  const [galleryUploading, setGalleryUploading] = React.useState(false)
 
   const loadHistory = React.useCallback(async () => {
     const raw = await AsyncStorage.getItem(TRAIL_HISTORY_KEY)
@@ -74,6 +77,35 @@ export default function TrailScreen() {
     await startRecording()
   }
 
+  const handleGalleryUpload = React.useCallback(async () => {
+    try {
+      setGalleryUploading(true)
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!permission.granted) {
+        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.')
+        return
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: false,
+      })
+
+      if (result.canceled || !result.assets.length) return
+
+      const asset = result.assets[0]
+      const fileName = asset.fileName ?? `gallery-${Date.now()}.jpg`
+      const response = await uploadFileToS3(asset.uri, fileName, 'APP_PHOTO', true)
+      Alert.alert('완료', response.data?.gallerySaved ? '사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
+    } catch (error) {
+      console.error('갤러리 업로드 실패:', error)
+      Alert.alert('안내', '갤러리 업로드에 실패했습니다.')
+    } finally {
+      setGalleryUploading(false)
+    }
+  }, [])
+
   return (
     <ScrollView
       style={styles.container}
@@ -109,6 +141,25 @@ export default function TrailScreen() {
         >
           <Text style={styles.primaryBtnText}>
             {isRecording ? '기록 종료' : '기록 시작'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.galleryCard}>
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>갤러리 업로드</Text>
+          <Text style={styles.sectionSub}>자동 저장됨</Text>
+        </View>
+        <Text style={styles.galleryText}>
+          사진을 선택하면 서버 저장 후 갤러리에 자동으로 들어갑니다.
+        </Text>
+        <TouchableOpacity
+          style={[styles.galleryBtn, galleryUploading && styles.galleryBtnDisabled]}
+          onPress={handleGalleryUpload}
+          disabled={galleryUploading}
+        >
+          <Text style={styles.galleryBtnText}>
+            {galleryUploading ? '업로드 중...' : '사진 올리기'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -217,6 +268,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
   },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  galleryCard: {
+    backgroundColor: '#111827',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  galleryText: { fontSize: 12, color: '#e5e7eb', lineHeight: 18, marginBottom: 12 },
+  galleryBtn: {
+    backgroundColor: '#FF6B35',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  galleryBtnDisabled: {
+    backgroundColor: '#6b7280',
+  },
+  galleryBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   emptyCard: {
     backgroundColor: '#fff',
     borderRadius: 18,

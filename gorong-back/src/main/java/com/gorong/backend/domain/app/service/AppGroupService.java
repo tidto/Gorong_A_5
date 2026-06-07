@@ -110,6 +110,7 @@ public class AppGroupService {
                 .id(group.getId())
                 .title(group.getTitle())
                 .event(group.getEvent())
+                .eventContentId(group.getEventContentId())
                 .location(group.getLocation())
                 .meetingDate(group.getMeetingDate())
                 .meetingTime(group.getMeetingTime())

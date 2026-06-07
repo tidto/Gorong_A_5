@@ -114,7 +114,7 @@ export default function GroupScreen() {
 
   const trackedVenueIds = useMemo(() => {
     const ids = [
-      ...groups.map((group) => group.event?.trim()),
+      ...groups.map((group) => (group.eventContentId ?? group.event)?.trim()),
       ...participations.map((item) => item.eventContentId?.trim()),
     ].filter((value): value is string => Boolean(value))
     return Array.from(new Set(ids))
@@ -158,6 +158,14 @@ export default function GroupScreen() {
       setVerifyingVenueId(null)
     }
   }, [resolveCurrentLocation])
+
+  const resolveGroupVenueId = useCallback((group: AppGroup) => {
+    const explicitVenueId = group.eventContentId?.trim()
+    if (explicitVenueId) return explicitVenueId
+    const fallback = group.event?.trim()
+    if (fallback && /^\d+$/.test(fallback)) return fallback
+    return null
+  }, [])
 
   useEffect(() => {
     if (!trackedVenueIds.length) return
@@ -235,7 +243,8 @@ export default function GroupScreen() {
         return
       }
 
-      if (!group.event || !arrivalVerifiedByVenueId[group.event]) {
+      const venueId = resolveGroupVenueId(group)
+      if (!venueId || !arrivalVerifiedByVenueId[venueId]) {
         Alert.alert('안내', '지오펜싱 참여 인증이 완료된 행사만 사진을 올릴 수 있습니다.')
         return
       }
@@ -250,8 +259,8 @@ export default function GroupScreen() {
 
       const asset = result.assets[0]
       const uri = asset.uri
-      const fileName = asset.fileName ?? `event-${group.event || group.id}-${Date.now()}.jpg`
-      const response = await uploadFileToS3(uri, fileName, 'APP_PHOTO', true, group.event)
+      const fileName = asset.fileName ?? `event-${venueId || group.id}-${Date.now()}.jpg`
+      const response = await uploadFileToS3(uri, fileName, 'APP_PHOTO', true, venueId)
       Alert.alert('완료', response.data?.gallerySaved ? '행사 사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
       loadData()
     } catch (error) {
@@ -261,11 +270,17 @@ export default function GroupScreen() {
   }
 
   const handleGroupSecondaryAction = async (group: AppGroup) => {
-    if (!group.joined || !group.event) return
+    if (!group.joined) return
 
-    const verified = arrivalVerifiedByVenueId[group.event]
+    const venueId = resolveGroupVenueId(group)
+    if (!venueId) {
+      Alert.alert('안내', '이 모임에는 지오펜싱 행사 ID가 연결되어 있지 않습니다.')
+      return
+    }
+
+    const verified = arrivalVerifiedByVenueId[venueId]
     if (!verified) {
-      await verifyVenueArrival(group.event, group.title || group.event)
+      await verifyVenueArrival(venueId, group.title || group.event)
       return
     }
 
@@ -393,15 +408,15 @@ export default function GroupScreen() {
                 <TouchableOpacity
                   style={[
                     styles.secondaryButton,
-                    (!group.event || verifyingVenueId === group.event) && styles.buttonDisabled,
+                    (!resolveGroupVenueId(group) || verifyingVenueId === resolveGroupVenueId(group)) && styles.buttonDisabled,
                   ]}
-                  disabled={!group.event || verifyingVenueId === group.event}
+                  disabled={!resolveGroupVenueId(group) || verifyingVenueId === resolveGroupVenueId(group)}
                   onPress={() => handleGroupSecondaryAction(group)}
                 >
                   <Text style={styles.secondaryButtonText}>
-                    {verifyingVenueId === group.event
+                    {verifyingVenueId === resolveGroupVenueId(group)
                       ? '인증 중...'
-                      : group.event && arrivalVerifiedByVenueId[group.event]
+                      : resolveGroupVenueId(group) && arrivalVerifiedByVenueId[resolveGroupVenueId(group)!]
                         ? '행사 사진 올리기'
                         : '지오펜싱 인증'}
                   </Text>
