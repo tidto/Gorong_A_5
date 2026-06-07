@@ -84,12 +84,36 @@ type GroupRoom = {
   maxMembers: number
   isGathered: boolean
   createdAt: number
+  closedAt?: number
   source: 'WEB_GROUP' | 'APP_GROUP'
+}
+
+function parseLocalDate(value?: string | null) {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (/^\d{8}$/.test(trimmed)) {
+    const y = Number(trimmed.slice(0, 4))
+    const m = Number(trimmed.slice(4, 6)) - 1
+    const d = Number(trimmed.slice(6, 8))
+    return new Date(y, m, d)
+  }
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function resolveClosedAt(meetingDate?: string | null) {
+  const base = parseLocalDate(meetingDate)
+  const target = base ?? new Date()
+  target.setHours(23, 59, 59, 999)
+  target.setDate(target.getDate() + 3)
+  return target.getTime()
 }
 
 export const ensureGroupRoom = async (group: AppGroup, userId: string) => {
   const roomRef = doc(db, 'group_rooms', String(group.id))
   const snap = await getDoc(roomRef)
+  const closedAt = resolveClosedAt(group.meetingDate)
 
   if (!snap.exists()) {
     await setDoc(roomRef, {
@@ -103,11 +127,16 @@ export const ensureGroupRoom = async (group: AppGroup, userId: string) => {
       maxMembers: group.maxMembers,
       isGathered: group.gathered,
       createdAt: Date.now(),
+      closedAt,
       source: 'WEB_GROUP',
     } as GroupRoom)
     return String(group.id)
   }
 
+  const room = snap.data() as GroupRoom
+  if (!room.closedAt) {
+    await updateDoc(roomRef, { closedAt })
+  }
   await joinGroupRoom(String(group.id), userId)
   return String(group.id)
 }
@@ -119,6 +148,9 @@ export const joinGroupRoom = async (groupId: string, userId: string) => {
 
   const room = snap.data() as GroupRoom
   if (room.members.includes(userId)) return
+  if (room.closedAt && Date.now() > room.closedAt) {
+    throw new Error('채팅방이 종료되었습니다.')
+  }
   if (room.members.length >= room.maxMembers) {
     throw new Error('정원이 가득 찼습니다.')
   }

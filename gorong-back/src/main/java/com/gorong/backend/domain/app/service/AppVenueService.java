@@ -77,6 +77,8 @@ public class AppVenueService {
                     double venueLat = Double.parseDouble(String.valueOf(item.get("mapy")));
                     double venueLng = Double.parseDouble(String.valueOf(item.get("mapx")));
                     int geofenceRadius = 300;
+                    String eventStartDate = normalizeDate(item.get("eventstartdate"));
+                    String eventEndDate = normalizeDate(item.get("eventenddate"));
 
                     venueGeoCache.put(id, new VenueGeo(id, venueLat, venueLng, geofenceRadius));
 
@@ -89,6 +91,8 @@ public class AppVenueService {
                             .address(String.valueOf(item.get("addr1")))
                             .category(String.valueOf(item.get("cat1")))
                             .imageUrl(String.valueOf(item.getOrDefault("firstimage", "")))
+                            .eventStartDate(eventStartDate.isBlank() ? null : eventStartDate)
+                            .eventEndDate(eventEndDate.isBlank() ? null : eventEndDate)
                             .build());
                 }
             }
@@ -97,5 +101,12 @@ public class AppVenueService {
             log.error("TourAPI 호출 실패: {}", e.getMessage());
             return new ArrayList<>();
         }
+    }
+
+    private String normalizeDate(Object value) {
+        if (value == null) return null;
+        String text = String.valueOf(value).trim();
+        if (text.isBlank() || "null".equalsIgnoreCase(text)) return null;
+        return text;
     }
 }

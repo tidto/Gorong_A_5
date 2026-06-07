@@ -33,6 +33,39 @@ function formatEventPeriod(start?: string, end?: string) {
   return '기간 미정'
 }
 
+function parseLooseDate(value?: string | null) {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  if (/^\d{8}$/.test(trimmed)) {
+    const year = Number(trimmed.slice(0, 4))
+    const month = Number(trimmed.slice(4, 6)) - 1
+    const day = Number(trimmed.slice(6, 8))
+    return new Date(year, month, day)
+  }
+
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function isVenueActiveToday(venue: Venue) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const start = parseLooseDate(venue.eventStartDate)
+  const end = parseLooseDate(venue.eventEndDate)
+
+  if (!start && !end) return true
+  if (start && today < start) return false
+  if (end) {
+    const endOfDay = new Date(end)
+    endOfDay.setHours(23, 59, 59, 999)
+    if (today > endOfDay) return false
+  }
+  return true
+}
+
 function mapPublicEventToVenue(item: PublicEvent): Venue {
   return {
     id: String(item.contentid),
@@ -68,7 +101,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets()
   const { setInsideVenueId } = useAuthStore()
   const geofenceVenues = useMemo(
-    () => venues.filter((venue) => venue.geofenceEnabled !== false && venue.radius > 0),
+    () => venues.filter((venue) => venue.geofenceEnabled !== false && venue.radius > 0 && isVenueActiveToday(venue)),
     [venues],
   )
   const { insideVenueId, isVerified } = useGeofence(geofenceVenues)

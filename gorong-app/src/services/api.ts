@@ -1,7 +1,7 @@
 // src/services/api.ts
 import axios from 'axios'
 import { auth } from '../config/firebaseConfig'
-import { AppGroup, PublicEvent, Venue } from '../types'
+import { AppGroup, EventParticipation, PublicEvent, Venue } from '../types'
 
 const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1'
 const rootUrl = baseUrl.replace(/\/api\/v1$/, '')
@@ -101,6 +101,9 @@ export const verifyArrival = (venueId: string, lat: number, lng: number) =>
 // 앱 그룹 목록 조회 (웹에서 생성된 그룹 포함)
 export const fetchAppGroups = () =>
   api.get<AppGroup[]>('/app/groups')
+
+export const fetchMyParticipations = () =>
+  api.get<EventParticipation[]>('/event-participation/me')
 
 // 앱 그룹 참가
 export const joinAppGroup = (groupId: number) =>

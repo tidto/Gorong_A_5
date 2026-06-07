@@ -4,8 +4,7 @@
 // 구성
 //   - 익명 채팅: 지오펜스 안에서만 참여 가능
 //   - 모임 채팅: 웹에서 만든 모임 목록 중 참여한 모임만 선택
-//                2명 이상인 모임만 Firestore room을 생성/활성화
-//   - 혼자참여 모임은 익명 채팅만 가능
+//                1명이어도 채팅방은 열리도록 허용
 // ─────────────────────────────────────────────────────────────────
 
 import React, { useEffect, useMemo, useState } from 'react'
@@ -50,6 +49,7 @@ export default function ChatScreen() {
   const [joinedGroups, setJoinedGroups] = useState<AppGroup[]>([])
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [groupRoomReady, setGroupRoomReady] = useState(false)
+  const [groupRoomClosedAt, setGroupRoomClosedAt] = useState<number | null>(null)
   const [loadingGroups, setLoadingGroups] = useState(true)
   const insets = useSafeAreaInsets()
 
@@ -65,7 +65,30 @@ export default function ChatScreen() {
     [joinedGroups, selectedGroupId]
   )
 
-  const canUseGroupChat = Boolean(selectedGroup && selectedGroup.currentMembers >= 2)
+  const canUseGroupChat = Boolean(selectedGroup)
+  const isGroupRoomClosed = Boolean(groupRoomClosedAt && Date.now() > groupRoomClosedAt)
+
+  const parseChatDate = (value?: string | null) => {
+    if (!value) return null
+    const parts = value.split('-').map((part) => Number(part))
+    if (parts.length === 3 && parts.every((part) => Number.isFinite(part))) {
+      return new Date(parts[0], parts[1] - 1, parts[2])
+    }
+
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const isGroupListingClosed = (group: AppGroup) => {
+    const meetingDate = parseChatDate(group.meetingDate)
+    if (!meetingDate) return false
+
+    const closedAt = new Date(meetingDate)
+    closedAt.setDate(closedAt.getDate() + 3)
+    closedAt.setHours(23, 59, 59, 999)
+
+    return Date.now() > closedAt.getTime()
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -92,23 +115,13 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!selectedGroup || !myUid) {
       setGroupRoomReady(false)
+      setGroupRoomClosedAt(null)
       setGroupMessages([])
       setGroupMembers([])
       setGroupGathered(false)
       setSharedLocs({})
       setSharedCount(0)
       setVerifyMessage('')
-      return
-    }
-
-    if (!canUseGroupChat) {
-      setGroupRoomReady(false)
-      setGroupMessages([])
-      setGroupMembers([])
-      setGroupGathered(false)
-      setSharedLocs({})
-      setSharedCount(0)
-      setVerifyMessage('2명 이상 참여한 모임만 모임 채팅을 사용할 수 있습니다.')
       return
     }
 
@@ -136,6 +149,7 @@ export default function ChatScreen() {
         unsubRoom = subscribeGroupRoom(groupId, (room) => {
           setGroupMembers(room?.members ?? [])
           setGroupGathered(Boolean(room?.isGathered))
+          setGroupRoomClosedAt(room?.closedAt ?? null)
         })
       } catch (error) {
         console.error('[ChatScreen] 모임 룸 준비 실패:', error)
@@ -173,7 +187,7 @@ export default function ChatScreen() {
   }
 
   const handleShareLocation = async () => {
-    if (!selectedGroup || !groupRoomReady || !myUid) return
+    if (!selectedGroup || !groupRoomReady || !myUid || isGroupRoomClosed) return
     const { status } = await Location.requestForegroundPermissionsAsync()
     if (status !== 'granted') return
     const loc = await Location.getCurrentPositionAsync({})
@@ -213,7 +227,7 @@ export default function ChatScreen() {
 
     if (mode === 'anonymous') {
       await sendMessage(text)
-    } else if (selectedGroup && canUseGroupChat && groupRoomReady) {
+    } else if (selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed) {
       await sendGroupMessage(String(selectedGroup.id), {
         text,
         userId: myUid,
@@ -274,14 +288,19 @@ export default function ChatScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupChipRow}>
               {joinedGroups.map((group) => {
                 const active = String(group.id) === selectedGroupId
-                const solo = group.maxMembers <= 1 || group.currentMembers < 2
+                const closed = isGroupListingClosed(group)
                 return (
                   <TouchableOpacity
                     key={group.id}
-                    style={[styles.groupChip, active && styles.groupChipActive]}
+                    style={[
+                      styles.groupChip,
+                      active && styles.groupChipActive,
+                      closed && styles.groupChipClosed,
+                    ]}
                     onPress={() => setSelectedGroupId(String(group.id))}
                     activeOpacity={0.85}
                   >
+                    {closed && <View pointerEvents="none" style={styles.groupChipOverlay} />}
                     <Text style={[styles.groupChipTitle, active && styles.groupChipTitleActive]} numberOfLines={1}>
                       {group.event || group.title}
                     </Text>
@@ -289,8 +308,13 @@ export default function ChatScreen() {
                       {group.meetingDate || '미정'} {group.meetingTime || ''}
                     </Text>
                     <Text style={[styles.groupChipMeta, active && styles.groupChipMetaActive]} numberOfLines={1}>
-                      {solo ? '혼자참여 · 채팅 없음' : `${group.currentMembers}/${group.maxMembers}명`}
+                      {closed ? '종료' : `${group.currentMembers}/${group.maxMembers}명`}
                     </Text>
+                    {closed && (
+                      <View style={styles.groupChipBadge}>
+                        <Text style={styles.groupChipBadgeText}>종료</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 )
               })}
@@ -308,25 +332,28 @@ export default function ChatScreen() {
               <Text style={styles.groupInfoText}>
                 인원: {selectedGroup.currentMembers}/{selectedGroup.maxMembers}
               </Text>
-              {selectedGroup.maxMembers <= 1 || selectedGroup.currentMembers < 2 ? (
-                <Text style={styles.warnText}>혼자참여는 모임 채팅방을 생성하지 않습니다.</Text>
-              ) : (
-                <Text style={styles.okText}>모임 채팅 사용 가능</Text>
-              )}
+              <Text style={styles.okText}>
+                {isGroupRoomClosed ? '채팅방 종료됨' : '모임 채팅 사용 가능'}
+              </Text>
               {!!verifyMessage && <Text style={styles.verifyText}>{verifyMessage}</Text>}
+              {isGroupRoomClosed && (
+                <Text style={styles.verifyText}>
+                  모임 날짜 기준 3일이 지나 채팅방이 닫혔습니다.
+                </Text>
+              )}
 
               <View style={styles.groupActionRow}>
                 <TouchableOpacity
                   style={[styles.smallBtn, (!selectedGroup || !groupRoomReady || !canUseGroupChat) && styles.smallBtnDisabled]}
                   onPress={handleShareLocation}
-                  disabled={!selectedGroup || !groupRoomReady || !canUseGroupChat}
+                  disabled={!selectedGroup || !groupRoomReady || !canUseGroupChat || isGroupRoomClosed}
                 >
                   <Text style={styles.smallBtnText}>📍 위치 공유(5초)</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.smallBtn, (!selectedGroup || !groupRoomReady || !canUseGroupChat || groupGathered) && styles.smallBtnDisabled]}
+                  style={[styles.smallBtn, (!selectedGroup || !groupRoomReady || !canUseGroupChat || groupGathered || isGroupRoomClosed) && styles.smallBtnDisabled]}
                   onPress={handleVerifyGathering}
-                  disabled={!selectedGroup || !groupRoomReady || !canUseGroupChat || groupGathered}
+                  disabled={!selectedGroup || !groupRoomReady || !canUseGroupChat || groupGathered || isGroupRoomClosed}
                 >
                   <Text style={styles.smallBtnText}>
                     {groupGathered ? '✅ 인증됨' : '모임 성사 인증'}
@@ -366,31 +393,31 @@ export default function ChatScreen() {
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder={
-            mode === 'anonymous'
-              ? (isConnected ? '메시지 입력...' : '행사장 진입 후 이용 가능')
-              : (selectedGroup && canUseGroupChat && groupRoomReady
+            placeholder={
+              mode === 'anonymous'
+                ? (isConnected ? '메시지 입력...' : '행사장 진입 후 이용 가능')
+              : (selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed
                 ? '모임 메시지 입력...'
-                : '2명 이상 모임만 이용 가능')
-          }
+                : (isGroupRoomClosed ? '채팅방이 종료되었습니다.' : '모임 채팅 사용 가능'))
+            }
           placeholderTextColor="#aaa"
-          editable={
-            mode === 'anonymous'
-              ? isConnected
-              : Boolean(selectedGroup && canUseGroupChat && groupRoomReady)
-          }
+            editable={
+              mode === 'anonymous'
+                ? isConnected
+              : Boolean(selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed)
+            }
           onSubmitEditing={handleSend}
           returnKeyType="send"
         />
         <TouchableOpacity
           style={[
             styles.sendBtn,
-            !((mode === 'anonymous' && isConnected) || (mode === 'group' && selectedGroup && canUseGroupChat && groupRoomReady)) &&
+            !((mode === 'anonymous' && isConnected) || (mode === 'group' && selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed)) &&
               styles.sendBtnDisabled,
           ]}
           onPress={handleSend}
           disabled={
-            !((mode === 'anonymous' && isConnected) || (mode === 'group' && selectedGroup && canUseGroupChat && groupRoomReady))
+            !((mode === 'anonymous' && isConnected) || (mode === 'group' && selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed))
           }
         >
           <Text style={styles.sendBtnText}>전송</Text>
@@ -480,10 +507,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    overflow: 'hidden',
   },
   groupChipActive: {
     borderColor: '#FF6B35',
     backgroundColor: '#fff7f2',
+  },
+  groupChipClosed: {
+    opacity: 0.72,
+  },
+  groupChipOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.42)',
   },
   groupChipTitle: {
     fontSize: 14,
@@ -509,6 +544,20 @@ const styles = StyleSheet.create({
   },
   groupChipMetaActive: {
     color: '#92400e',
+  },
+  groupChipBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(17, 24, 39, 0.78)',
+  },
+  groupChipBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
   },
   groupInfoBox: {
     marginTop: 12,

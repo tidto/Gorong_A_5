@@ -86,6 +86,17 @@ export interface AppGroup {
   status: string
 }
 
+export interface EventParticipation {
+  id: number
+  eventContentId: string
+  eventTitle: string
+  groupPostId?: number | null
+  groupPostTitle?: string | null
+  participationType: 'SOLO' | 'GROUP'
+  visitDate?: string | null
+  appliedAt: string
+}
+
 // ─── 회원가입 요청 DTO (앱 → 백엔드) ─────────
 // 백엔드 SignUpRequestDto 와 매핑
 export interface SignUpPayload {
