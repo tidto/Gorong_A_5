@@ -1,23 +1,117 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import * as Location from 'expo-location'
 import MapView, { Circle, Marker, Polyline } from 'react-native-maps'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useGeofence } from '../hooks/useGeofence'
-import { fetchNearbyVenues, uploadFileToS3 } from '../services/api'
+import { fetchMyParticipations, fetchNearbyVenues, fetchPublicEventDetail, fetchPublicEvents, uploadFileToS3 } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { useTrailStore } from '../store/trailStore'
-import { Venue } from '../types'
+import { PublicEvent, Venue } from '../types'
+
+function distanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+) {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function formatEventPeriod(start?: string, end?: string) {
+  if (start && end) return `${start} ~ ${end}`
+  if (start) return `${start} 시작`
+  if (end) return `${end} 종료`
+  return '기간 미정'
+}
+
+function parseLooseDate(value?: string | null) {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  if (/^\d{8}$/.test(trimmed)) {
+    const year = Number(trimmed.slice(0, 4))
+    const month = Number(trimmed.slice(4, 6)) - 1
+    const day = Number(trimmed.slice(6, 8))
+    return new Date(year, month, day)
+  }
+
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function isVenueActiveToday(venue: Venue) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const start = parseLooseDate(venue.eventStartDate)
+  const end = parseLooseDate(venue.eventEndDate)
+
+  if (!start && !end) return true
+  if (start && today < start) return false
+  if (end) {
+    const endOfDay = new Date(end)
+    endOfDay.setHours(23, 59, 59, 999)
+    if (today > endOfDay) return false
+  }
+  return true
+}
+
+function mapPublicEventToVenue(item: PublicEvent): Venue {
+  return {
+    id: String(item.contentid),
+    name: item.title,
+    lat: Number(item.mapy),
+    lng: Number(item.mapx),
+    radius: 0,
+    geofenceEnabled: false,
+    address: item.addr1,
+    category: item.cat1 ?? 'EVENT',
+    imageUrl: item.firstimage,
+    eventStartDate: item.eventStartDate,
+    eventEndDate: item.eventEndDate,
+    overview: item.overview,
+  }
+}
+
+function mapNearbyVenueToVenue(item: Venue): Venue {
+  return {
+    ...item,
+    geofenceEnabled: true,
+  }
+}
 
 export default function MapScreen() {
   const [venues, setVenues] = useState<Venue[]>([])
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [showPawPrint, setShowPawPrint] = useState(false)
   const [outsideTimer, setOutsideTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   const mapRef = useRef<MapView | null>(null)
+  const insets = useSafeAreaInsets()
   const { setInsideVenueId } = useAuthStore()
-  const { insideVenueId, isVerified } = useGeofence(venues)
+  const geofenceVenues = useMemo(
+    () => venues.filter((venue) => venue.geofenceEnabled !== false && venue.radius > 0 && isVenueActiveToday(venue)),
+    [venues],
+  )
+  const { insideVenueId, isVerified } = useGeofence(geofenceVenues)
   const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
+  const selectedVenue = useMemo(
+    () => venues.find((venue) => venue.id === selectedVenueId) ?? null,
+    [venues, selectedVenueId],
+  )
+  const buttonRowBottom = 220 + insets.bottom
+  const eventSheetBottomPadding = 24 + insets.bottom
 
   useEffect(() => {
     setInsideVenueId(insideVenueId)
@@ -89,8 +183,79 @@ export default function MapScreen() {
       setUserLocation({ lat: latitude, lng: longitude })
 
       try {
-        const response = await fetchNearbyVenues(latitude, longitude)
-        setVenues(response.data)
+        const [publicResponse, nearbyResponse, participationResponse] = await Promise.allSettled([
+          fetchPublicEvents(),
+          fetchNearbyVenues(latitude, longitude),
+          fetchMyParticipations(),
+        ])
+
+        if (publicResponse.status !== 'fulfilled' || nearbyResponse.status !== 'fulfilled') {
+          throw new Error('행사 데이터를 불러오지 못했습니다.')
+        }
+
+        const participationData = participationResponse.status === 'fulfilled'
+          ? participationResponse.value.data
+          : []
+
+        const publicVenues = publicResponse.value.data
+          .map(mapPublicEventToVenue)
+          .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
+
+        const nearbyVenues = nearbyResponse.value.data
+          .map(mapNearbyVenueToVenue)
+          .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
+
+        const soloParticipationIds = new Set(
+          participationData
+            .filter((item) => item.participationType === 'SOLO')
+            .map((item) => item.eventContentId?.trim())
+            .filter((value): value is string => Boolean(value))
+        )
+
+        const publicVenueById = new Map(publicVenues.map((venue) => [venue.id, venue]))
+        const missingSoloIds = Array.from(soloParticipationIds).filter((id) => !publicVenueById.has(id))
+
+        const fallbackResponses = await Promise.allSettled(
+          missingSoloIds.map(async (id) => {
+            const response = await fetchPublicEventDetail(id)
+            return mapPublicEventToVenue(response.data)
+          })
+        )
+
+        const fallbackSoloVenues = fallbackResponses
+          .filter((item): item is PromiseFulfilledResult<Venue> => item.status === 'fulfilled')
+          .map((item) => item.value)
+          .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
+
+        const venueById = new Map<string, Venue>()
+        ;[...publicVenues, ...fallbackSoloVenues].forEach((venue) => {
+          venueById.set(venue.id, venue)
+        })
+
+        nearbyVenues.forEach((venue) => {
+          const current = venueById.get(venue.id)
+          venueById.set(venue.id, {
+            ...(current ?? venue),
+            ...venue,
+            radius: venue.radius,
+            geofenceEnabled: true,
+          })
+        })
+
+        soloParticipationIds.forEach((venueId) => {
+          const current = venueById.get(venueId)
+          if (!current) return
+          venueById.set(venueId, {
+            ...current,
+            radius: current.radius > 0 ? current.radius : 300,
+            geofenceEnabled: true,
+          })
+        })
+
+        const mergedVenues = Array.from(venueById.values())
+
+        setVenues(mergedVenues)
+        setSelectedVenueId((current) => current ?? mergedVenues[0]?.id ?? null)
       } catch (err) {
         console.error('주변 행사 조회 실패:', err)
         Alert.alert('오류', '주변 행사 정보를 불러오지 못했습니다.')
@@ -103,6 +268,17 @@ export default function MapScreen() {
     const venue = venues.find(v => v.id === insideVenueId)
     Alert.alert('도착 인증', `${venue?.name ?? '행사장'}에 도착했습니다.`)
   }, [isVerified, insideVenueId, venues])
+
+  const visibleVenues = useMemo(() => {
+    if (!userLocation) return venues.slice(0, 5)
+    return [...venues]
+      .map((venue) => ({
+        ...venue,
+        distance: distanceMeters(userLocation.lat, userLocation.lng, venue.lat, venue.lng),
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 8)
+  }, [venues, userLocation])
 
   if (!userLocation) {
     return (
@@ -127,18 +303,26 @@ export default function MapScreen() {
       >
         {venues.map(venue => (
           <React.Fragment key={venue.id}>
-            <Marker
+              <Marker
               coordinate={{ latitude: venue.lat, longitude: venue.lng }}
               title={venue.name}
               description={venue.address}
               pinColor={insideVenueId === venue.id ? 'green' : 'red'}
+              onPress={() => setSelectedVenueId(venue.id)}
             />
-            <Circle
-              center={{ latitude: venue.lat, longitude: venue.lng }}
-              radius={venue.radius}
-              strokeColor={insideVenueId === venue.id ? 'rgba(0,200,0,0.8)' : 'rgba(0,122,255,0.5)'}
-              fillColor={insideVenueId === venue.id ? 'rgba(0,200,0,0.1)' : 'rgba(0,122,255,0.1)'}
-            />
+            {venue.geofenceEnabled !== false && venue.radius > 0 && (
+              <Circle
+                center={{ latitude: venue.lat, longitude: venue.lng }}
+                radius={venue.radius}
+                strokeWidth={insideVenueId === venue.id ? 4 : 2}
+                strokeColor={insideVenueId === venue.id
+                  ? 'rgba(255, 107, 53, 0.95)'
+                  : 'rgba(59, 130, 246, 0.75)'}
+                fillColor={insideVenueId === venue.id
+                  ? 'rgba(255, 107, 53, 0.30)'
+                  : 'rgba(59, 130, 246, 0.16)'}
+              />
+            )}
           </React.Fragment>
         ))}
 
@@ -158,7 +342,75 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      <View style={styles.buttonRow}>
+      {selectedVenue && (
+        <View style={[styles.previewCard, { top: 96 + insets.top }]}>
+          <Image
+            source={
+              selectedVenue.imageUrl
+                ? { uri: selectedVenue.imageUrl }
+                : require('../../assets/icon.png')
+            }
+            style={styles.previewImage}
+          />
+          <View style={styles.previewText}>
+            <Text style={styles.previewTitle} numberOfLines={1}>
+              {selectedVenue.name}
+            </Text>
+            <Text style={styles.previewSub} numberOfLines={2}>
+              {selectedVenue.address}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <View style={[styles.eventSheet, { paddingBottom: eventSheetBottomPadding }]}>
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>주변 행사</Text>
+          <Text style={styles.sheetSub}>
+            {selectedVenueId
+              ? '선택된 행사와 지오펜싱 반경을 확인하세요'
+              : '행사 마커를 눌러 상세를 확인하세요'}
+          </Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
+          {visibleVenues.map((venue) => {
+            const isSelected = selectedVenueId === venue.id
+            const isInside = insideVenueId === venue.id
+            return (
+              <TouchableOpacity
+                key={venue.id}
+                style={[
+                  styles.eventCard,
+                  isSelected && styles.eventCardSelected,
+                  isInside && styles.eventCardInside,
+                ]}
+                onPress={() => setSelectedVenueId(venue.id)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.eventCardTitle} numberOfLines={1}>
+                  {venue.name}
+                </Text>
+                <Text style={styles.eventCardPeriod} numberOfLines={1}>
+                  {formatEventPeriod(venue.eventStartDate, venue.eventEndDate)}
+                </Text>
+                <Text style={styles.eventCardAddress} numberOfLines={2}>
+                  {venue.address}
+                </Text>
+                <View style={styles.eventCardFooter}>
+                  <Text style={styles.eventCardRadius}>
+                    {venue.geofenceEnabled === false || venue.radius <= 0
+                      ? '지오펜싱 없음'
+                      : `반경 ${venue.radius}m`}
+                  </Text>
+                  {isInside && <Text style={styles.eventCardBadge}>진입 중</Text>}
+                </View>
+              </TouchableOpacity>
+            )
+          })}
+        </ScrollView>
+      </View>
+
+      <View style={[styles.buttonRow, { bottom: buttonRowBottom }]}>
         <TouchableOpacity
           style={[styles.btn, isRecording && styles.btnActive]}
           onPress={isRecording ? () => handleStopRecording('manual') : startRecording}
@@ -195,7 +447,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   buttonRow: {
     position: 'absolute',
-    bottom: 40,
     left: 16,
     right: 16,
     flexDirection: 'row',
@@ -216,7 +467,7 @@ const styles = StyleSheet.create({
   btnText: { fontWeight: '600', color: '#333' },
   badge: {
     position: 'absolute',
-    top: 60,
+    top: 92,
     alignSelf: 'center',
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -228,4 +479,120 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   badgeText: { fontWeight: '700', fontSize: 14 },
+  previewCard: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 18,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  previewImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: '#f3f4f6',
+  },
+  previewText: {
+    flex: 1,
+  },
+  previewTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  previewSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 16,
+  },
+  eventSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  sheetHeader: {
+    marginBottom: 10,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  sheetSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  cardRow: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+  eventCard: {
+    width: 180,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  eventCardSelected: {
+    borderColor: '#FF6B35',
+    backgroundColor: '#fff7f2',
+  },
+  eventCardInside: {
+    borderColor: '#FF6B35',
+    backgroundColor: 'rgba(255,107,53,0.12)',
+  },
+  eventCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  eventCardPeriod: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#FF6B35',
+    fontWeight: '700',
+  },
+  eventCardAddress: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#4b5563',
+    lineHeight: 16,
+  },
+  eventCardFooter: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  eventCardRadius: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  eventCardBadge: {
+    fontSize: 11,
+    color: '#FF6B35',
+    fontWeight: '800',
+  },
 })

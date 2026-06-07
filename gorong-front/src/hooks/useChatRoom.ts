@@ -46,6 +46,7 @@ export interface JoinedGroup {
     status: string
     event?: string
     meetingDate?: string
+    meetingTime?: string
     /** 작성자의 표시명(닉네임), 없으면 이메일이 백업 */
     authorName?: string
     /** 작성자의 Firebase 이메일. 권한 판정의 핵심 필드
@@ -67,6 +68,7 @@ interface RawGroupPost {
     status?: string
     event?: string
     meetingDate?: string
+    meetingTime?: string
     authorName?: string          // @JsonProperty("authorName") 또는 getAuthorName() 반환값
     author?: {
         id?: number
@@ -416,15 +418,17 @@ export function useChatRoom() {
         setIsConnected(false)
         connectedGroupIdRef.current = gid
 
-        // 과거 채팅 기록 먼저 표시
-        const history = await loadChatHistory(gid)
+        // 채팅 기록 로드와 Firebase 토큰 취득을 동시에 요청 (순차→병렬 최적화)
+        const [history, token] = await Promise.all([
+            loadChatHistory(gid),
+            auth.currentUser?.getIdToken() ?? Promise.resolve(null),
+        ])
+
         setMessages([
             { user: '시스템', text: `[${groupTitle}] 채팅방에 입장했습니다.` },
             ...history,
         ])
 
-        // Firebase 토큰 취득
-        const token = await auth.currentUser?.getIdToken()
         if (!token) {
             debugLog('connect', 'Firebase 토큰 없음, 연결 중단')
             setIsConnecting(false)
@@ -565,6 +569,7 @@ export async function fetchJoinedGroups(): Promise<JoinedGroup[]> {
                 status:          g.status ?? 'RECRUITING',
                 event:           g.event,
                 meetingDate:     g.meetingDate,
+                meetingTime:     g.meetingTime,
                 authorName:      g.authorName,
                 // 권한 판정용: 백엔드 author 객체에서 이메일 직접 추출
                 authorEmail:     g.author?.email,

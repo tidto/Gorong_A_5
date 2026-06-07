@@ -4,6 +4,7 @@ import com.gorong.backend.domain.event.dto.TourItemDto;
 import com.gorong.backend.domain.event.entity.Event;
 import com.gorong.backend.domain.event.repository.EventRepository;
 import com.gorong.backend.global.TourApiConfig;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -30,6 +31,20 @@ public class TourApiService {
         factory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.NONE);
         rt.setUriTemplateHandler(factory);
         return rt;
+    }
+
+    @PostConstruct
+    @Transactional
+    public void initMissingCategories() {
+        long naCount = eventRepository.countByTourCategoryCode("NA");
+        long lsCount = eventRepository.countByTourCategoryCode("LS");
+
+        if (naCount == 0 || lsCount == 0) {
+            System.out.println("📭 자연관광/레포츠 데이터 없음 → 자동 동기화 시작");
+            getAndSyncApiData();
+        } else {
+            System.out.println("✅ 자연관광(" + naCount + "개) / 레포츠(" + lsCount + "개) 확인 완료");
+        }
     }
 
     @Transactional
@@ -70,6 +85,7 @@ public class TourApiService {
             if (dto.getContentid() == null || dto.getContentid().isEmpty()) continue;
             try {
                 fillBarrierFreeDetail(dto);
+                fillGalleryImages(dto);
                 Long eventId = Long.parseLong(dto.getContentid());
                 eventRepository.findById(eventId)
                         .ifPresentOrElse(
@@ -88,18 +104,17 @@ public class TourApiService {
     }
 
     public List<TourItemDto> getFestivalList() {
-        int[] contentTypes = {14, 15};
+        int[] contentTypes = {12, 14, 15, 28};
         List<TourItemDto> totalList = new ArrayList<>();
 
-        // 대구/경북 7개 거점 좌표 [경도(mapX), 위도(mapY)]
         double[][] centers = {
-                {128.6225, 35.8714},  // 대구 중심
-                {128.5911, 35.8019},  // 대구 서구
-                {129.0756, 35.5665},  // 경주
-                {128.7322, 36.5760},  // 안동
-                {128.9963, 35.9078},  // 포항
-                {128.3445, 35.7300},  // 고령/성주
-                {128.6922, 36.0390},  // 영천
+                {128.6225, 35.8714},
+                {128.5911, 35.8019},
+                {129.0756, 35.5665},
+                {128.7322, 36.5760},
+                {128.9963, 35.9078},
+                {128.3445, 35.7300},
+                {128.6922, 36.0390},
         };
 
         for (double[] center : centers) {
@@ -128,7 +143,6 @@ public class TourApiService {
                         if (itemArr != null) {
                             for (int i = 0; i < itemArr.length(); i++) {
                                 TourItemDto dto = mapToDtoFromJson(itemArr.getJSONObject(i));
-                                // contentid 기준 중복 제거
                                 boolean isDuplicate = totalList.stream()
                                         .anyMatch(d -> d.getContentid().equals(dto.getContentid()));
                                 if (!isDuplicate) totalList.add(dto);
@@ -168,10 +182,54 @@ public class TourApiService {
                     dto.setRestroom(detail.optString("restroom"));
                     dto.setRoute(detail.optString("route"));
                     dto.setOverview(detail.optString("overview"));
+
+                    // 무장애 추가 필드
+                    dto.setWheelchair(detail.optString("wheelchair"));
+                    dto.setExit(detail.optString("exit"));
+                    dto.setPublicTransport(detail.optString("publictransport"));
+                    dto.setBraileBlock(detail.optString("braileblock"));
+                    dto.setAudioGuide(detail.optString("audioguide"));
+                    dto.setHelpDog(detail.optString("helpdog"));
+                    dto.setSignGuide(detail.optString("signguide"));
+                    dto.setVideoGuide(detail.optString("videoguide"));
+                    dto.setStroller(detail.optString("stroller"));
                 }
             }
         } catch (Exception e) {
             System.err.println("🚨 상세 정보 호출 실패 (ID: " + dto.getContentid() + ")");
+        }
+    }
+
+    private void fillGalleryImages(TourItemDto dto) {
+        String galleryUrl = "https://apis.data.go.kr/B551011/KorService2/detailImage2"
+                + "?serviceKey=" + tourApiConfig.getServiceKey()
+                + "&contentId=" + dto.getContentid()
+                + "&imageYN=Y&subImageYN=Y&numOfRows=5"
+                + "&MobileOS=ETC&MobileApp=Gorong&_type=json";
+
+        try {
+            String res = restTemplate.getForObject(galleryUrl, String.class);
+            if (res == null || res.startsWith("<")) return;
+
+            JSONObject json = new JSONObject(res);
+            JSONObject body = json.optJSONObject("response").optJSONObject("body");
+            Object itemsObj = body.opt("items");
+
+            if (itemsObj instanceof JSONObject) {
+                JSONArray itemArr = ((JSONObject) itemsObj).optJSONArray("item");
+                if (itemArr != null && itemArr.length() > 0) {
+                    List<String> urls = new ArrayList<>();
+                    for (int i = 0; i < itemArr.length(); i++) {
+                        String imgUrl = itemArr.getJSONObject(i).optString("originimgurl", "").trim();
+                        if (!imgUrl.isEmpty()) urls.add(imgUrl);
+                    }
+                    if (!urls.isEmpty()) {
+                        dto.setGalleryImages(String.join(",", urls));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("🚨 관광사진 호출 실패 (ID: " + dto.getContentid() + "): " + e.getMessage());
         }
     }
 
@@ -195,6 +253,18 @@ public class TourApiService {
         dto.setFirstimage(img.isEmpty()
                 ? "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?q=80&w=500"
                 : img);
+
+        String img2 = obj.optString("firstimage2", "").trim();
+        if (!img2.isEmpty()) dto.setFirstimage2(img2);
+
+        String startDate = obj.optString("eventstartdate", "").trim();
+        String endDate   = obj.optString("eventenddate",   "").trim();
+        if (!startDate.isEmpty()) dto.setEventStartDate(startDate);
+        if (!endDate.isEmpty())   dto.setEventEndDate(endDate);
+
+        String tel = obj.optString("tel", "").trim();
+        if (!tel.isEmpty()) dto.setTel(tel);
+
         return dto;
     }
 
@@ -206,11 +276,41 @@ public class TourApiService {
         dto.setMapx(event.getMapX() != null ? event.getMapX().trim() : "");
         dto.setMapy(event.getMapY() != null ? event.getMapY().trim() : "");
         dto.setFirstimage(event.getFirstImage());
+        dto.setFirstimage2(event.getFirstImage2());
         dto.setParking(event.getParking());
         dto.setElevator(event.getElevator());
         dto.setRestroom(event.getRestroom());
         dto.setRoute(event.getRoute());
         dto.setOverview(event.getDescription());
+        dto.setEventStartDate(event.getEventStartDate());
+        dto.setEventEndDate(event.getEventEndDate());
+        dto.setTel(event.getTel());
+
+        // 무장애 추가 필드
+        dto.setWheelchair(event.getWheelchair());
+        dto.setExit(event.getExit());
+        dto.setPublicTransport(event.getPublicTransport());
+        dto.setBraileBlock(event.getBraileBlock());
+        dto.setAudioGuide(event.getAudioGuide());
+        dto.setHelpDog(event.getHelpDog());
+        dto.setSignGuide(event.getSignGuide());
+        dto.setVideoGuide(event.getVideoGuide());
+        dto.setStroller(event.getStroller());
+        dto.setGalleryImages(event.getGalleryImages());
+
+        String code = event.getTourCategoryCode();
+        if (code != null) {
+            switch (code) {
+                case "NA":  dto.setCat1("A01"); break;
+                case "VE":  dto.setCat1("A02"); break;
+                case "LS":  dto.setCat1("A03"); break;
+                case "SH":  dto.setCat1("A04"); break;
+                case "FD":  dto.setCat1("A05"); break;
+                case "C01": dto.setCat1("C01"); break;
+                default:    dto.setCat1("ETC");
+            }
+        }
+
         return dto;
     }
 }

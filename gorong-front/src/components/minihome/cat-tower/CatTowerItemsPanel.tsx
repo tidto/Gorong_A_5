@@ -16,8 +16,9 @@ type CatTowerItemsPanelProps = {
 };
 
 const TABS: { id: GoCatItemCategory; label: string; emoji: string }[] = [
-  { id: "HEAD", label: "모자", emoji: "🎩" },
-  { id: "ACCESSORY", label: "악세", emoji: "🎀" },
+  { id: "HEAD", label: "머리", emoji: "🎩" },
+  { id: "FACE", label: "얼굴", emoji: "👓" },
+  { id: "NECK", label: "목", emoji: "🎀" },
 ];
 
 /** 아이템함 — category tab + equipped highlight */
@@ -34,7 +35,7 @@ export default function CatTowerItemsPanel({
 
   const equippedIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const slot of ["HEAD", "ACCESSORY"] as const) {
+    for (const slot of ["HEAD", "FACE", "NECK"] as const) {
       const code = safeEquipped[slot]?.itemCode?.toLowerCase();
       if (code) ids.add(code);
     }
@@ -48,7 +49,7 @@ export default function CatTowerItemsPanel({
           {readOnly ? "🎒 장착 아이템" : "🎒 Go냥이 꾸미기 아이템"}
         </p>
         <p className="mt-0.5 text-[9px] font-medium text-white/80">
-          {readOnly ? "이 Go냥이가 착용 중인 아이템이에요" : "모자·악세를 골라 장착해 보세요"}
+          {readOnly ? "이 Go냥이가 착용 중인 아이템이에요" : "머리·얼굴·목 아이템을 장착해 보세요"}
         </p>
       </div>
 

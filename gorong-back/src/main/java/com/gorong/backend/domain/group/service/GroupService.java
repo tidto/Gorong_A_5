@@ -54,6 +54,13 @@ public class GroupService {
         // 정원 증가
         post.setCurrentCapacity(post.getCurrentCapacity() + 1);
 
+        // 정원이 꽉 차면 RECRUITING → IN_PROGRESS (채팅 유지, 모집만 마감)
+        if (post.getMaxCapacity() != null
+                && post.getCurrentCapacity() >= post.getMaxCapacity()
+                && "RECRUITING".equals(post.getStatus())) {
+            post.setStatus("IN_PROGRESS");
+        }
+
         if (recordActivity) {
             boolean alreadyLogged = activityLogRepository.existsByUserIdAndActivityTypeAndReferenceId(
                     userId,

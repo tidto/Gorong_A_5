@@ -52,7 +52,8 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class MiniHomeService {
 
-    private static final Set<String> ALLOWED_SLOTS = Set.of("HEAD", "BODY", "ACCESSORY");
+    private static final Set<String> EQUIP_SLOTS = Set.of("HEAD", "FACE", "NECK");
+    private static final Set<String> RETIRED_SLOTS = Set.of("BADGE", "BODY", "ACCESSORY");
 
     private final MiniHomeRepository miniHomeRepository;
     private final GoCatRepository goCatRepository;
@@ -65,6 +66,7 @@ public class MiniHomeService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final EventCategoryItemRewardService eventCategoryItemRewardService;
+    private final GoCatItemUnlockService goCatItemUnlockService;
     private final GroupRepository groupRepository;
 
     public MiniHomeResponseDto getMiniHome(Long userId) {
@@ -281,6 +283,7 @@ public class MiniHomeService {
                 resolvedTitle,
                 resolvedDescription
         );
+        goCatItemUnlockService.syncUnlocksForUser(userId);
 
         MiniHomePageResponseDto.ActivityDto dto = MiniHomePageResponseDto.ActivityDto.from(saved);
         if ((title != null && !title.isBlank()) || (description != null && !description.isBlank())) {
@@ -375,6 +378,7 @@ public class MiniHomeService {
                 .miniHomeId(miniHome.getMiniHomeId())
                 .title(req.getTitle())
                 .description(req.getDescription())
+                .referenceId(req.getReferenceId())
                 .build());
 
         return MiniHomePageResponseDto.GalleryDto.from(gallery, List.of());
@@ -412,8 +416,10 @@ public class MiniHomeService {
         return MiniHomePageResponseDto.GalleryImageDto.from(image);
     }
 
+    @Transactional
     public List<MiniHomeItemDto> getUserItems(Long userId) {
         requireUserId(userId);
+        goCatItemUnlockService.syncUnlocksForUser(userId);
 
         List<UserItem> userItems = userItemRepository.findByUserIdOrderByAcquiredAtDesc(userId);
         if (userItems.isEmpty()) return List.of();
@@ -452,8 +458,8 @@ public class MiniHomeService {
         if (req.getSlotType() == null || req.getSlotType().trim().isEmpty()) throw new IllegalArgumentException("slotType은 필수입니다.");
 
         String slot = normalizeSlot(req.getSlotType());
-        if (!ALLOWED_SLOTS.contains(slot)) {
-            throw new IllegalArgumentException("slotType은 HEAD, BODY, ACCESSORY 중 하나여야 합니다.");
+        if (!EQUIP_SLOTS.contains(slot)) {
+            throw new IllegalArgumentException("slotType은 HEAD, FACE, NECK 중 하나여야 합니다.");
         }
 
         // 사용자 보유 아이템 검증(보유하지 않은 아이템 착용 방지)
@@ -490,10 +496,12 @@ public class MiniHomeService {
             throw new IllegalArgumentException("장착할 슬롯 정보가 필요합니다.");
         }
 
+        deactivateRetiredEquipSlots(userId);
+
         for (MiniHomeEquipmentsSaveRequestDto.SlotEquipDto slotEquip : equipments) {
             String slot = normalizeSlot(slotEquip.getSlotType());
-            if (!ALLOWED_SLOTS.contains(slot)) {
-                throw new IllegalArgumentException("slotType은 HEAD, BODY, ACCESSORY 중 하나여야 합니다.");
+            if (!EQUIP_SLOTS.contains(slot)) {
+                throw new IllegalArgumentException("slotType은 HEAD, FACE, NECK 중 하나여야 합니다.");
             }
             if (slotEquip.getItemId() == null) {
                 unequip(userId, slot);
@@ -510,8 +518,8 @@ public class MiniHomeService {
     public void unequip(Long userId, String slotType) {
         requireUserId(userId);
         String slot = normalizeSlot(slotType);
-        if (!ALLOWED_SLOTS.contains(slot)) {
-            throw new IllegalArgumentException("slotType은 HEAD, BODY, ACCESSORY 중 하나여야 합니다.");
+        if (!EQUIP_SLOTS.contains(slot) && !RETIRED_SLOTS.contains(slot)) {
+            throw new IllegalArgumentException("slotType은 HEAD, FACE, NECK 중 하나여야 합니다.");
         }
 
         GoCat cat = requireGoCatForUser(userId);
@@ -524,39 +532,8 @@ public class MiniHomeService {
     }
 
     private void seedStarterItems(Long userId) {
-        grantStarterItem(userId, "STARTER_HAT", "기본 모자", "HEAD");
-        grantStarterItem(userId, "STARTER_BODY", "기본 옷", "BODY");
-        grantStarterItem(userId, "STARTER_ACC", "기본 리본", "ACCESSORY");
-    }
-
-    private static final Map<String, String> STARTER_ITEM_IMAGE_URLS = Map.of(
-            "STARTER_HAT", "/assets/cat/items/starter-hat.svg",
-            "STARTER_BODY", "/assets/cat/items/starter-body.svg",
-            "STARTER_ACC", "/assets/cat/items/starter-acc.svg"
-    );
-
-    private void grantStarterItem(Long userId, String itemCode, String itemName, String itemType) {
-        Item item = itemRepository.findByItemCode(itemCode).orElseGet(() ->
-                itemRepository.save(Item.builder()
-                        .itemCode(itemCode)
-                        .itemName(itemName)
-                        .itemType(itemType)
-                        .imageUrl(STARTER_ITEM_IMAGE_URLS.get(itemCode))
-                        .build())
-        );
-        if (item.getImageUrl() == null || item.getImageUrl().isBlank()) {
-            String url = STARTER_ITEM_IMAGE_URLS.get(itemCode);
-            if (url != null) {
-                item.setImageUrl(url);
-                itemRepository.save(item);
-            }
-        }
-        if (!userItemRepository.existsByUserIdAndItemId(userId, item.getItemId())) {
-            userItemRepository.save(UserItem.builder()
-                    .userId(userId)
-                    .itemId(item.getItemId())
-                    .build());
-        }
+        goCatItemUnlockService.grantOnce(userId, "WITCH_HAT", "마녀 모자", "HEAD");
+        goCatItemUnlockService.grantOnce(userId, "PINK_BOW", "목 리본", "NECK");
     }
 
     @Transactional
@@ -622,6 +599,21 @@ public class MiniHomeService {
                 state.put("headItemCode", req.getHeadItemCode().trim().toLowerCase());
             }
         }
+        if (req.getFaceItemCode() != null) {
+            if (req.getFaceItemCode().isBlank()) {
+                state.remove("faceItemCode");
+            } else {
+                state.put("faceItemCode", req.getFaceItemCode().trim().toLowerCase());
+            }
+        }
+        if (req.getNeckItemCode() != null) {
+            if (req.getNeckItemCode().isBlank()) {
+                state.remove("neckItemCode");
+            } else {
+                state.put("neckItemCode", req.getNeckItemCode().trim().toLowerCase());
+            }
+        }
+        state.remove("badgeItemCode");
         if (req.getAccessoryItemCode() != null) {
             if (req.getAccessoryItemCode().isBlank()) {
                 state.remove("accessoryItemCode");
@@ -697,8 +689,20 @@ public class MiniHomeService {
         }
     }
 
+    /** 퇴역 BADGE·BODY·ACCESSORY 슬롯 장착 해제 */
+    private void deactivateRetiredEquipSlots(Long userId) {
+        GoCat cat = requireGoCatForUser(userId);
+        for (String slot : RETIRED_SLOTS) {
+            catEquipRepository
+                    .findByGoCatIdAndIsActiveAndSlotTypeOrderByEquippedAtDesc(cat.getGoCatId(), true, slot)
+                    .forEach(e -> {
+                        e.setIsActive(false);
+                        catEquipRepository.save(e);
+                    });
+        }
+    }
+
     private static String normalizeSlot(String slotType) {
         return slotType == null ? "" : slotType.trim().toUpperCase();
     }
 }
-

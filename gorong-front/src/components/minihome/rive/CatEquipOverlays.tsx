@@ -17,8 +17,8 @@ import { CUSTOMIZE_CAT_BOX_PX } from "../../../utils/minihome/gocat/catPreviewBo
 export type EquipSlot = SlotType;
 export type OverlayLayer = "behind" | "body" | "front";
 
-const FRONT_SLOTS: EquipSlot[] = ["HEAD", "ACCESSORY"];
-const BODY_SLOTS: EquipSlot[] = ["BODY"];
+const FRONT_SLOTS: EquipSlot[] = ["HEAD", "FACE", "NECK"];
+const BODY_SLOTS: EquipSlot[] = [];
 
 function slotsForLayer(layer: OverlayLayer): EquipSlot[] {
   if (layer === "body") return BODY_SLOTS;

@@ -29,8 +29,10 @@ public class MiniHomeGallery {
     @Column(name = "DESCRIPTION", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "REFERENCE_ID", length = 100)
+    private String referenceId;
+
     @CreationTimestamp
     @Column(name = "CREATE_AT", updatable = false)
     private OffsetDateTime createAt;
 }
-

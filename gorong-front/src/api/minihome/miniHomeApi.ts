@@ -51,6 +51,10 @@ export type CatAppearancePayload = {
   catName?: string;
   roomBackground?: string;
   headItemCode?: string;
+  faceItemCode?: string;
+  neckItemCode?: string;
+  badgeItemCode?: string;
+  /** @deprecated face/neck/badge로 분리 */
   accessoryItemCode?: string;
 };
 
@@ -164,6 +168,7 @@ export {
   unequipSlot,
   saveMyEquipments,
   saveEquipments,
+  grantEventItemReward,
 } from "./itemApi";
 
 export async function addGalleryImage(

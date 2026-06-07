@@ -14,14 +14,14 @@ public interface GroupRepository extends JpaRepository<GroupPost, Long> {
 
     /**
      * meetingDate(yyyy-MM-dd) + meetingTime(HH:mm) 을 합쳐서 현재 시각보다 이전인
-     * RECRUITING 상태의 그룹을 CLOSED 로 일괄 업데이트합니다.
+     * RECRUITING / IN_PROGRESS 상태의 그룹을 CLOSED 로 일괄 업데이트합니다.
      * :now 는 "yyyy-MM-dd HH:mm" 형태의 문자열로 넘겨주세요.
      */
     @Modifying
     @Query("""
         UPDATE GroupPost g
            SET g.status = 'CLOSED'
-         WHERE g.status = 'RECRUITING'
+         WHERE g.status IN ('RECRUITING', 'IN_PROGRESS')
            AND g.meetingDate IS NOT NULL
            AND g.meetingTime  IS NOT NULL
            AND CONCAT(g.meetingDate, ' ', g.meetingTime) < :now

@@ -1,5 +1,5 @@
 import type { GrowthStage } from "../growth/growth";
-import { formatGrowthStageLabel } from "../growth/growth";
+import { formatGrowthStageLabel, normalizeGrowthStage } from "../growth/growth";
 import { getRiveAnimationForStage } from "../rive/riveGrowth";
 
 export type CatVisual = {
@@ -8,25 +8,20 @@ export type CatVisual = {
   imageSrc: string;
   riveSrc: string;
   riveAnimation: string;
-  /** 캐릭터 본체 scale */
   scale: number;
-  /** 애니메이션 속도 배율 (1.0 = 기본) */
   animationSpeed: number;
   badgeEmoji: string | null;
   badgeLabel: string | null;
   showCornerBadge: boolean;
   showCrownOnHead: boolean;
   ringClass: string;
-  /** 바깥 원형 카드 배경 */
   shellClass: string;
-  /** 캐릭터가 들어가는 내부 영역 */
   innerClass: string;
   filterClass: string;
   emojiFallback: string;
   emojiSizeClass: string;
   hasAura: boolean;
   hasSparkle: boolean;
-  /** 성장 단계별 glow 효과 클래스 */
   glowClass: string;
 };
 
@@ -106,14 +101,15 @@ const STAGE_VISUAL: Record<GrowthStage, StageMeta> = {
   },
 };
 
-export function getCatVisualByStage(stage: GrowthStage): CatVisual {
-  const meta = STAGE_VISUAL[stage];
+export function getCatVisualByStage(stage: GrowthStage | string | null | undefined): CatVisual {
+  const key = normalizeGrowthStage(stage);
+  const meta = STAGE_VISUAL[key];
   return {
-    stage,
-    stageLabel: formatGrowthStageLabel(stage),
+    stage: key,
+    stageLabel: formatGrowthStageLabel(key),
     imageSrc: BASE_CAT_IMAGE,
     riveSrc: RIVE_SRC,
-    riveAnimation: getRiveAnimationForStage(stage),
+    riveAnimation: getRiveAnimationForStage(key),
     ...meta,
   };
 }

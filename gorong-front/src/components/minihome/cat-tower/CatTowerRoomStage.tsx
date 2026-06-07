@@ -1,19 +1,18 @@
-import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { memo, useMemo } from "react";
+import { motion } from "framer-motion";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import { normalizeEquipPreview, resolveEquipImageUrl } from "../../../utils/minihome/gocat/items";
+import LazyImage from "../../common/LazyImage";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import {
   ROOM_BACKGROUND_BY_ID,
   type RoomBackgroundId,
 } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
-import {
-  nextSpeechBubble,
-  pickSpeechBubble,
-  speechBubbleTilt,
-} from "../../../utils/minihome/cat-tower/catTowerPresentation";
 import CatTowerRoomAmbience from "./CatTowerRoomAmbience";
 import CatTowerRoomStickers from "./CatTowerRoomStickers";
+import CatTowerRoomDecorLayer from "./CatTowerRoomDecorLayer";
+import CatTowerSpeechBubble from "./CatTowerSpeechBubble";
+import type { RoomDecorItem } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 import GoCatVisual from "../mini-home/GoCatVisual";
 
 type CatTowerRoomStageProps = {
@@ -21,43 +20,47 @@ type CatTowerRoomStageProps = {
   activityCount: number;
   equipped?: EquipPreview | null;
   roomBackground?: RoomBackgroundId;
+  roomDecorItems?: RoomDecorItem[];
   catName?: string;
   interactive?: boolean;
   readOnly?: boolean;
+  /** @deprecated preview 사용 */
+  compact?: boolean;
+  /** 미리보기 모달 전용 — 축소·중앙 정렬·클리핑 없음 */
+  preview?: boolean;
 };
 
 /** 중앙 — 방 배경 + Go냥이 (미니홈피 스테이지) */
-export default function CatTowerRoomStage({
+function CatTowerRoomStage({
   growthStage,
   activityCount,
   equipped,
   roomBackground = "BASIC_ROOM",
+  roomDecorItems = [],
   catName = "Go냥이",
   interactive = true,
   readOnly = false,
+  compact = false,
+  preview = false,
 }: CatTowerRoomStageProps) {
-  const safeEquipped = normalizeEquipPreview(equipped);
-  const worn = (["HEAD", "ACCESSORY"] as const)
-    .map((slot) => safeEquipped[slot])
-    .filter(Boolean);
+  const isPreviewLayout = preview || compact;
+  const safeEquipped = useMemo(() => normalizeEquipPreview(equipped), [equipped]);
+  const worn = useMemo(
+    () =>
+      (["HEAD", "FACE", "NECK"] as const)
+        .map((slot) => safeEquipped[slot])
+        .filter(Boolean),
+    [safeEquipped]
+  );
   const bg = ROOM_BACKGROUND_BY_ID[roomBackground] ?? ROOM_BACKGROUND_BY_ID.BASIC_ROOM;
 
-  const [speech, setSpeech] = useState(() => pickSpeechBubble(catName));
-  const speechTilt = speechBubbleTilt(speech);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setSpeech((prev) => nextSpeechBubble(prev));
-    }, 7000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: "easeOut" }}
-      className={`relative flex min-h-[400px] flex-col overflow-hidden rounded-[1.75rem] shadow-[0_20px_50px_rgba(0,0,0,0.06),0_6px_20px_rgba(255,140,80,0.1),inset_0_1px_0_rgba(255,255,255,0.45)] sm:min-h-[500px] ${bg.stageClass}`}
+    <div
+      className={`relative flex flex-col rounded-[1.75rem] shadow-[0_20px_50px_rgba(0,0,0,0.06),0_6px_20px_rgba(255,140,80,0.1),inset_0_1px_0_rgba(255,255,255,0.45)] ${
+        isPreviewLayout
+          ? "min-h-[300px] overflow-visible sm:min-h-[320px]"
+          : "min-h-[300px] overflow-hidden sm:min-h-[360px]"
+      } ${bg.stageClass}`}
     >
       <CatTowerRoomAmbience theme={bg.theme} isDark={bg.isDark} />
       <CatTowerRoomStickers isDark={bg.isDark} />
@@ -74,8 +77,14 @@ export default function CatTowerRoomStage({
         className={`pointer-events-none absolute inset-x-0 bottom-0 h-[22%] bg-gradient-to-t ${bg.floorClass} to-transparent`}
       />
 
+      <CatTowerRoomDecorLayer items={roomDecorItems} isDark={bg.isDark} />
+
       {/* room title */}
-      <div className={`relative z-20 border-b px-4 py-3 text-center ${bg.headerBgClass}`}>
+      <div
+        className={`relative z-20 border-b text-center ${bg.headerBgClass} ${
+          isPreviewLayout ? "px-3 py-2" : "px-4 py-3"
+        }`}
+      >
         <div className="flex flex-col items-center gap-1">
           <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1 text-[10px] font-extrabold tracking-wide shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
@@ -98,25 +107,15 @@ export default function CatTowerRoomStage({
         </div>
       </div>
 
-      {/* 말풍선 — rotate + fade */}
-      <div className="pointer-events-none absolute left-3 top-[5.75rem] z-20 max-w-[152px] sm:left-5">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={speech}
-            initial={{ opacity: 0, y: 8, scale: 0.92, rotate: speechTilt - 2 }}
-            animate={{ opacity: 1, y: 0, scale: 1, rotate: speechTilt }}
-            exit={{ opacity: 0, y: -6, scale: 0.94, rotate: speechTilt + 1 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className={`rounded-2xl rounded-bl-sm border px-3 py-2 text-[9px] font-bold leading-snug shadow-[0_4px_12px_rgba(0,0,0,0.08)] ${
-              bg.isDark
-                ? "border-indigo-300/25 bg-indigo-950/70 text-indigo-100/90 backdrop-blur-md"
-                : "border-white/85 bg-white/90 text-rose-800/85 backdrop-blur-md"
-            }`}
-          >
-            {speech}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      {!isPreviewLayout ? (
+        <div className="pointer-events-none absolute left-3 top-[5.75rem] z-20 max-w-[152px] sm:left-5">
+          <CatTowerSpeechBubble
+            catName={catName}
+            isDark={bg.isDark ?? false}
+            animate={interactive === true}
+          />
+        </div>
+      ) : null}
 
       <span className="pointer-events-none absolute right-5 top-[4.75rem] z-20 animate-sparkle text-sm opacity-60">
         ✨
@@ -129,9 +128,15 @@ export default function CatTowerRoomStage({
       </span>
 
       {/* Go냥이 */}
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-2 py-4 sm:px-4 sm:py-5">
-        <div className="group relative flex flex-col items-center">
-          {worn.length > 0 ? (
+      <div
+        className={`relative z-10 flex flex-col items-center justify-center overflow-visible ${
+          isPreviewLayout
+            ? "min-h-[220px] flex-none px-2 py-3 sm:min-h-[240px] sm:py-4"
+            : "flex-1 px-2 py-4 sm:px-4 sm:py-5"
+        }`}
+      >
+        <div className="group relative flex flex-col items-center justify-center overflow-visible">
+          {worn.length > 0 && !isPreviewLayout ? (
             <div className="absolute -top-2 z-20 flex flex-wrap justify-center gap-1">
               {worn.map((item) => (
                 <motion.span
@@ -152,10 +157,10 @@ export default function CatTowerRoomStage({
 
           <GoCatVisual
             stage={growthStage}
-            variant="room"
+            variant={isPreviewLayout ? "room-preview" : "room"}
             equipped={safeEquipped}
             activityCount={activityCount}
-            interactive={interactive && !readOnly}
+            interactive={interactive && !readOnly && !isPreviewLayout}
           />
 
           {/* 바닥 그림자 — hover 시 살짝 축소 */}
@@ -171,7 +176,7 @@ export default function CatTowerRoomStage({
           />
         </div>
 
-        {!readOnly ? (
+        {!readOnly && !isPreviewLayout ? (
           <p
             className={`mt-2.5 text-[10px] font-medium tracking-wide ${
               bg.isDark ? "text-indigo-200/40" : "text-emerald-800/35"
@@ -182,7 +187,7 @@ export default function CatTowerRoomStage({
         ) : null}
       </div>
 
-      {worn.length > 0 ? (
+      {worn.length > 0 && !isPreviewLayout ? (
         <div
           className={`relative z-20 border-t px-3 py-3 sm:px-4 ${
             bg.isDark
@@ -213,7 +218,7 @@ export default function CatTowerRoomStage({
                 >
                   {imageUrl ? (
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/85 shadow-inner">
-                      <img
+                      <LazyImage
                         src={imageUrl}
                         alt=""
                         className="h-3.5 w-3.5 object-contain transition duration-300 group-hover:scale-110"
@@ -229,7 +234,7 @@ export default function CatTowerRoomStage({
             })}
           </div>
         </div>
-      ) : (
+      ) : !isPreviewLayout ? (
         <p
           className={`relative z-20 border-t py-3 text-center text-[10px] font-medium ${
             bg.isDark
@@ -239,9 +244,21 @@ export default function CatTowerRoomStage({
         >
           {readOnly
             ? `${catName}의 Go냥이를 둘러보고 있어요 🐾`
-            : "Go냥이 꾸미기 · 내 공간에서 나만의 방을 꾸며 보세요 ✨"}
+            : "고양이 방을 구경해 보세요 🐾"}
+        </p>
+      ) : (
+        <p
+          className={`relative z-20 border-t py-2 text-center text-[9px] font-medium ${
+            bg.isDark
+              ? "border-indigo-400/12 bg-indigo-950/28 text-indigo-200/45"
+              : "border-white/45 bg-white/30 text-slate-500/85"
+          }`}
+        >
+          {catName}의 Go냥이 · 장착 아이템 포함 미리보기 🐾
         </p>
       )}
-    </motion.div>
+    </div>
   );
 }
+
+export default memo(CatTowerRoomStage);

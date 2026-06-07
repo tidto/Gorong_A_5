@@ -1,11 +1,8 @@
-/** 발표 MVP — 모자 3 · 악세 2 */
-export const GOCAT_MVP_HEAD_IDS = ["witch_hat", "crown", "blue_cap"] as const;
-export const GOCAT_MVP_ACCESSORY_IDS = ["pink_bow", "round_glasses"] as const;
+import type { SlotType } from "../../utils/minihome/gocat/gocatSlots";
 
-export type GoCatItemCategory = "HEAD" | "BODY" | "ACCESSORY";
+export type GoCatItemCategory = SlotType;
 
-/** UI·저장·overlay에 노출하는 슬롯 (BODY는 에셋 정비 후 재활성화) */
-export const GOCAT_ENABLED_CATEGORIES: GoCatItemCategory[] = ["HEAD", "ACCESSORY"];
+export const GOCAT_ENABLED_CATEGORIES: GoCatItemCategory[] = ["HEAD", "FACE", "NECK"];
 
 export function isGoCatSlotEnabled(category: GoCatItemCategory): boolean {
   return GOCAT_ENABLED_CATEGORIES.includes(category);
@@ -18,20 +15,14 @@ export type GoCatItem = {
   imageUrl: string;
 };
 
-/** public/assets/cat/overlays/*_aligned.png — 420×420 정렬 overlay */
 export const GOCAT_OVERLAY_BASE = "/assets/cat/overlays";
 
 export const GOCAT_ITEMS: GoCatItem[] = [
   { id: "witch_hat", name: "마녀 모자", category: "HEAD", imageUrl: `${GOCAT_OVERLAY_BASE}/witch_hat_aligned.png` },
   { id: "crown", name: "왕관", category: "HEAD", imageUrl: `${GOCAT_OVERLAY_BASE}/crown_aligned.png` },
   { id: "blue_cap", name: "파란 캡모자", category: "HEAD", imageUrl: `${GOCAT_OVERLAY_BASE}/blue_cap_aligned.png` },
-  { id: "pink_bow", name: "목 리본", category: "ACCESSORY", imageUrl: `${GOCAT_OVERLAY_BASE}/pink_bow_neck_aligned.png` },
-  {
-    id: "round_glasses",
-    name: "동그란 안경",
-    category: "ACCESSORY",
-    imageUrl: `${GOCAT_OVERLAY_BASE}/round_glasses_aligned.png`,
-  },
+  { id: "round_glasses", name: "동그란 안경", category: "FACE", imageUrl: `${GOCAT_OVERLAY_BASE}/round_glasses_aligned.png` },
+  { id: "pink_bow", name: "목 리본", category: "NECK", imageUrl: `${GOCAT_OVERLAY_BASE}/pink_bow_neck_aligned.png` },
 ];
 
 export const GOCAT_MVP_ITEMS = GOCAT_ITEMS;

@@ -15,7 +15,7 @@ export type UserItem = {
 export type Equipment = {
   catEquipId: number;
   goCatId: number;
-  slotType: "HEAD" | "BODY" | "ACCESSORY" | string;
+  slotType: "HEAD" | "FACE" | "NECK" | "BADGE" | string;
   itemId: number;
   itemCode: string | null;
   itemName: string | null;

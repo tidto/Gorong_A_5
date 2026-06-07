@@ -21,10 +21,35 @@ export interface Venue {
   lat: number
   lng: number
   radius: number           // 지오펜스 반경 (미터)
+  geofenceEnabled?: boolean // 지오펜싱 대상 여부
   address: string
   category: string          // TourAPI 카테고리
   barrierFreeInfo?: string  // 무장애 정보
   imageUrl?: string
+  eventStartDate?: string
+  eventEndDate?: string
+  overview?: string
+}
+
+// ─── 공개 행사 목록 (백엔드 /api/public/map) ─────
+export interface PublicEvent {
+  contentid: string
+  title: string
+  addr1: string
+  mapx: string
+  mapy: string
+  firstimage?: string
+  firstimage2?: string
+  overview?: string
+  parking?: string
+  elevator?: string
+  restroom?: string
+  route?: string
+  areacode?: string
+  cat1?: string
+  eventStartDate?: string
+  eventEndDate?: string
+  tel?: string
 }
 
 // ─── 채팅 메시지 ──────────────────────────────
@@ -52,11 +77,24 @@ export interface AppGroup {
   title: string
   event: string
   location: string
+  meetingDate?: string
+  meetingTime?: string
   maxMembers: number
   currentMembers: number
   joined: boolean       // 내가 이미 참가했는지
   gathered: boolean     // 모임 성사 인증 여부
   status: string
+}
+
+export interface EventParticipation {
+  id: number
+  eventContentId: string
+  eventTitle: string
+  groupPostId?: number | null
+  groupPostTitle?: string | null
+  participationType: 'SOLO' | 'GROUP'
+  visitDate?: string | null
+  appliedAt: string
 }
 
 // ─── 회원가입 요청 DTO (앱 → 백엔드) ─────────

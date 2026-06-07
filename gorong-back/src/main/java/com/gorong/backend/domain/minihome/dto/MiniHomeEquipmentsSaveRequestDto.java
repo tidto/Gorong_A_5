@@ -12,21 +12,26 @@ import java.util.List;
 public class MiniHomeEquipmentsSaveRequestDto {
 
     private Long headItemId;
+    private Long faceItemId;
+    private Long neckItemId;
+    /** @deprecated 장식(BADGE) 슬롯 퇴역 */
+    private Long badgeItemId;
+
+    /** @deprecated 레거시 슬롯 */
     private Long bodyItemId;
     private Long accessoryItemId;
 
     @Valid
     private List<SlotEquipDto> equipments;
 
-    /** headItemId 형식 또는 equipments 배열을 슬롯 목록으로 통일합니다. */
     public List<SlotEquipDto> resolveSlotEquips() {
         if (equipments != null && !equipments.isEmpty()) {
             return equipments;
         }
         List<SlotEquipDto> list = new ArrayList<>(3);
         list.add(slot("HEAD", headItemId));
-        list.add(slot("BODY", bodyItemId));
-        list.add(slot("ACCESSORY", accessoryItemId));
+        list.add(slot("FACE", faceItemId));
+        list.add(slot("NECK", neckItemId));
         return list;
     }
 

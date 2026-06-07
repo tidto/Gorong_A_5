@@ -1,9 +1,9 @@
 import {
   collection, addDoc, query, orderBy,
-  limitToLast, onSnapshot, doc, setDoc, deleteDoc, getDoc, updateDoc
+  limitToLast, onSnapshot, doc, setDoc, deleteDoc, getDoc, updateDoc, arrayUnion
 } from 'firebase/firestore'
 import { db } from '../config/firebaseConfig'
-import { ChatMessage } from '../types'
+import { AppGroup, ChatMessage } from '../types'
 
 // ─── 익명 채팅 (지오펜스 기반)
 export const sendAnonymousMessage = (
@@ -74,24 +74,65 @@ export const subscribeGroupLocations = (
   })
 
 type GroupRoom = {
-  venueId: string
-  hostId: string
+  groupId: string
+  title: string
+  event: string
+  location: string
+  meetingDate: string
+  meetingTime: string
   members: string[]
   maxMembers: number
   isGathered: boolean
   createdAt: number
+  closedAt?: number
+  source: 'WEB_GROUP' | 'APP_GROUP'
 }
 
-export const createGroupRoom = async (venueId: string, hostId: string, maxMembers = 4) => {
-  const roomRef = await addDoc(collection(db, 'group_rooms'), {
-    venueId,
-    hostId,
-    members: [hostId],
-    maxMembers,
-    isGathered: false,
-    createdAt: Date.now(),
-  } as GroupRoom)
-  return roomRef.id
+function parseLocalDate(value?: string | null) {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (/^\d{8}$/.test(trimmed)) {
+    const y = Number(trimmed.slice(0, 4))
+    const m = Number(trimmed.slice(4, 6)) - 1
+    const d = Number(trimmed.slice(6, 8))
+    return new Date(y, m, d)
+  }
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function resolveClosedAt(meetingDate?: string | null) {
+  const base = parseLocalDate(meetingDate)
+  const target = base ?? new Date()
+  target.setHours(23, 59, 59, 999)
+  target.setDate(target.getDate() + 3)
+  return target.getTime()
+}
+
+export const ensureGroupRoom = async (group: AppGroup, userId: string) => {
+  const roomRef = doc(db, 'group_rooms', String(group.id))
+  const closedAt = resolveClosedAt(group.meetingDate)
+
+  await setDoc(
+    roomRef,
+    {
+      groupId: String(group.id),
+      title: group.title,
+      event: group.event,
+      location: group.location,
+      meetingDate: group.meetingDate ?? '',
+      meetingTime: group.meetingTime ?? '',
+      members: arrayUnion(userId),
+      maxMembers: group.maxMembers,
+      isGathered: group.gathered,
+      createdAt: Date.now(),
+      closedAt,
+      source: 'WEB_GROUP',
+    } as any,
+    { merge: true }
+  )
+  return String(group.id)
 }
 
 export const joinGroupRoom = async (groupId: string, userId: string) => {
@@ -101,6 +142,9 @@ export const joinGroupRoom = async (groupId: string, userId: string) => {
 
   const room = snap.data() as GroupRoom
   if (room.members.includes(userId)) return
+  if (room.closedAt && Date.now() > room.closedAt) {
+    throw new Error('채팅방이 종료되었습니다.')
+  }
   if (room.members.length >= room.maxMembers) {
     throw new Error('정원이 가득 찼습니다.')
   }

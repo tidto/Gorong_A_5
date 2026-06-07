@@ -1,112 +1,252 @@
-import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native'
-import { useTrailStore } from '../store/trailStore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import React from 'react'
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { TRAIL_HISTORY_KEY, TrailHistoryEntry, useTrailStore } from '../store/trailStore'
 
-const TRAIL_ARCHIVE_KEY = 'gorong-trail-archive-count'
+type TrailSessionDetail = TrailHistoryEntry & {
+  localTrailSize?: number
+}
+
+function formatTime(ms: number) {
+  return new Date(ms).toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatDuration(startedAt: number, endedAt: number) {
+  const diff = Math.max(0, endedAt - startedAt)
+  const minutes = Math.floor(diff / 60000)
+  const seconds = Math.floor((diff % 60000) / 1000)
+  return `${minutes}분 ${seconds}초`
+}
 
 export default function TrailScreen() {
-  const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
-  const [archiveCount, setArchiveCount] = React.useState(0)
+  const insets = useSafeAreaInsets()
+  const { isRecording, trail, startRecording, stopRecording, startedAt } = useTrailStore()
+  const [history, setHistory] = React.useState<TrailSessionDetail[]>([])
+  const [refreshing, setRefreshing] = React.useState(false)
 
-  React.useEffect(() => {
-    ;(async () => {
-      const raw = await AsyncStorage.getItem(TRAIL_ARCHIVE_KEY)
-      setArchiveCount(Number(raw ?? 0))
-    })()
+  const loadHistory = React.useCallback(async () => {
+    const raw = await AsyncStorage.getItem(TRAIL_HISTORY_KEY)
+    const parsed = raw ? (JSON.parse(raw) as TrailHistoryEntry[]) : []
+
+    const withLocalSize = await Promise.all(
+      parsed.map(async (entry) => {
+        try {
+          const sessionRaw = await AsyncStorage.getItem(`gorong-trail-session-${entry.id}`)
+          const points = sessionRaw ? JSON.parse(sessionRaw) as Array<{ latitude: number; longitude: number }> : []
+          return { ...entry, localTrailSize: points.length }
+        } catch {
+          return { ...entry, localTrailSize: undefined }
+        }
+      })
+    )
+
+    setHistory(withLocalSize)
   }, [])
 
-  const handleArchive = async () => {
-    if (trail.length < 2) return
-    const nextCount = archiveCount + 1
-    await AsyncStorage.setItem(`gorong-trail-${Date.now()}`, JSON.stringify(trail))
-    await AsyncStorage.setItem(TRAIL_ARCHIVE_KEY, String(nextCount))
-    setArchiveCount(nextCount)
+  React.useEffect(() => {
+    loadHistory()
+  }, [loadHistory])
+
+  const onRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await loadHistory()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const activeMinutes = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 60000)) : 0
+
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      await stopRecording('manual')
+      await loadHistory()
+      return
+    }
+    await startRecording()
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: 16 + insets.top, paddingBottom: 24 + insets.bottom }]}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>🐾 나의 동선 기록</Text>
-        <Text style={styles.headerSub}>행사장에서의 경로를 기록해보세요</Text>
-      </View>
-
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{trail.length}</Text>
-          <Text style={styles.statLabel}>기록된 포인트</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{isRecording ? '🔴 기록 중' : '⏸ 대기'}</Text>
-          <Text style={styles.statLabel}>상태</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{archiveCount}</Text>
-          <Text style={styles.statLabel}>보관된 동선</Text>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
-        onPress={isRecording ? () => stopRecording('manual') : startRecording}
-      >
-        <Text style={styles.recordBtnText}>
-          {isRecording ? '⏹ 동선 기록 종료' : '▶ 동선 기록 시작'}
+        <Text style={styles.headerTitle}>🐾 트레일 기록 히스토리</Text>
+        <Text style={styles.headerSub}>
+          현재 기록과 종료된 세션의 저장 위치를 확인할 수 있습니다.
         </Text>
-      </TouchableOpacity>
+      </View>
 
-      <FlatList
-        data={trail.slice().reverse()}
-        keyExtractor={(_, i) => String(i)}
-        style={styles.list}
-        renderItem={({ item, index }) => (
-          <View style={styles.pointItem}>
-            <Text style={styles.pointIndex}>#{trail.length - index}</Text>
-            <Text style={styles.pointCoord}>
-              {item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}
+      <View style={styles.activeCard}>
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>현재 세션</Text>
+          <Text style={[styles.statusPill, isRecording ? styles.statusOn : styles.statusOff]}>
+            {isRecording ? '기록 중' : '대기'}
+          </Text>
+        </View>
+        <Text style={styles.activeStat}>기록된 포인트: {trail.length}</Text>
+        <Text style={styles.activeStat}>
+          기록 시간: {isRecording && startedAt ? `${activeMinutes}분 경과` : '진행 중인 기록 없음'}
+        </Text>
+        <Text style={styles.activeHint}>
+          {isRecording
+            ? '지도에서 트레일 기록을 종료하면 서버 활동 로그와 로컬 히스토리에 함께 남습니다.'
+            : '지도 탭에서 기록을 시작/종료할 수 있습니다.'}
+        </Text>
+        <TouchableOpacity
+          style={[styles.primaryBtn, isRecording && styles.primaryBtnActive]}
+          onPress={handleToggleRecording}
+        >
+          <Text style={styles.primaryBtnText}>
+            {isRecording ? '기록 종료' : '기록 시작'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>종료된 기록</Text>
+        <Text style={styles.sectionSub}>{history.length}개</Text>
+      </View>
+
+      {history.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>아직 종료된 기록이 없습니다.</Text>
+          <Text style={styles.emptyText}>
+            지도에서 트레일을 종료하면 여기서 서버/로컬 저장 상태를 확인할 수 있습니다.
+          </Text>
+        </View>
+      ) : (
+        history.map((item) => (
+          <View key={item.id} style={styles.historyCard}>
+            <View style={styles.historyTopRow}>
+              <Text style={styles.historyTitle}>{item.venueId}</Text>
+              <Text style={[styles.statusPill, item.serverSaved ? styles.statusOn : styles.statusOff]}>
+                {item.serverSaved ? '서버 저장' : '서버 실패'}
+              </Text>
+            </View>
+            <Text style={styles.historyMeta}>
+              시작: {formatTime(item.startedAt)}
+            </Text>
+            <Text style={styles.historyMeta}>
+              종료: {formatTime(item.endedAt)}
+            </Text>
+            <Text style={styles.historyMeta}>
+              지속시간: {formatDuration(item.startedAt, item.endedAt)}
+            </Text>
+            <Text style={styles.historyMeta}>
+              포인트: {item.pointCount}개 · 로컬 보관: {item.localSaved ? '완료' : '실패'}
+            </Text>
+            <Text style={styles.historyMeta}>
+              로컬 기록: {item.localTrailSize ?? item.pointCount}개 좌표
+            </Text>
+            <Text style={styles.historyReason}>
+              종료 사유: {item.reason === 'manual' ? '직접 종료' : item.reason === 'max_duration' ? '최대 시간 도달' : '행사장 이탈 후 종료'}
             </Text>
           </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.empty}>기록된 동선이 없습니다.</Text>
-        }
-      />
-    </View>
+        ))
+      )}
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f8f8' },
+  content: { paddingHorizontal: 16, gap: 12 },
   header: {
-    backgroundColor: '#FF6B35', paddingTop: 60,
-    paddingBottom: 16, paddingHorizontal: 16,
+    backgroundColor: '#FF6B35',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
   },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  headerSub: { color: '#fff', fontSize: 12, marginTop: 4, opacity: 0.85 },
-  statsRow: { flexDirection: 'row', padding: 16, gap: 12 },
-  statBox: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 12,
-    padding: 16, alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
+  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  headerSub: { color: '#fff', fontSize: 12, marginTop: 6, opacity: 0.9, lineHeight: 18 },
+  activeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  statValue: { fontSize: 20, fontWeight: '700', color: '#333' },
-  statLabel: { fontSize: 12, color: '#999', marginTop: 4 },
-  actionsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8 },
-  recordBtn: {
-    flex: 1, backgroundColor: '#FF6B35',
-    borderRadius: 12, padding: 16, alignItems: 'center',
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  recordBtnActive: { backgroundColor: '#333' },
-  recordBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  archiveBtn: { backgroundColor: '#2f855a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 16 },
-  archiveBtnDisabled: { backgroundColor: '#9ca3af' },
-  archiveBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  list: { flex: 1, marginTop: 16, paddingHorizontal: 16 },
-  pointItem: {
-    backgroundColor: '#fff', borderRadius: 10, padding: 12,
-    marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 8,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 2,
   },
-  pointIndex: { fontSize: 11, color: '#FF6B35', fontWeight: '700', width: 28 },
-  pointCoord: { flex: 1, fontSize: 12, color: '#555' },
-  empty: { textAlign: 'center', color: '#aaa', marginTop: 40 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  sectionSub: { fontSize: 12, color: '#6b7280', fontWeight: '600' },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontSize: 11,
+    overflow: 'hidden',
+    fontWeight: '800',
+  },
+  statusOn: { backgroundColor: '#DCFCE7', color: '#166534' },
+  statusOff: { backgroundColor: '#E5E7EB', color: '#4B5563' },
+  activeStat: { fontSize: 13, color: '#374151', marginBottom: 6, fontWeight: '600' },
+  activeHint: { fontSize: 12, color: '#6b7280', lineHeight: 18, marginTop: 4 },
+  primaryBtn: {
+    marginTop: 14,
+    backgroundColor: '#FF6B35',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  primaryBtnActive: {
+    backgroundColor: '#111827',
+  },
+  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  emptyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    alignItems: 'center',
+  },
+  emptyTitle: { fontSize: 14, fontWeight: '800', color: '#111827', marginBottom: 6 },
+  emptyText: { fontSize: 12, color: '#6b7280', textAlign: 'center', lineHeight: 18 },
+  historyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
+    gap: 5,
+  },
+  historyTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  historyTitle: { fontSize: 14, fontWeight: '800', color: '#111827', flex: 1, paddingRight: 8 },
+  historyMeta: { fontSize: 12, color: '#374151', lineHeight: 18 },
+  historyReason: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#FF6B35',
+    fontWeight: '700',
+  },
 })

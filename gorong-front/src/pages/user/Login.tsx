@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { ShieldCheck, Accessibility } from 'lucide-react'
 import { checkUserStatus } from '../../api/userApi'
 import { auth } from '../../firebase/firebaseConfig'
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth'
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, fetchSignInMethodsForEmail } from 'firebase/auth'
 import { loginWithGoogle, loginWithGithub } from '../../api/authService'
 import { useNotification } from '../../contexts/NotificationContext'
 
@@ -87,7 +87,23 @@ export default function Login() {
         })
       }
     } catch (error: any) {
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+        toast('비밀번호가 틀렸습니다.', 'error')
+        return
+      }
+
+      if (error.code === 'auth/user-not-found') {
+        const signInMethods = await fetchSignInMethodsForEmail(auth, email)
+        if (signInMethods.length > 0 && signInMethods.includes('password')) {
+          toast('비밀번호가 틀렸습니다.', 'error')
+          return
+        }
+
+        if (signInMethods.length > 0) {
+          toast('이 이메일은 다른 로그인 방식으로 가입된 계정입니다.', 'warning')
+          return
+        }
+
         const wantsToSignUp = await confirm({
             message: '가입되지 않은 이메일입니다.',
             description: '이 정보로 새로 계정을 만드시겠습니까?',
@@ -112,8 +128,6 @@ export default function Login() {
             }
           }
         }
-      } else if (error.code === 'auth/wrong-password') {
-        toast('비밀번호가 틀렸습니다.', 'error')
       } else {
         toast('로그인 처리 중 문제가 발생했습니다.', 'error')
       }

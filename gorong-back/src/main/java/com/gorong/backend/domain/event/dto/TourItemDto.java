@@ -9,27 +9,44 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TourItemDto {
-    private String title;      // 장소 이름
-    private String addr1;      // 주소
+    private String title;
+    private String addr1;
 
-    // 프론트엔드 전달 시 key값을 소문자로 고정
     @JsonProperty("mapx")
-    private String mapx;       // 경도
+    private String mapx;
 
     @JsonProperty("mapy")
-    private String mapy;       // 위도
+    private String mapy;
 
-    private String firstimage; // 대표 이미지
-    private String contentid;  // 고유 ID
+    private String firstimage;
+    private String firstimage2;
+    private String contentid;
 
-    // 무장애 정보 및 상세 내용
     private String overview;
     private String parking;
     private String elevator;
     private String restroom;
     private String route;
 
-    // 추가
-    private String areacode;    // [필수] getAreacode() 대응 (대구/경북 필터링용)
-    private String cat1;        // [필수] getCat1() 대응 (A01 -> NA 매핑용)
+    private String areacode;
+    private String cat1;
+
+    private String eventStartDate;
+    private String eventEndDate;
+
+    private String tel;
+
+    // 무장애 추가 필드
+    private String wheelchair;
+    private String exit;
+    private String publicTransport;
+    private String braileBlock;
+    private String audioGuide;
+    private String helpDog;
+    private String signGuide;
+    private String videoGuide;
+    private String stroller;
+
+    // 관광사진 추가 이미지 (쉼표 구분)
+    private String galleryImages;
 }

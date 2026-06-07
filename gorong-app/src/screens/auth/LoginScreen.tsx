@@ -32,7 +32,7 @@ type Props = {
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loadingProvider, setLoadingProvider] = useState<'email' | null>(null)
 
   // 백엔드 로그인 확인 함수
   const { checkBackendLogin } = useAuthStore()
@@ -49,7 +49,7 @@ export default function LoginScreen({ navigation }: Props) {
       return
     }
 
-    setLoading(true)
+    setLoadingProvider('email')
     try {
       // 1. Firebase 이메일/비밀번호 로그인
       await signInWithEmailAndPassword(auth, email.trim(), password)
@@ -63,7 +63,7 @@ export default function LoginScreen({ navigation }: Props) {
       const msg = parseFirebaseError(error.code)
       Alert.alert('로그인 실패', msg)
     } finally {
-      setLoading(false)
+      setLoadingProvider(null)
     }
   }
 
@@ -84,6 +84,23 @@ export default function LoginScreen({ navigation }: Props) {
 
         {/* 입력 폼 */}
         <View style={styles.form}>
+          <TouchableOpacity
+            style={[styles.socialBtn, styles.googleBtn, styles.btnDisabled]}
+            onPress={() => {
+              Alert.alert('안내', '현재는 이메일/비밀번호 로그인을 사용합니다.')
+            }}
+            disabled
+            activeOpacity={0.85}
+          >
+            <Text style={styles.socialBtnText}>Google로 계속</Text>
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>또는</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <Text style={styles.label}>이메일</Text>
           <TextInput
             style={styles.input}
@@ -111,12 +128,12 @@ export default function LoginScreen({ navigation }: Props) {
 
           {/* 로그인 버튼 */}
           <TouchableOpacity
-            style={[styles.loginBtn, loading && styles.btnDisabled]}
+            style={[styles.loginBtn, loadingProvider && styles.btnDisabled]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loadingProvider !== null}
             activeOpacity={0.8}
           >
-            {loading ? (
+            {loadingProvider === 'email' ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.loginBtnText}>로그인</Text>
@@ -188,6 +205,38 @@ const styles = StyleSheet.create({
   // ─── 폼 ───
   form: {
     marginBottom: 24,
+  },
+  socialBtn: {
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  googleBtn: {
+    backgroundColor: '#fff',
+    borderColor: '#d0d7de',
+  },
+  socialBtnText: {
+    color: '#1f2937',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 12,
+    color: '#9ca3af',
   },
   label: {
     fontSize: 13,

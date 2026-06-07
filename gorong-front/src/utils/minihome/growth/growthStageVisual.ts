@@ -1,8 +1,9 @@
 import type { GrowthStage } from "./growth";
+import { normalizeGrowthStage } from "./growth";
 
-/** Rive 바깥 wrapper scale — origin-bottom */
-export function growthStageScaleClass(stage: GrowthStage): string {
-  switch (stage) {
+export function growthStageScaleClass(stage: GrowthStage | string): string {
+  const s = normalizeGrowthStage(stage);
+  switch (s) {
     case "BASIC":
       return "scale-75";
     case "TEEN":

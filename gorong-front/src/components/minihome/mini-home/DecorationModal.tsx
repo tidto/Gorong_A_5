@@ -2,9 +2,10 @@ import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import Button from "../../Button";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
+import type { SlotType } from "../../../utils/minihome/gocat/gocatSlots";
 import DecorationCatStage from "../decoration/DecorationCatStage";
 
-export type SlotType = "HEAD" | "BODY" | "ACCESSORY";
+export type { SlotType };
 
 export type DecorItem = import("../../../types/minihome/item").UserItem & {
   slotType?: SlotType;
@@ -41,32 +42,27 @@ export default function DecorationModal(props: {
           </button>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          {/* 왼쪽: 큰 고양이 */}
-          <div className="relative min-h-[min(52vh,380px)] flex-1 lg:min-h-[420px]">
-            <DecorationCatStage>{Preview}</DecorationCatStage>
-          </div>
-
-          {/* 오른쪽: 색상 + 장착 */}
-          <aside className="flex max-h-[48vh] w-full shrink-0 flex-col border-t border-amber-100/80 bg-white/70 lg:max-h-none lg:w-[300px] lg:border-l lg:border-t-0 xl:w-[320px]">
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">{customizePanel}</div>
-
-            {error ? (
-              <p className="mx-4 mb-2 shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="shrink-0 border-t border-amber-100/60 p-4">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 sm:grid-cols-[1fr_minmax(280px,360px)]">
+          <DecorationCatStage>{Preview}</DecorationCatStage>
+          <aside className="flex min-h-0 flex-col border-t border-amber-100/80 sm:border-l sm:border-t-0">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">{customizePanel}</div>
+            <footer className="shrink-0 border-t border-amber-100/80 bg-white/60 p-4">
+              {error ? (
+                <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
+              ) : null}
               <Button
+                type="button"
                 variant="primary"
+                className="w-full"
+                disabled={saving}
                 onClick={onSave}
-                disabled={saving || !props.canEdit}
-                className="w-full rounded-2xl py-3 text-sm font-extrabold shadow-lg shadow-amber-300/40 transition hover:scale-[1.01] active:scale-[0.99]"
               >
-                {saving ? "저장 중…" : "저장하기"}
+                {saving ? "저장 중…" : "저장하고 적용하기"}
               </Button>
-            </div>
+              <p className="mt-2 text-center text-[10px] text-amber-800/50">
+                저장 전에는 미리보기만, 저장 후 방문자에게도 보여요
+              </p>
+            </footer>
           </aside>
         </div>
       </div>

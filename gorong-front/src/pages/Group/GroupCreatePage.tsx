@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import { useAuth } from '../../contexts/AuthContext';
+import { useChatNotification } from '../../contexts/ChatNotificationContext'; // ✅ [추가]
 
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
 const TOUR_API_KEY  = import.meta.env.VITE_TOUR_API_KEY  || '';
@@ -51,25 +52,19 @@ declare global { interface Window { kakao: any } }
 const toEventCenter = (event: { title: string; addr1?: string; mapx?: string; mapy?: string; mapX?: string; mapY?: string }): MapCenter | null => {
     const lng = Number(event.mapx ?? event.mapX);
     const lat = Number(event.mapy ?? event.mapY);
-
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-
-    return {
-        lat,
-        lng,
-        title: event.title,
-        address: event.addr1,
-    };
+    return { lat, lng, title: event.title, address: event.addr1 };
 };
 
 // ═══════════════════════════════════════════════════════════════
 const GroupCreatePage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { addGroupSubscription } = useChatNotification(); // ✅ [추가]
 
     // ─── 폼 데이터 ──────────────────────────────────────────────
     const [formData, setFormData] = useState({
-        title: '', event: '', location: '', content: '',
+        title: '', event: '', eventContentId: '', location: '', content: '',
         maxCapacity: 4, meetingDate: '', meetingTime: '', condition: '',
     });
 
@@ -87,7 +82,6 @@ const GroupCreatePage = () => {
     const [dbEvents, setDbEvents] = useState<DbEvent[]>([]);
     const [dbLoading, setDbLoading] = useState(false);
     const [eventSearch, setEventSearch] = useState('');
-    // TourAPI
     const [eventKeyword, setEventKeyword] = useState('');
     const [tourEvents, setTourEvents] = useState<TourEvent[]>([]);
     const [tourLoading, setTourLoading] = useState(false);
@@ -99,7 +93,7 @@ const GroupCreatePage = () => {
     const [placeKeyword, setPlaceKeyword] = useState('');
     const [placeResults, setPlaceResults] = useState<KakaoPlace[]>([]);
     const [selectedPlace, setSelectedPlace] = useState<KakaoPlace | null>(null);
-    const [userBaseAddress, setUserBaseAddress] = useState('');   // 회원가입 주소
+    const [userBaseAddress, setUserBaseAddress] = useState('');
     const [selectedEventCenter, setSelectedEventCenter] = useState<MapCenter | null>(null);
     const mapRef = useRef<HTMLDivElement>(null);
     const kakaoMapRef = useRef<any>(null);
@@ -150,15 +144,12 @@ const GroupCreatePage = () => {
         if (!showMapModal || !mapLoaded || !mapRef.current) return;
         const timer = setTimeout(() => {
             if (!mapRef.current) return;
-
-            // 기본 중심: 서울 → 유저 주소가 있으면 지오코딩으로 덮어씀
             const defaultCenter = selectedEventCenter
                 ? new window.kakao.maps.LatLng(selectedEventCenter.lat, selectedEventCenter.lng)
                 : new window.kakao.maps.LatLng(37.5665, 126.9780);
             const map = new window.kakao.maps.Map(mapRef.current, { center: defaultCenter, level: selectedEventCenter ? 4 : 5 });
             kakaoMapRef.current = map;
 
-            // ✅ 회원가입 주소가 있으면 지오코딩 → 지도 중심 이동
             if (selectedEventCenter) {
                 const eventPosition = new window.kakao.maps.LatLng(selectedEventCenter.lat, selectedEventCenter.lng);
                 map.setCenter(eventPosition);
@@ -174,7 +165,6 @@ const GroupCreatePage = () => {
                 });
             }
 
-            // 지도 클릭 → 역지오코딩으로 주소 추출
             window.kakao.maps.event.addListener(map, 'click', (mouseEvent: any) => {
                 const latlng = mouseEvent.latLng;
                 placeMarker(latlng, map);
@@ -207,12 +197,8 @@ const GroupCreatePage = () => {
         if (!placeKeyword.trim() || !mapLoaded) return;
         const ps = new window.kakao.maps.services.Places();
         const options = selectedEventCenter
-            ? {
-                location: new window.kakao.maps.LatLng(selectedEventCenter.lat, selectedEventCenter.lng),
-                radius: 3000,
-            }
+            ? { location: new window.kakao.maps.LatLng(selectedEventCenter.lat, selectedEventCenter.lng), radius: 3000 }
             : undefined;
-
         ps.keywordSearch(placeKeyword, (data: any, status: any) => {
             setPlaceResults(status === window.kakao.maps.services.Status.OK ? data.slice(0, 8) : []);
         }, options);
@@ -263,7 +249,7 @@ const GroupCreatePage = () => {
 
     // ─── 행사 선택 ────────────────────────────────────────────────
     const handleDbEventSelect = (ev: DbEvent) => {
-        setFormData(prev => ({ ...prev, event: ev.title }));
+        setFormData(prev => ({ ...prev, event: ev.title, eventContentId: ev.id?.toString() || '' }));
         setSelectedEventCenter(toEventCenter(ev));
         setPlaceResults([]);
         setSelectedPlace(null);
@@ -273,7 +259,7 @@ const GroupCreatePage = () => {
     };
 
     const handleTourEventSelect = (ev: TourEvent) => {
-        setFormData(prev => ({ ...prev, event: ev.title }));
+        setFormData(prev => ({ ...prev, event: ev.title, eventContentId: ev.contentid?.toString() || '' }));
         setSelectedEventCenter(toEventCenter(ev));
         setPlaceResults([]);
         setSelectedPlace(null);
@@ -311,8 +297,6 @@ const GroupCreatePage = () => {
 
     const handleSubmit = async (e: any) => {
         e.preventDefault();
-
-        // 날짜·시간 필수 체크
         const missingDate = !formData.meetingDate;
         const missingTime = !formData.meetingTime;
         setDateError(missingDate);
@@ -321,9 +305,13 @@ const GroupCreatePage = () => {
             alert('모임 날짜와 집합 시간은 필수 입력 항목입니다.');
             return;
         }
-
         try {
-            await axiosInstance.post('/groups', formData);
+            // ✅ [수정] 응답값에서 생성된 그룹 id·title을 받아 구독 추가
+            const res = await axiosInstance.post('/groups', formData);
+            const created = res.data;
+            if (created?.id) {
+                await addGroupSubscription(created.id, created.title ?? formData.title);
+            }
             alert('모집글이 성공적으로 등록되었습니다! 🐈');
             navigate('/group');
         } catch (err) {
@@ -334,315 +322,1154 @@ const GroupCreatePage = () => {
 
     const fmtDate = (d: string) => d ? `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}` : '';
 
-    // DB 행사 필터링 (검색어)
     const filteredDbEvents = dbEvents.filter(ev =>
         !eventSearch || ev.title.toLowerCase().includes(eventSearch.toLowerCase()) || ev.addr1.toLowerCase().includes(eventSearch.toLowerCase())
     );
 
     // ═══════════════════════════════════════════════════════════════
     return (
-        <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', padding: '40px 20px 80px' }}>
-            <div style={{ maxWidth: '860px', margin: '0 auto', backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 4px 24px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
 
-                {/* 헤더 */}
-                <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff6b1a 100%)', padding: '28px 36px', color: 'white' }}>
-                    <h2 style={{ margin: 0, fontSize: '22px', fontWeight: '800' }}>👥 모집글 작성</h2>
-                    <p style={{ margin: '6px 0 0', fontSize: '13px', opacity: 0.85 }}>함께할 동행자를 모집해보세요</p>
+                .gcp-root {
+                    background: #f5f4f0;
+                    min-height: 100vh;
+                    font-family: 'Noto Sans KR', sans-serif;
+                    padding: 48px 24px 80px;
+                }
+
+                /* ── 상단 헤드 영역 ── */
+                .gcp-head {
+                    max-width: 1100px;
+                    margin: 0 auto 36px;
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: space-between;
+                    gap: 16px;
+                }
+                .gcp-head-left {}
+                .gcp-breadcrumb {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 13px;
+                    color: #9e9b95;
+                    margin-bottom: 10px;
+                }
+                .gcp-breadcrumb span { cursor: default; }
+                .gcp-breadcrumb a {
+                    color: #9e9b95;
+                    text-decoration: none;
+                    cursor: pointer;
+                    transition: color 0.15s;
+                }
+                .gcp-breadcrumb a:hover { color: #e06c2a; }
+                .gcp-breadcrumb-sep { font-size: 11px; }
+                .gcp-title {
+                    font-size: 30px;
+                    font-weight: 800;
+                    color: #1a1816;
+                    letter-spacing: -0.5px;
+                    margin: 0;
+                }
+                .gcp-title-accent { color: #e06c2a; }
+                .gcp-subtitle {
+                    margin: 6px 0 0;
+                    font-size: 14px;
+                    color: #8a877f;
+                }
+                .gcp-back-btn {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 10px 18px;
+                    border-radius: 8px;
+                    border: 1.5px solid #ddd9d2;
+                    background: white;
+                    color: #5a564f;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                    font-family: inherit;
+                }
+                .gcp-back-btn:hover {
+                    border-color: #e06c2a;
+                    color: #e06c2a;
+                    background: #fff9f5;
+                }
+
+                /* ── 2컬럼 레이아웃 ── */
+                .gcp-layout {
+                    max-width: 1100px;
+                    margin: 0 auto;
+                    display: grid;
+                    grid-template-columns: 1fr 340px;
+                    gap: 24px;
+                    align-items: start;
+                }
+
+                /* ── 폼 카드 ── */
+                .gcp-main-card {
+                    background: white;
+                    border-radius: 16px;
+                    border: 1px solid #e8e4dd;
+                    overflow: hidden;
+                }
+
+                /* ── 사이드바 ── */
+                .gcp-sidebar {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 16px;
+                    position: sticky;
+                    top: 24px;
+                }
+                .gcp-sidebar-card {
+                    background: white;
+                    border-radius: 16px;
+                    border: 1px solid #e8e4dd;
+                    padding: 24px;
+                }
+                .gcp-sidebar-card-title {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #8a877f;
+                    text-transform: uppercase;
+                    letter-spacing: 0.8px;
+                    margin: 0 0 16px;
+                }
+                .gcp-preview-title {
+                    font-size: 17px;
+                    font-weight: 700;
+                    color: #1a1816;
+                    min-height: 24px;
+                    word-break: break-all;
+                }
+                .gcp-preview-title.placeholder { color: #c5c1bb; font-weight: 400; }
+                .gcp-preview-row {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 10px;
+                    margin-top: 12px;
+                    font-size: 13px;
+                    color: #5a564f;
+                }
+                .gcp-preview-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+                .gcp-preview-empty { color: #c5c1bb; }
+                .gcp-tags-preview {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    margin-top: 14px;
+                }
+                .gcp-tag-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    padding: 4px 10px;
+                    border-radius: 20px;
+                    background: #fff4ec;
+                    color: #e06c2a;
+                    font-size: 12px;
+                    font-weight: 600;
+                    border: 1px solid #fad4b8;
+                }
+                .gcp-tip-item {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: 12px;
+                    font-size: 13px;
+                    color: #5a564f;
+                    line-height: 1.5;
+                }
+                .gcp-tip-item:last-child { margin-bottom: 0; }
+                .gcp-tip-num {
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: #fff4ec;
+                    color: #e06c2a;
+                    font-size: 11px;
+                    font-weight: 700;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                    margin-top: 1px;
+                }
+
+                /* ── 섹션 구분 ── */
+                .gcp-section {
+                    padding: 32px 36px;
+                    border-bottom: 1px solid #f0ece6;
+                }
+                .gcp-section:last-of-type { border-bottom: none; }
+                .gcp-section-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #e06c2a;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    margin-bottom: 20px;
+                }
+                .gcp-section-label-line {
+                    flex: 1;
+                    height: 1px;
+                    background: #f0ece6;
+                }
+
+                /* ── 필드 ── */
+                .gcp-field { margin-bottom: 20px; }
+                .gcp-field:last-child { margin-bottom: 0; }
+                .gcp-label {
+                    display: block;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #3a3730;
+                    margin-bottom: 8px;
+                }
+                .gcp-label-required {
+                    color: #e06c2a;
+                    margin-left: 3px;
+                }
+                .gcp-hint {
+                    font-size: 12px;
+                    color: #9e9b95;
+                    margin: -4px 0 8px;
+                }
+                .gcp-input {
+                    width: 100%;
+                    padding: 11px 14px;
+                    border-radius: 8px;
+                    border: 1.5px solid #e0dbd3;
+                    outline: none;
+                    font-size: 14px;
+                    color: #1a1816;
+                    box-sizing: border-box;
+                    transition: border-color 0.15s, box-shadow 0.15s;
+                    background: white;
+                    font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-input:focus {
+                    border-color: #e06c2a;
+                    box-shadow: 0 0 0 3px rgba(224,108,42,0.1);
+                }
+                .gcp-input::placeholder { color: #c0bcb5; }
+                .gcp-input.error {
+                    border-color: #ef4444;
+                    background: #fef9f9;
+                }
+                .gcp-input.error:focus {
+                    box-shadow: 0 0 0 3px rgba(239,68,68,0.1);
+                }
+                .gcp-input-readonly {
+                    background: #fafaf8;
+                    cursor: pointer;
+                }
+                .gcp-input-readonly:hover {
+                    border-color: #c8c3bb;
+                }
+                .gcp-error-msg {
+                    margin: 5px 0 0;
+                    font-size: 12px;
+                    color: #ef4444;
+                    font-weight: 600;
+                }
+                .gcp-textarea {
+                    width: 100%;
+                    padding: 12px 14px;
+                    border-radius: 8px;
+                    border: 1.5px solid #e0dbd3;
+                    outline: none;
+                    font-size: 14px;
+                    color: #1a1816;
+                    box-sizing: border-box;
+                    transition: border-color 0.15s, box-shadow 0.15s;
+                    background: white;
+                    font-family: 'Noto Sans KR', sans-serif;
+                    resize: vertical;
+                    min-height: 120px;
+                }
+                .gcp-textarea:focus {
+                    border-color: #e06c2a;
+                    box-shadow: 0 0 0 3px rgba(224,108,42,0.1);
+                }
+                .gcp-textarea::placeholder { color: #c0bcb5; }
+
+                /* ── 행 그리드 ── */
+                .gcp-row-3 {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 16px;
+                }
+                .gcp-row-2 {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 16px;
+                }
+
+                /* ── 인풋+버튼 묶음 ── */
+                .gcp-input-group {
+                    display: flex;
+                    gap: 8px;
+                }
+                .gcp-input-group .gcp-input { flex: 1; }
+                .gcp-select-btn {
+                    padding: 11px 16px;
+                    border-radius: 8px;
+                    border: 1.5px solid #e06c2a;
+                    background: white;
+                    color: #e06c2a;
+                    font-weight: 700;
+                    font-size: 13px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                    transition: all 0.15s;
+                    font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-select-btn:hover {
+                    background: #e06c2a;
+                    color: white;
+                }
+
+                /* ── 해시태그 영역 ── */
+                .gcp-tag-box {
+                    min-height: 46px;
+                    padding: 6px 10px;
+                    border-radius: 8px;
+                    border: 1.5px solid #e0dbd3;
+                    background: white;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    align-items: center;
+                    cursor: text;
+                    transition: border-color 0.15s, box-shadow 0.15s;
+                }
+                .gcp-tag-box:focus-within {
+                    border-color: #e06c2a;
+                    box-shadow: 0 0 0 3px rgba(224,108,42,0.1);
+                }
+                .gcp-tag-pill {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    background: #fff4ec;
+                    color: #e06c2a;
+                    border: 1px solid #fad4b8;
+                    border-radius: 20px;
+                    padding: 3px 10px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    white-space: nowrap;
+                }
+                .gcp-tag-remove {
+                    cursor: pointer;
+                    font-size: 15px;
+                    line-height: 1;
+                    color: #e06c2a;
+                    opacity: 0.7;
+                    transition: opacity 0.1s;
+                    background: none;
+                    border: none;
+                    padding: 0;
+                    display: flex;
+                    align-items: center;
+                }
+                .gcp-tag-remove:hover { opacity: 1; }
+                .gcp-tag-input {
+                    border: none;
+                    outline: none;
+                    font-size: 13px;
+                    min-width: 160px;
+                    flex: 1;
+                    padding: 3px 4px;
+                    color: #1a1816;
+                    background: transparent;
+                    font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-tag-input::placeholder { color: #c0bcb5; }
+
+                /* ── 제출 버튼 영역 ── */
+                .gcp-submit-area {
+                    padding: 28px 36px;
+                    background: #fafaf8;
+                    border-top: 1px solid #f0ece6;
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                }
+                .gcp-submit-btn {
+                    flex: 1;
+                    padding: 15px;
+                    border-radius: 10px;
+                    border: none;
+                    background: #e06c2a;
+                    color: white;
+                    font-weight: 800;
+                    font-size: 16px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-family: 'Noto Sans KR', sans-serif;
+                    letter-spacing: -0.2px;
+                }
+                .gcp-submit-btn:hover {
+                    background: #c95e22;
+                    transform: translateY(-1px);
+                    box-shadow: 0 6px 20px rgba(224,108,42,0.35);
+                }
+                .gcp-submit-btn:active { transform: translateY(0); }
+                .gcp-cancel-btn {
+                    padding: 15px 24px;
+                    border-radius: 10px;
+                    border: 1.5px solid #ddd9d2;
+                    background: white;
+                    color: #8a877f;
+                    font-weight: 600;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                    font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-cancel-btn:hover {
+                    border-color: #b8b3ac;
+                    color: #5a564f;
+                }
+
+                /* ── 모달 오버레이 ── */
+                .gcp-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(15,12,9,0.55);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 9999;
+                    padding: 24px;
+                    backdrop-filter: blur(2px);
+                }
+                .gcp-modal {
+                    background: white;
+                    border-radius: 16px;
+                    overflow: hidden;
+                    box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+                    display: flex;
+                    flex-direction: column;
+                }
+                .gcp-modal-head {
+                    padding: 20px 24px;
+                    border-bottom: 1px solid #f0ece6;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-shrink: 0;
+                }
+                .gcp-modal-head-title {
+                    font-size: 17px;
+                    font-weight: 700;
+                    color: #1a1816;
+                    margin: 0;
+                }
+                .gcp-modal-head-sub {
+                    font-size: 12px;
+                    color: #9e9b95;
+                    margin: 3px 0 0;
+                }
+                .gcp-modal-close {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    border: 1.5px solid #e8e4dd;
+                    background: white;
+                    color: #8a877f;
+                    font-size: 18px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.15s;
+                    line-height: 1;
+                }
+                .gcp-modal-close:hover {
+                    border-color: #e06c2a;
+                    color: #e06c2a;
+                    background: #fff9f5;
+                }
+
+                /* ── 탭 ── */
+                .gcp-tabs {
+                    display: flex;
+                    border-bottom: 1px solid #f0ece6;
+                    flex-shrink: 0;
+                }
+                .gcp-tab {
+                    flex: 1;
+                    padding: 13px;
+                    border: none;
+                    cursor: pointer;
+                    font-weight: 600;
+                    font-size: 13px;
+                    background: white;
+                    color: #9e9b95;
+                    border-bottom: 2px solid transparent;
+                    transition: all 0.15s;
+                    font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-tab.active {
+                    color: #e06c2a;
+                    border-bottom-color: #e06c2a;
+                }
+                .gcp-tab:hover:not(.active) { background: #fafaf8; color: #5a564f; }
+
+                /* ── 모달 검색 ── */
+                .gcp-modal-search {
+                    padding: 14px 20px;
+                    border-bottom: 1px solid #f0ece6;
+                    display: flex;
+                    gap: 8px;
+                    flex-shrink: 0;
+                }
+                .gcp-modal-input {
+                    flex: 1;
+                    padding: 9px 13px;
+                    border-radius: 7px;
+                    border: 1.5px solid #e0dbd3;
+                    outline: none;
+                    font-size: 13px;
+                    color: #1a1816;
+                    transition: border-color 0.15s;
+                    font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-modal-input:focus { border-color: #e06c2a; }
+                .gcp-modal-input::placeholder { color: #c0bcb5; }
+                .gcp-modal-search-btn {
+                    padding: 9px 16px;
+                    border-radius: 7px;
+                    border: none;
+                    background: #e06c2a;
+                    color: white;
+                    font-weight: 700;
+                    font-size: 13px;
+                    cursor: pointer;
+                    font-family: 'Noto Sans KR', sans-serif;
+                    transition: background 0.15s;
+                }
+                .gcp-modal-search-btn:hover { background: #c95e22; }
+
+                /* ── 이벤트 리스트 ── */
+                .gcp-event-list {
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 12px 20px 16px;
+                }
+                .gcp-event-item {
+                    padding: 12px;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    border: 1.5px solid #f0ece6;
+                    margin-bottom: 8px;
+                    display: flex;
+                    gap: 12px;
+                    align-items: flex-start;
+                    transition: all 0.15s;
+                }
+                .gcp-event-item:hover {
+                    border-color: #e06c2a;
+                    background: #fff9f5;
+                }
+                .gcp-event-thumb {
+                    width: 52px;
+                    height: 52px;
+                    border-radius: 8px;
+                    object-fit: cover;
+                    flex-shrink: 0;
+                }
+                .gcp-event-thumb-placeholder {
+                    width: 52px;
+                    height: 52px;
+                    border-radius: 8px;
+                    background: #fff4ec;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 22px;
+                    flex-shrink: 0;
+                }
+                .gcp-event-name {
+                    font-weight: 700;
+                    font-size: 14px;
+                    color: #1a1816;
+                    margin-bottom: 3px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .gcp-event-addr {
+                    font-size: 12px;
+                    color: #8a877f;
+                    margin-top: 2px;
+                }
+                .gcp-event-date {
+                    font-size: 11px;
+                    color: #b0ac a5;
+                    margin-top: 2px;
+                }
+                .gcp-event-arrow {
+                    color: #e06c2a;
+                    font-size: 18px;
+                    flex-shrink: 0;
+                    margin-top: 14px;
+                }
+                .gcp-list-empty {
+                    text-align: center;
+                    padding: 48px 24px;
+                    color: #b0aca5;
+                    font-size: 14px;
+                }
+
+                /* ── 지도 모달 하단 ── */
+                .gcp-map-footer {
+                    padding: 14px 20px;
+                    border-top: 1px solid #f0ece6;
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                    flex-shrink: 0;
+                }
+                .gcp-map-selected-info {
+                    flex: 1;
+                    font-size: 13px;
+                    color: #5a564f;
+                    font-weight: 600;
+                }
+                .gcp-map-selected-info.placeholder {
+                    color: #b0aca5;
+                    font-weight: 400;
+                }
+                .gcp-map-confirm-btn {
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    border: none;
+                    font-weight: 700;
+                    font-size: 13px;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                    font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-map-confirm-btn.active {
+                    background: #e06c2a;
+                    color: white;
+                }
+                .gcp-map-confirm-btn.active:hover { background: #c95e22; }
+                .gcp-map-confirm-btn.disabled {
+                    background: #f0ece6;
+                    color: #b0aca5;
+                    cursor: default;
+                }
+
+                /* ── 행사 선택 완료 뱃지 ── */
+                .gcp-selected-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 4px 10px;
+                    border-radius: 20px;
+                    background: #e8f5e9;
+                    color: #2e7d32;
+                    font-size: 12px;
+                    font-weight: 600;
+                    border: 1px solid #c8e6c9;
+                    margin-top: 8px;
+                }
+
+                /* ── 반응형 ── */
+                @media (max-width: 900px) {
+                    .gcp-layout { grid-template-columns: 1fr; }
+                    .gcp-sidebar { position: static; }
+                    .gcp-row-3 { grid-template-columns: 1fr 1fr; }
+                }
+                @media (max-width: 640px) {
+                    .gcp-root { padding: 24px 16px 60px; }
+                    .gcp-section { padding: 24px 20px; }
+                    .gcp-submit-area { padding: 20px; }
+                    .gcp-row-3 { grid-template-columns: 1fr; }
+                    .gcp-row-2 { grid-template-columns: 1fr; }
+                    .gcp-head { flex-direction: column; align-items: flex-start; }
+                }
+            `}</style>
+
+            <div className="gcp-root">
+
+                {/* ── 상단 헤더 ── */}
+                <div className="gcp-head">
+                    <div className="gcp-head-left">
+                        <nav className="gcp-breadcrumb">
+                            <a onClick={() => navigate('/')}>홈</a>
+                            <span className="gcp-breadcrumb-sep">›</span>
+                            <a onClick={() => navigate('/group')}>모임 목록</a>
+                            <span className="gcp-breadcrumb-sep">›</span>
+                            <span>모집글 작성</span>
+                        </nav>
+                        <h1 className="gcp-title">
+                            새 모임 <span className="gcp-title-accent">모집글</span> 작성
+                        </h1>
+                        <p className="gcp-subtitle">함께할 동행자를 모집해보세요 🐈</p>
+                    </div>
+                    <button className="gcp-back-btn" onClick={() => navigate('/group')}>
+                        ← 목록으로 돌아가기
+                    </button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '40px 36px' }}>
+                {/* ── 2컬럼 레이아웃 ── */}
+                <div className="gcp-layout">
 
-                    {/* 제목 */}
-                    <Field label="제목">
-                        <input name="title" placeholder="모집글 제목을 입력해주세요" onChange={handleChange} required style={inputStyle} />
-                    </Field>
+                    {/* ═══ 왼쪽: 메인 폼 카드 ═══ */}
+                    <div className="gcp-main-card">
+                        <form onSubmit={handleSubmit}>
 
-                    {/* 참여할 행사 */}
-                    <Field label="참여할 행사" hint="고롱 DB 행사 또는 TourAPI에서 검색해 선택하세요">
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input readOnly placeholder="행사를 검색해서 선택해주세요" value={formData.event}
-                                   style={{ ...inputStyle, flex: 1, cursor: 'pointer', backgroundColor: '#fafafa' }}
-                                   onClick={() => setShowEventModal(true)} />
-                            <button type="button" onClick={() => setShowEventModal(true)} style={orangeBtn}>🔍 행사 선택</button>
-                        </div>
-                    </Field>
+                            {/* 섹션 1: 기본 정보 */}
+                            <div className="gcp-section">
+                                <div className="gcp-section-label">
+                                    <span>01</span>
+                                    <span>기본 정보</span>
+                                    <div className="gcp-section-label-line" />
+                                </div>
 
-                    {/* 모임 장소 */}
-                    <Field
-                        label="모임 장소 (상세)"
-                        hint={
-                            selectedEventCenter
-                                ? `선택한 행사 주변: ${selectedEventCenter.address || selectedEventCenter.title}`
-                                : userBaseAddress
-                                    ? `기본 위치: ${userBaseAddress}`
-                                    : '지도에서 클릭하거나 장소를 검색해 핀을 꽂아보세요'
-                        }
-                    >
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input readOnly placeholder="지도에서 장소를 선택해주세요" value={formData.location}
-                                   style={{ ...inputStyle, flex: 1, cursor: 'pointer', backgroundColor: '#fafafa' }}
-                                   onClick={() => setShowMapModal(true)} />
-                            <button type="button" onClick={() => setShowMapModal(true)} style={orangeBtn}>📍 지도 열기</button>
-                        </div>
-                    </Field>
+                                {/* 제목 */}
+                                <div className="gcp-field">
+                                    <label className="gcp-label">
+                                        모집 제목 <span className="gcp-label-required">*</span>
+                                    </label>
+                                    <input
+                                        name="title"
+                                        placeholder="예: 올림픽공원 재즈 페스티벌 같이 가요 🎷"
+                                        onChange={handleChange}
+                                        required
+                                        className="gcp-input"
+                                    />
+                                </div>
 
-                    {/* 설명 */}
-                    <Field label="설명">
-            <textarea name="content" placeholder="모집에 대한 자세한 설명을 입력하세요" onChange={handleChange} required
-                      style={{ ...inputStyle, height: '120px', resize: 'none' } as any} />
-                    </Field>
+                                {/* 설명 */}
+                                <div className="gcp-field">
+                                    <label className="gcp-label">모임 소개</label>
+                                    <textarea
+                                        name="content"
+                                        placeholder="어떤 모임인지 자세히 설명해주세요. 분위기, 주의사항, 일정 등을 적어보세요."
+                                        onChange={handleChange}
+                                        required
+                                        className="gcp-textarea"
+                                    />
+                                </div>
+                            </div>
 
-                    {/* 인원 / 날짜 / 시간 */}
-                    <div style={{ display: 'flex', gap: '20px', marginBottom: '28px' }}>
-                        <Field label="최대 인원" style={{ flex: 1, marginBottom: 0 }}>
-                            <input type="number" name="maxCapacity" value={formData.maxCapacity} min="2" max="20" onChange={handleChange} style={inputStyle} />
-                        </Field>
-                        <Field label="모임 날짜 *" style={{ flex: 1, marginBottom: 0 }}>
-                            <input
-                                type="date"
-                                name="meetingDate"
-                                onChange={e => { handleChange(e); setDateError(false); }}
-                                required
-                                style={{
-                                    ...inputStyle,
-                                    padding: '16px 18px',
-                                    fontSize: '16px',
-                                    border: `1.5px solid ${dateError ? '#ef4444' : '#e2e8f0'}`,
-                                    backgroundColor: dateError ? '#fff5f5' : 'white',
-                                    cursor: 'pointer',
-                                }}
-                            />
-                            {dateError && <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444', fontWeight: '600' }}>⚠ 날짜를 선택해주세요</p>}
-                        </Field>
-                        <Field label="집합 시간 *" style={{ flex: 1, marginBottom: 0 }}>
-                            <input
-                                type="time"
-                                name="meetingTime"
-                                onChange={e => { handleChange(e); setTimeError(false); }}
-                                required
-                                style={{
-                                    ...inputStyle,
-                                    padding: '16px 18px',
-                                    fontSize: '16px',
-                                    border: `1.5px solid ${timeError ? '#ef4444' : '#e2e8f0'}`,
-                                    backgroundColor: timeError ? '#fff5f5' : 'white',
-                                    cursor: 'pointer',
-                                }}
-                            />
-                            {timeError && <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#ef4444', fontWeight: '600' }}>⚠ 시간을 선택해주세요</p>}
-                        </Field>
+                            {/* 섹션 2: 행사 & 장소 */}
+                            <div className="gcp-section">
+                                <div className="gcp-section-label">
+                                    <span>02</span>
+                                    <span>행사 및 장소</span>
+                                    <div className="gcp-section-label-line" />
+                                </div>
+
+                                {/* 참여할 행사 */}
+                                <div className="gcp-field">
+                                    <label className="gcp-label">참여할 행사</label>
+                                    <p className="gcp-hint">고롱 DB 행사 또는 TourAPI에서 검색해 선택하세요</p>
+                                    <div className="gcp-input-group">
+                                        <input
+                                            readOnly
+                                            placeholder="행사를 검색해서 선택해주세요"
+                                            value={formData.event}
+                                            className="gcp-input gcp-input-readonly"
+                                            onClick={() => setShowEventModal(true)}
+                                        />
+                                        <button type="button" onClick={() => setShowEventModal(true)} className="gcp-select-btn">
+                                            🔍 행사 선택
+                                        </button>
+                                    </div>
+                                    {formData.event && (
+                                        <div className="gcp-selected-badge">✓ {formData.event}</div>
+                                    )}
+                                </div>
+
+                                {/* 모임 장소 */}
+                                <div className="gcp-field">
+                                    <label className="gcp-label">모임 장소 (상세)</label>
+                                    <p className="gcp-hint">
+                                        {selectedEventCenter
+                                            ? `선택한 행사 주변: ${selectedEventCenter.address || selectedEventCenter.title}`
+                                            : userBaseAddress
+                                                ? `기본 위치: ${userBaseAddress}`
+                                                : '지도에서 클릭하거나 장소를 검색해 핀을 꽂아보세요'}
+                                    </p>
+                                    <div className="gcp-input-group">
+                                        <input
+                                            readOnly
+                                            placeholder="지도에서 장소를 선택해주세요"
+                                            value={formData.location}
+                                            className="gcp-input gcp-input-readonly"
+                                            onClick={() => setShowMapModal(true)}
+                                        />
+                                        <button type="button" onClick={() => setShowMapModal(true)} className="gcp-select-btn">
+                                            📍 지도 열기
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 섹션 3: 모임 일정 */}
+                            <div className="gcp-section">
+                                <div className="gcp-section-label">
+                                    <span>03</span>
+                                    <span>모임 일정 & 인원</span>
+                                    <div className="gcp-section-label-line" />
+                                </div>
+
+                                <div className="gcp-row-3">
+                                    {/* 최대 인원 */}
+                                    <div className="gcp-field">
+                                        <label className="gcp-label">최대 인원</label>
+                                        <input
+                                            type="number"
+                                            name="maxCapacity"
+                                            value={formData.maxCapacity}
+                                            min="2"
+                                            max="4"
+                                            onChange={handleChange}
+                                            className="gcp-input"
+                                        />
+                                    </div>
+
+                                    {/* 모임 날짜 */}
+                                    <div className="gcp-field">
+                                        <label className="gcp-label">
+                                            모임 날짜 <span className="gcp-label-required">*</span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="meetingDate"
+                                            onChange={e => { handleChange(e); setDateError(false); }}
+                                            required
+                                            className={`gcp-input${dateError ? ' error' : ''}`}
+                                        />
+                                        {dateError && <p className="gcp-error-msg">⚠ 날짜를 선택해주세요</p>}
+                                    </div>
+
+                                    {/* 집합 시간 */}
+                                    <div className="gcp-field">
+                                        <label className="gcp-label">
+                                            집합 시간 <span className="gcp-label-required">*</span>
+                                        </label>
+                                        <input
+                                            type="time"
+                                            name="meetingTime"
+                                            onChange={e => { handleChange(e); setTimeError(false); }}
+                                            required
+                                            className={`gcp-input${timeError ? ' error' : ''}`}
+                                        />
+                                        {timeError && <p className="gcp-error-msg">⚠ 시간을 선택해주세요</p>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 섹션 4: 참여 조건 */}
+                            <div className="gcp-section">
+                                <div className="gcp-section-label">
+                                    <span>04</span>
+                                    <span>참여 조건</span>
+                                    <div className="gcp-section-label-line" />
+                                </div>
+
+                                <div className="gcp-field">
+                                    <label className="gcp-label">태그</label>
+                                    <p className="gcp-hint">입력 후 Space 또는 Enter를 누르면 태그가 추가돼요</p>
+                                    <div
+                                        className="gcp-tag-box"
+                                        onClick={() => document.getElementById('gcp-tag-input')?.focus()}
+                                    >
+                                        {tags.map(tag => (
+                                            <span key={tag} className="gcp-tag-pill">
+                                                #{tag}
+                                                <button
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); removeTag(tag); }}
+                                                    className="gcp-tag-remove"
+                                                >×</button>
+                                            </span>
+                                        ))}
+                                        <input
+                                            id="gcp-tag-input"
+                                            value={tagInput}
+                                            onChange={e => setTagInput(e.target.value)}
+                                            onKeyDown={handleTagKeyDown}
+                                            placeholder={tags.length === 0 ? '#비흡연자  #20대  #여성만  (Space / Enter로 추가)' : ''}
+                                            className="gcp-tag-input"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 제출 버튼 */}
+                            <div className="gcp-submit-area">
+                                <button type="button" className="gcp-cancel-btn" onClick={() => navigate('/group')}>
+                                    취소
+                                </button>
+                                <button type="submit" className="gcp-submit-btn">
+                                    모집글 등록하기
+                                </button>
+                            </div>
+                        </form>
                     </div>
 
-                    {/* 참여 조건 - 해시태그 */}
-                    <Field label="참여 조건" hint="입력 후 Space 또는 Enter를 누르면 태그가 추가돼요">
-                        <div
-                            style={{ minHeight: '54px', padding: '8px 12px', borderRadius: '10px', border: '1.5px solid #e2e8f0', backgroundColor: 'white', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', cursor: 'text' }}
-                            onClick={() => document.getElementById('tag-input')?.focus()}
-                        >
-                            {tags.map(tag => (
-                                <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: '#fff4ed', color: '#ff8a3d', border: '1.5px solid #fbd5b5', borderRadius: '20px', padding: '4px 12px', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                  #{tag}
-                                    <span onClick={e => { e.stopPropagation(); removeTag(tag); }} style={{ cursor: 'pointer', fontSize: '14px', lineHeight: 1, color: '#ff8a3d', marginLeft: '2px' }}>×</span>
-                </span>
-                            ))}
-                            <input id="tag-input" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleTagKeyDown}
-                                   placeholder={tags.length === 0 ? '#비흡연자  #20대  #여성만  (Space / Enter로 추가)' : ''}
-                                   style={{ border: 'none', outline: 'none', fontSize: '14px', minWidth: '180px', flex: 1, padding: '4px 4px', color: '#1e293b', backgroundColor: 'transparent' }} />
-                        </div>
-                        {tags.length > 0 && <div style={{ marginTop: '6px', fontSize: '12px', color: '#94a3b8' }}>저장값: {formData.condition}</div>}
-                    </Field>
+                    {/* ═══ 오른쪽: 사이드바 ═══ */}
+                    <div className="gcp-sidebar">
 
-                    <button type="submit" style={{ width: '100%', padding: '18px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #ff8a3d 0%, #ff6b1a 100%)', color: 'white', fontWeight: '800', fontSize: '17px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(255,138,61,0.35)', marginTop: '8px' }}>
-                        등록하기 🐈
-                    </button>
-                </form>
+                        {/* 미리보기 카드 */}
+                        <div className="gcp-sidebar-card">
+                            <p className="gcp-sidebar-card-title">미리보기</p>
+                            <div className={`gcp-preview-title${!formData.title ? ' placeholder' : ''}`}>
+                                {formData.title || '모집 제목이 여기에 표시됩니다'}
+                            </div>
+                            {formData.event && (
+                                <div className="gcp-preview-row">
+                                    <span className="gcp-preview-icon">🎟️</span>
+                                    <span>{formData.event}</span>
+                                </div>
+                            )}
+                            {formData.location && (
+                                <div className="gcp-preview-row">
+                                    <span className="gcp-preview-icon">📍</span>
+                                    <span>{formData.location}</span>
+                                </div>
+                            )}
+                            {(formData.meetingDate || formData.meetingTime) && (
+                                <div className="gcp-preview-row">
+                                    <span className="gcp-preview-icon">📅</span>
+                                    <span>
+                                        {formData.meetingDate && formData.meetingDate.replace(/-/g, '.')}
+                                        {formData.meetingDate && formData.meetingTime && ' · '}
+                                        {formData.meetingTime}
+                                    </span>
+                                </div>
+                            )}
+                            <div className="gcp-preview-row">
+                                <span className="gcp-preview-icon">👥</span>
+                                <span>최대 {formData.maxCapacity}명</span>
+                            </div>
+                            {tags.length > 0 && (
+                                <div className="gcp-tags-preview">
+                                    {tags.map(tag => (
+                                        <span key={tag} className="gcp-tag-chip">#{tag}</span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 작성 팁 카드 */}
+                        <div className="gcp-sidebar-card">
+                            <p className="gcp-sidebar-card-title">작성 팁</p>
+                            <div className="gcp-tip-item">
+                                <span className="gcp-tip-num">1</span>
+                                <span>제목에 행사명과 분위기를 함께 적으면 클릭률이 높아져요</span>
+                            </div>
+                            <div className="gcp-tip-item">
+                                <span className="gcp-tip-num">2</span>
+                                <span>태그로 연령대·성별·흡연 여부 등을 미리 알려두면 좋아요</span>
+                            </div>
+                            <div className="gcp-tip-item">
+                                <span className="gcp-tip-num">3</span>
+                                <span>행사를 먼저 선택하면 지도 장소 검색이 더 편해져요</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* ════════════ 모달: 행사 선택 ════════════ */}
             {showEventModal && (
-                <ModalOverlay onClose={() => { setShowEventModal(false); setEventSearch(''); setTourEvents([]); }}>
-                    <div style={{ width: '580px', maxWidth: '95vw', backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
-
-                        {/* 모달 헤더 */}
-                        <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff6b1a 100%)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                <div className="gcp-overlay" onClick={() => { setShowEventModal(false); setEventSearch(''); setTourEvents([]); }}>
+                    <div
+                        className="gcp-modal"
+                        style={{ width: '580px', maxWidth: '95vw', maxHeight: '80vh' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="gcp-modal-head">
                             <div>
-                                <div style={{ color: 'white', fontWeight: '800', fontSize: '17px' }}>🎟️ 행사 선택</div>
-                                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginTop: '2px' }}>고롱 DB 행사 또는 TourAPI에서 검색</div>
+                                <p className="gcp-modal-head-title">🎟️ 행사 선택</p>
+                                <p className="gcp-modal-head-sub">고롱 DB 행사 또는 TourAPI에서 검색</p>
                             </div>
-                            <button onClick={() => setShowEventModal(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer' }}>닫기</button>
+                            <button className="gcp-modal-close" onClick={() => { setShowEventModal(false); setEventSearch(''); setTourEvents([]); }}>×</button>
                         </div>
 
-                        {/* 탭 */}
-                        <div style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+                        <div className="gcp-tabs">
                             {(['db', 'tour'] as const).map(tab => (
-                                <button key={tab} onClick={() => setEventTab(tab)}
-                                        style={{ flex: 1, padding: '14px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '14px', borderBottom: eventTab === tab ? '2.5px solid #ff8a3d' : '2.5px solid transparent', color: eventTab === tab ? '#ff8a3d' : '#94a3b8', backgroundColor: 'white', transition: 'all 0.15s' }}>
+                                <button
+                                    key={tab}
+                                    onClick={() => setEventTab(tab)}
+                                    className={`gcp-tab${eventTab === tab ? ' active' : ''}`}
+                                >
                                     {tab === 'db' ? '📋 고롱 행사 목록' : '🔍 TourAPI 검색'}
                                 </button>
                             ))}
                         </div>
 
-                        {/* ── DB 행사 탭 ── */}
                         {eventTab === 'db' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                <div style={{ padding: '16px 20px 8px', flexShrink: 0 }}>
-                                    <input value={eventSearch} onChange={e => setEventSearch(e.target.value)}
-                                           placeholder="행사명 또는 주소로 필터링"
-                                           style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} autoFocus />
+                            <>
+                                <div className="gcp-modal-search">
+                                    <input
+                                        value={eventSearch}
+                                        onChange={e => setEventSearch(e.target.value)}
+                                        placeholder="행사명 또는 주소로 필터링"
+                                        className="gcp-modal-input"
+                                        autoFocus
+                                    />
                                 </div>
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
-                                    {dbLoading && <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>행사 목록 불러오는 중... ⏳</div>}
+                                <div className="gcp-event-list">
+                                    {dbLoading && <div className="gcp-list-empty">행사 목록 불러오는 중... ⏳</div>}
                                     {!dbLoading && filteredDbEvents.length === 0 && (
-                                        <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: '14px' }}>검색 결과가 없어요.</div>
+                                        <div className="gcp-list-empty">검색 결과가 없어요.</div>
                                     )}
                                     {filteredDbEvents.map(ev => (
-                                        <div key={ev.id} onClick={() => handleDbEventSelect(ev)}
-                                             style={{ padding: '12px', borderRadius: '12px', cursor: 'pointer', border: '1.5px solid #f1f5f9', marginBottom: '8px', display: 'flex', gap: '12px', alignItems: 'center', transition: 'all 0.15s' }}
-                                             onMouseEnter={e => (e.currentTarget.style.borderColor = '#ff8a3d')}
-                                             onMouseLeave={e => (e.currentTarget.style.borderColor = '#f1f5f9')}>
+                                        <div key={ev.id} className="gcp-event-item" onClick={() => handleDbEventSelect(ev)}>
                                             {ev.image
-                                                ? <img src={ev.image} alt={ev.title} style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
-                                                : <div style={{ width: '52px', height: '52px', borderRadius: '8px', backgroundColor: '#fff4ed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>🎪</div>
+                                                ? <img src={ev.image} alt={ev.title} className="gcp-event-thumb" />
+                                                : <div className="gcp-event-thumb-placeholder">🎪</div>
                                             }
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.title}</div>
-                                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>📍 {ev.addr1 || '장소 정보 없음'}</div>
+                                                <div className="gcp-event-name">{ev.title}</div>
+                                                <div className="gcp-event-addr">📍 {ev.addr1 || '장소 정보 없음'}</div>
                                             </div>
-                                            <div style={{ color: '#ff8a3d', fontSize: '18px', flexShrink: 0 }}>›</div>
+                                            <span className="gcp-event-arrow">›</span>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </>
                         )}
 
-                        {/* ── TourAPI 탭 ── */}
                         {eventTab === 'tour' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                <div style={{ padding: '16px 20px 8px', display: 'flex', gap: '10px', flexShrink: 0 }}>
-                                    <input value={eventKeyword} onChange={e => setEventKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchTourEvents()}
-                                           placeholder="행사명 또는 지역 검색 (예: 서울, 재즈)"
-                                           style={{ ...inputStyle, flex: 1 }} autoFocus />
-                                    <button type="button" onClick={searchTourEvents} style={orangeBtn}>검색</button>
+                            <>
+                                <div className="gcp-modal-search">
+                                    <input
+                                        value={eventKeyword}
+                                        onChange={e => setEventKeyword(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && searchTourEvents()}
+                                        placeholder="행사명 또는 지역 검색 (예: 서울, 재즈)"
+                                        className="gcp-modal-input"
+                                        autoFocus
+                                    />
+                                    <button type="button" onClick={searchTourEvents} className="gcp-modal-search-btn">검색</button>
                                 </div>
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
-                                    {tourLoading && <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>불러오는 중... ⏳</div>}
-                                    {tourError && <div style={{ textAlign: 'center', padding: '40px', color: '#ef4444', fontSize: '14px' }}>{tourError}</div>}
+                                <div className="gcp-event-list">
+                                    {tourLoading && <div className="gcp-list-empty">불러오는 중... ⏳</div>}
+                                    {tourError && <div className="gcp-list-empty" style={{ color: '#ef4444' }}>{tourError}</div>}
                                     {!tourLoading && !tourError && tourEvents.length === 0 && (
-                                        <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: '14px' }}>키워드를 입력하고 검색해보세요 🔍</div>
+                                        <div className="gcp-list-empty">키워드를 입력하고 검색해보세요 🔍</div>
                                     )}
                                     {tourEvents.map(ev => (
-                                        <div key={ev.contentid} onClick={() => handleTourEventSelect(ev)}
-                                             style={{ padding: '12px', borderRadius: '12px', cursor: 'pointer', border: '1.5px solid #f1f5f9', marginBottom: '8px', display: 'flex', gap: '12px', alignItems: 'flex-start', transition: 'all 0.15s' }}
-                                             onMouseEnter={e => (e.currentTarget.style.borderColor = '#ff8a3d')}
-                                             onMouseLeave={e => (e.currentTarget.style.borderColor = '#f1f5f9')}>
+                                        <div key={ev.contentid} className="gcp-event-item" onClick={() => handleTourEventSelect(ev)}>
                                             {ev.firstimage
-                                                ? <img src={ev.firstimage} alt={ev.title} style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
-                                                : <div style={{ width: '52px', height: '52px', borderRadius: '8px', backgroundColor: '#fff4ed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>🎪</div>
+                                                ? <img src={ev.firstimage} alt={ev.title} className="gcp-event-thumb" />
+                                                : <div className="gcp-event-thumb-placeholder">🎪</div>
                                             }
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b', marginBottom: '3px' }}>{ev.title}</div>
-                                                <div style={{ fontSize: '12px', color: '#64748b' }}>📍 {ev.addr1 || '장소 정보 없음'}</div>
-                                                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>📅 {fmtDate(ev.eventstartdate)} ~ {fmtDate(ev.eventenddate)}</div>
+                                                <div className="gcp-event-name">{ev.title}</div>
+                                                <div className="gcp-event-addr">📍 {ev.addr1 || '장소 정보 없음'}</div>
+                                                <div className="gcp-event-date">📅 {fmtDate(ev.eventstartdate)} ~ {fmtDate(ev.eventenddate)}</div>
                                             </div>
-                                            <div style={{ color: '#ff8a3d', fontSize: '18px', flexShrink: 0 }}>›</div>
+                                            <span className="gcp-event-arrow">›</span>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </>
                         )}
                     </div>
-                </ModalOverlay>
+                </div>
             )}
 
             {/* ════════════ 모달: 카카오 지도 ════════════ */}
             {showMapModal && (
-                <ModalOverlay onClose={() => { setShowMapModal(false); setPlaceResults([]); }}>
-                    <div style={{ width: '680px', maxWidth: '97vw', backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.18)' }}>
-
-                        <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff6b1a 100%)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="gcp-overlay" onClick={() => { setShowMapModal(false); setPlaceResults([]); }}>
+                    <div
+                        className="gcp-modal"
+                        style={{ width: '720px', maxWidth: '97vw' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="gcp-modal-head">
                             <div>
-                                <div style={{ color: 'white', fontWeight: '800', fontSize: '17px' }}>📍 모임 장소 선택</div>
-                                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', marginTop: '3px' }}>
+                                <p className="gcp-modal-head-title">📍 모임 장소 선택</p>
+                                <p className="gcp-modal-head-sub">
                                     {selectedEventCenter
                                         ? `선택한 행사 주변: ${selectedEventCenter.address || selectedEventCenter.title}`
                                         : userBaseAddress
                                             ? `기본 위치: ${userBaseAddress}`
                                             : '장소를 검색하거나 지도를 클릭해 핀을 꽂으세요'}
-                                </div>
+                                </p>
                             </div>
-                            <button onClick={() => { setShowMapModal(false); setPlaceResults([]); }}
-                                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer' }}>
-                                닫기
-                            </button>
+                            <button className="gcp-modal-close" onClick={() => { setShowMapModal(false); setPlaceResults([]); }}>×</button>
                         </div>
 
-                        <div style={{ padding: '16px 20px 12px', display: 'flex', gap: '10px' }}>
-                            <input value={placeKeyword} onChange={e => setPlaceKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchPlace()}
-                                   placeholder="장소명 검색 (예: 올림픽공원, 홍대입구역)"
-                                   style={{ ...inputStyle, flex: 1 }} autoFocus />
-                            <button type="button" onClick={searchPlace} style={orangeBtn}>검색</button>
+                        <div className="gcp-modal-search">
+                            <input
+                                value={placeKeyword}
+                                onChange={e => setPlaceKeyword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && searchPlace()}
+                                placeholder="장소명 검색 (예: 올림픽공원, 홍대입구역)"
+                                className="gcp-modal-input"
+                                autoFocus
+                            />
+                            <button type="button" onClick={searchPlace} className="gcp-modal-search-btn">검색</button>
                         </div>
 
                         {placeResults.length > 0 && (
-                            <div style={{ maxHeight: '180px', overflowY: 'auto', borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ maxHeight: '180px', overflowY: 'auto', borderBottom: '1px solid #f0ece6' }}>
                                 {placeResults.map((place, i) => (
-                                    <div key={i} onClick={() => handlePlaceSelect(place)}
-                                         style={{ padding: '12px 20px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                         onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fff4ed')}
-                                         onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+                                    <div
+                                        key={i}
+                                        onClick={() => handlePlaceSelect(place)}
+                                        style={{ padding: '11px 20px', cursor: 'pointer', borderBottom: '1px solid #fafaf8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.1s' }}
+                                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fff9f5')}
+                                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}
+                                    >
                                         <div>
-                                            <div style={{ fontWeight: '600', fontSize: '14px', color: '#1e293b' }}>{place.place_name}</div>
-                                            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{place.road_address_name || place.address_name}</div>
+                                            <div style={{ fontWeight: '600', fontSize: '14px', color: '#1a1816' }}>{place.place_name}</div>
+                                            <div style={{ fontSize: '12px', color: '#9e9b95', marginTop: '2px' }}>{place.road_address_name || place.address_name}</div>
                                         </div>
-                                        <div style={{ color: '#ff8a3d', fontSize: '18px' }}>›</div>
+                                        <span style={{ color: '#e06c2a', fontSize: '18px' }}>›</span>
                                     </div>
                                 ))}
                             </div>
                         )}
 
-                        {!mapLoaded && <div style={{ height: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>지도를 불러오는 중...</div>}
-                        <div ref={mapRef} style={{ width: '100%', height: '360px', display: mapLoaded ? 'block' : 'none' }} />
+                        {!mapLoaded && (
+                            <div style={{ height: '380px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b0aca5' }}>
+                                지도를 불러오는 중...
+                            </div>
+                        )}
+                        <div ref={mapRef} style={{ width: '100%', height: '380px', display: mapLoaded ? 'block' : 'none' }} />
 
-                        <div style={{ padding: '16px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                            <div style={{ flex: 1, fontSize: '14px', color: selectedPlace ? '#1e293b' : '#94a3b8', fontWeight: selectedPlace ? '600' : '400' }}>
+                        <div className="gcp-map-footer">
+                            <div className={`gcp-map-selected-info${!selectedPlace ? ' placeholder' : ''}`}>
                                 {selectedPlace ? `📍 ${selectedPlace.place_name || selectedPlace.road_address_name}` : '지도를 클릭하거나 장소를 검색해 선택하세요'}
                             </div>
-                            <button type="button" onClick={confirmPlace} disabled={!selectedPlace}
-                                    style={{ padding: '10px 24px', borderRadius: '10px', border: 'none', fontWeight: '700', fontSize: '14px', cursor: selectedPlace ? 'pointer' : 'default', backgroundColor: selectedPlace ? '#ff8a3d' : '#e2e8f0', color: selectedPlace ? 'white' : '#94a3b8', transition: 'all 0.15s' }}>
+                            <button
+                                type="button"
+                                onClick={confirmPlace}
+                                disabled={!selectedPlace}
+                                className={`gcp-map-confirm-btn ${selectedPlace ? 'active' : 'disabled'}`}
+                            >
                                 이 장소로 선택
                             </button>
                         </div>
                     </div>
-                </ModalOverlay>
+                </div>
             )}
-        </div>
+        </>
     );
 };
-
-// ─── 공통 스타일 ──────────────────────────────────────────────
-const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '13px 16px', borderRadius: '10px',
-    border: '1.5px solid #e2e8f0', outline: 'none', fontSize: '14px',
-    color: '#1e293b', boxSizing: 'border-box', transition: 'border-color 0.15s',
-};
-const orangeBtn: React.CSSProperties = {
-    padding: '13px 20px', borderRadius: '10px', border: 'none',
-    backgroundColor: '#ff8a3d', color: 'white', fontWeight: '700',
-    fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-};
-const Field = ({ label, hint, children, style }: {
-    label: string; hint?: string; children: React.ReactNode; style?: React.CSSProperties;
-}) => (
-    <div style={{ marginBottom: '28px', ...style }}>
-        <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', marginBottom: hint ? '4px' : '10px', color: '#1e293b' }}>{label}</label>
-        {hint && <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#94a3b8' }}>{hint}</p>}
-        {children}
-    </div>
-);
-const ModalOverlay = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
-        <div onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
-);
 
 export default GroupCreatePage;

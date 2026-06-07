@@ -1,15 +1,6 @@
 import { motion } from "framer-motion";
-import type { DecorItem, SlotType } from "../mini-home/DecorationModal";
-
-import { GOCAT_ENABLED_CATEGORIES } from "../../../data/minihome/gocatItems";
-
-const SLOTS = GOCAT_ENABLED_CATEGORIES as SlotType[];
-
-const SLOT_CARDS: Record<SlotType, { label: string; emoji: string }> = {
-  HEAD: { label: "머리", emoji: "🎩" },
-  BODY: { label: "몸", emoji: "👕" },
-  ACCESSORY: { label: "액세", emoji: "✨" },
-};
+import type { DecorItem } from "../mini-home/DecorationModal";
+import { GOCAT_SLOTS, SLOT_UI, type SlotType } from "../../../utils/minihome/gocat/gocatSlots";
 
 export default function DecorationSlotPicker(props: {
   slot: SlotType;
@@ -21,8 +12,8 @@ export default function DecorationSlotPicker(props: {
 
   return (
     <div className="flex gap-2">
-      {SLOTS.map((s) => {
-        const meta = SLOT_CARDS[s];
+      {GOCAT_SLOTS.map((s) => {
+        const meta = SLOT_UI[s];
         const active = slot === s;
         const equipped = draft[s];
         const clearing = clearingSlot === s;

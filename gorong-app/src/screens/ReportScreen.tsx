@@ -10,12 +10,15 @@
 
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function ReportScreen() {
+  const insets = useSafeAreaInsets()
+
   return (
     <View style={styles.container}>
       {/* 헤더 */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: 76 + insets.top }]}>
         <Text style={styles.headerTitle}>🚧 현장 신고</Text>
         <Text style={styles.headerSub}>
           지도에 없는 공사현장이나 장애물을 신고하세요
@@ -50,7 +53,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FF6B35',
-    paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

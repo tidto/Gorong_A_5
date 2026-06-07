@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import CatTowerDailyQuote from "./CatTowerDailyQuote";
+import CatTowerParticipatingEvents from "./CatTowerParticipatingEvents";
 
 type CatTowerProfilePanelProps = {
   nickname: string;
@@ -10,6 +11,8 @@ type CatTowerProfilePanelProps = {
   isPublic: boolean;
   galleryCount?: number;
   loading?: boolean;
+  showParticipatingEvents?: boolean;
+  refreshToken?: number;
 };
 
 /** 왼쪽 — 싸이월드/동물농장 스타일 프로필 카드 */
@@ -20,6 +23,8 @@ export default function CatTowerProfilePanel({
   isPublic,
   galleryCount = 0,
   loading,
+  showParticipatingEvents = false,
+  refreshToken = 0,
 }: CatTowerProfilePanelProps) {
   return (
     <aside className="flex flex-col gap-3">
@@ -101,9 +106,9 @@ export default function CatTowerProfilePanel({
 
       <CatTowerDailyQuote catName={catName} />
 
-      <p className="rounded-2xl border border-rose-100/80 bg-gradient-to-r from-rose-50/80 to-orange-50/60 px-3 py-2.5 text-center text-[10px] leading-relaxed text-rose-900/65">
-        🏡 옛날 미니홈피처럼 Go냥이의 방을 꾸며 나만의 공간을 만들어 보세요
-      </p>
+      {showParticipatingEvents ? (
+        <CatTowerParticipatingEvents enabled refreshToken={refreshToken} />
+      ) : null}
     </aside>
   );
 }
