@@ -34,9 +34,9 @@ public class AppArrivalService {
             """;
 
         try {
-            var venueGeo = appVenueService.findCachedVenueGeo(normalizedVenueId).orElse(null);
+            var venueGeo = appVenueService.resolveVenueGeo(normalizedVenueId).orElse(null);
             if (venueGeo == null) {
-                log.warn("도착 인증 실패 - venue 캐시 없음: venueId={}, user={}", normalizedVenueId, userEmail);
+                log.warn("도착 인증 실패 - venue 좌표를 찾지 못함: venueId={}, user={}", normalizedVenueId, userEmail);
                 return false;
             }
 

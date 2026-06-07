@@ -1,6 +1,6 @@
 import {
   collection, addDoc, query, orderBy,
-  limitToLast, onSnapshot, doc, setDoc, deleteDoc, getDoc, updateDoc
+  limitToLast, onSnapshot, doc, setDoc, deleteDoc, getDoc, updateDoc, arrayUnion
 } from 'firebase/firestore'
 import { db } from '../config/firebaseConfig'
 import { AppGroup, ChatMessage } from '../types'
@@ -112,32 +112,26 @@ function resolveClosedAt(meetingDate?: string | null) {
 
 export const ensureGroupRoom = async (group: AppGroup, userId: string) => {
   const roomRef = doc(db, 'group_rooms', String(group.id))
-  const snap = await getDoc(roomRef)
   const closedAt = resolveClosedAt(group.meetingDate)
 
-  if (!snap.exists()) {
-    await setDoc(roomRef, {
+  await setDoc(
+    roomRef,
+    {
       groupId: String(group.id),
       title: group.title,
       event: group.event,
       location: group.location,
       meetingDate: group.meetingDate ?? '',
       meetingTime: group.meetingTime ?? '',
-      members: [userId],
+      members: arrayUnion(userId),
       maxMembers: group.maxMembers,
       isGathered: group.gathered,
       createdAt: Date.now(),
       closedAt,
       source: 'WEB_GROUP',
-    } as GroupRoom)
-    return String(group.id)
-  }
-
-  const room = snap.data() as GroupRoom
-  if (!room.closedAt) {
-    await updateDoc(roomRef, { closedAt })
-  }
-  await joinGroupRoom(String(group.id), userId)
+    } as any,
+    { merge: true }
+  )
   return String(group.id)
 }
 

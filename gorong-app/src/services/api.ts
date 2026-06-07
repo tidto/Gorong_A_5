@@ -94,6 +94,10 @@ export const fetchNearbyVenues = (lat: number, lng: number, radius = 5000) =>
 export const fetchPublicEvents = () =>
   publicApi.get<PublicEvent[]>('/api/public/map')
 
+// 공개 행사 상세 조회
+export const fetchPublicEventDetail = (id: string | number) =>
+  publicApi.get<PublicEvent>(`/api/public/map/${id}`)
+
 // 도착 인증 (위경도 포함 → 백엔드 PostGIS 검증)
 export const verifyArrival = (venueId: string, lat: number, lng: number) =>
   api.post<string>('/app/arrivals', { venueId, lat, lng })
@@ -103,7 +107,7 @@ export const fetchAppGroups = () =>
   api.get<AppGroup[]>('/app/groups')
 
 export const fetchMyParticipations = () =>
-  api.get<EventParticipation[]>('/event-participation/me')
+  publicApi.get<EventParticipation[]>('/api/event-participation/me')
 
 // 앱 그룹 참가
 export const joinAppGroup = (groupId: number) =>

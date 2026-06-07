@@ -67,6 +67,8 @@ export default function ChatScreen() {
 
   const canUseGroupChat = Boolean(selectedGroup)
   const isGroupRoomClosed = Boolean(groupRoomClosedAt && Date.now() > groupRoomClosedAt)
+  const canSendAnonymousMessage = mode === 'anonymous' && isConnected
+  const canSendGroupMessage = Boolean(selectedGroup && canUseGroupChat && !isGroupRoomClosed)
 
   const parseChatDate = (value?: string | null) => {
     if (!value) return null
@@ -90,10 +92,31 @@ export default function ChatScreen() {
     return Date.now() > closedAt.getTime()
   }
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  const waitForAuthReady = async () => {
+    if (auth.currentUser) return true
+    return await new Promise<boolean>((resolve) => {
+      const unsub = auth.onAuthStateChanged((user) => {
+        if (user) {
+          unsub()
+          resolve(true)
+        }
+      })
+      setTimeout(() => {
+        unsub()
+        resolve(false)
+      }, 3000)
+    })
+  }
+
   useEffect(() => {
     ;(async () => {
       setLoadingGroups(true)
       try {
+        const ready = await waitForAuthReady()
+        if (!ready) {
+          throw new Error('로그인 정보를 확인할 수 없습니다.')
+        }
         const response = await fetchAppGroups()
         const groups = response.data.filter((group) => group.joined)
         setJoinedGroups(groups)
@@ -105,7 +128,7 @@ export default function ChatScreen() {
         })
       } catch (error) {
         console.error('[ChatScreen] 모임 목록 조회 실패:', error)
-        Alert.alert('오류', '참여 중인 모임 목록을 불러오지 못했습니다.')
+        Alert.alert('오류', '참여 중인 모임 목록을 불러오지 못했습니다. 다시 로그인해 주세요.')
       } finally {
         setLoadingGroups(false)
       }
@@ -135,7 +158,20 @@ export default function ChatScreen() {
 
     ;(async () => {
       try {
-        await ensureGroupRoom(selectedGroup, myUid)
+        let lastError: unknown = null
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            await ensureGroupRoom(selectedGroup, myUid)
+            lastError = null
+            break
+          } catch (error) {
+            lastError = error
+            if (attempt === 0) {
+              await sleep(500)
+            }
+          }
+        }
+        if (lastError) throw lastError
         if (cancelled) return
 
         const groupId = String(selectedGroup.id)
@@ -225,18 +261,33 @@ export default function ChatScreen() {
     const text = input.trim()
     if (!text || !myUid) return
 
-    if (mode === 'anonymous') {
-      await sendMessage(text)
-    } else if (selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed) {
-      await sendGroupMessage(String(selectedGroup.id), {
-        text,
-        userId: myUid,
-        nickname: myNickname,
-        createdAt: Date.now(),
-        isAnonymous: false,
-      })
+    let sent = false
+
+    try {
+      if (mode === 'anonymous') {
+        await sendMessage(text)
+        sent = true
+      } else if (selectedGroup && canUseGroupChat && !isGroupRoomClosed) {
+        if (!groupRoomReady) {
+          await ensureGroupRoom(selectedGroup, myUid)
+          setGroupRoomReady(true)
+        }
+
+        await sendGroupMessage(String(selectedGroup.id), {
+          text,
+          userId: myUid,
+          nickname: myNickname,
+          createdAt: Date.now(),
+          isAnonymous: false,
+        })
+        sent = true
+      }
+    } catch (error) {
+      console.error('[ChatScreen] 메시지 전송 실패:', error)
+      Alert.alert('안내', '메시지 전송에 실패했습니다.')
+    } finally {
+      if (sent) setInput('')
     }
-    setInput('')
   }
 
   return (
@@ -333,7 +384,7 @@ export default function ChatScreen() {
                 인원: {selectedGroup.currentMembers}/{selectedGroup.maxMembers}
               </Text>
               <Text style={styles.okText}>
-                {isGroupRoomClosed ? '채팅방 종료됨' : '모임 채팅 사용 가능'}
+                {isGroupRoomClosed ? '채팅방 종료됨' : (groupRoomReady ? '모임 채팅 사용 가능' : '모임 채팅 준비 중')}
               </Text>
               {!!verifyMessage && <Text style={styles.verifyText}>{verifyMessage}</Text>}
               {isGroupRoomClosed && (
@@ -344,16 +395,16 @@ export default function ChatScreen() {
 
               <View style={styles.groupActionRow}>
                 <TouchableOpacity
-                  style={[styles.smallBtn, (!selectedGroup || !groupRoomReady || !canUseGroupChat) && styles.smallBtnDisabled]}
+                  style={[styles.smallBtn, (!selectedGroup || !canUseGroupChat) && styles.smallBtnDisabled]}
                   onPress={handleShareLocation}
-                  disabled={!selectedGroup || !groupRoomReady || !canUseGroupChat || isGroupRoomClosed}
+                  disabled={!selectedGroup || !canUseGroupChat || isGroupRoomClosed}
                 >
                   <Text style={styles.smallBtnText}>📍 위치 공유(5초)</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.smallBtn, (!selectedGroup || !groupRoomReady || !canUseGroupChat || groupGathered || isGroupRoomClosed) && styles.smallBtnDisabled]}
+                  style={[styles.smallBtn, (!selectedGroup || !canUseGroupChat || groupGathered || isGroupRoomClosed) && styles.smallBtnDisabled]}
                   onPress={handleVerifyGathering}
-                  disabled={!selectedGroup || !groupRoomReady || !canUseGroupChat || groupGathered || isGroupRoomClosed}
+                  disabled={!selectedGroup || !canUseGroupChat || groupGathered || isGroupRoomClosed}
                 >
                   <Text style={styles.smallBtnText}>
                     {groupGathered ? '✅ 인증됨' : '모임 성사 인증'}
@@ -394,9 +445,9 @@ export default function ChatScreen() {
           value={input}
           onChangeText={setInput}
             placeholder={
-              mode === 'anonymous'
+            mode === 'anonymous'
                 ? (isConnected ? '메시지 입력...' : '행사장 진입 후 이용 가능')
-              : (selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed
+              : (selectedGroup && canUseGroupChat && !isGroupRoomClosed
                 ? '모임 메시지 입력...'
                 : (isGroupRoomClosed ? '채팅방이 종료되었습니다.' : '모임 채팅 사용 가능'))
             }
@@ -404,7 +455,7 @@ export default function ChatScreen() {
             editable={
               mode === 'anonymous'
                 ? isConnected
-              : Boolean(selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed)
+              : Boolean(selectedGroup && canUseGroupChat && !isGroupRoomClosed)
             }
           onSubmitEditing={handleSend}
           returnKeyType="send"
@@ -412,12 +463,12 @@ export default function ChatScreen() {
         <TouchableOpacity
           style={[
             styles.sendBtn,
-            !((mode === 'anonymous' && isConnected) || (mode === 'group' && selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed)) &&
+            !(canSendAnonymousMessage || canSendGroupMessage) &&
               styles.sendBtnDisabled,
           ]}
           onPress={handleSend}
           disabled={
-            !((mode === 'anonymous' && isConnected) || (mode === 'group' && selectedGroup && canUseGroupChat && groupRoomReady && !isGroupRoomClosed))
+            !(canSendAnonymousMessage || canSendGroupMessage)
           }
         >
           <Text style={styles.sendBtnText}>전송</Text>

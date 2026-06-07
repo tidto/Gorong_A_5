@@ -4,7 +4,7 @@ import * as Location from 'expo-location'
 import MapView, { Circle, Marker, Polyline } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useGeofence } from '../hooks/useGeofence'
-import { fetchNearbyVenues, fetchPublicEvents, uploadFileToS3 } from '../services/api'
+import { fetchMyParticipations, fetchNearbyVenues, fetchPublicEventDetail, fetchPublicEvents, uploadFileToS3 } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { useTrailStore } from '../store/trailStore'
 import { PublicEvent, Venue } from '../types'
@@ -183,36 +183,76 @@ export default function MapScreen() {
       setUserLocation({ lat: latitude, lng: longitude })
 
       try {
-        const [publicResponse, nearbyResponse] = await Promise.all([
+        const [publicResponse, nearbyResponse, participationResponse] = await Promise.allSettled([
           fetchPublicEvents(),
           fetchNearbyVenues(latitude, longitude),
+          fetchMyParticipations(),
         ])
 
-        const publicVenues = publicResponse.data
+        if (publicResponse.status !== 'fulfilled' || nearbyResponse.status !== 'fulfilled') {
+          throw new Error('행사 데이터를 불러오지 못했습니다.')
+        }
+
+        const participationData = participationResponse.status === 'fulfilled'
+          ? participationResponse.value.data
+          : []
+
+        const publicVenues = publicResponse.value.data
           .map(mapPublicEventToVenue)
           .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
 
-        const nearbyVenues = nearbyResponse.data
+        const nearbyVenues = nearbyResponse.value.data
           .map(mapNearbyVenueToVenue)
           .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
 
-        const nearbyById = new Map(nearbyVenues.map((venue) => [venue.id, venue]))
-        const mergedVenues = publicVenues.map((venue) => {
-          const nearbyVenue = nearbyById.get(venue.id)
-          if (!nearbyVenue) return venue
-          return {
-            ...venue,
-            ...nearbyVenue,
-            radius: nearbyVenue.radius,
-            geofenceEnabled: true,
-          }
+        const soloParticipationIds = new Set(
+          participationData
+            .filter((item) => item.participationType === 'SOLO')
+            .map((item) => item.eventContentId?.trim())
+            .filter((value): value is string => Boolean(value))
+        )
+
+        const publicVenueById = new Map(publicVenues.map((venue) => [venue.id, venue]))
+        const missingSoloIds = Array.from(soloParticipationIds).filter((id) => !publicVenueById.has(id))
+
+        const fallbackResponses = await Promise.allSettled(
+          missingSoloIds.map(async (id) => {
+            const response = await fetchPublicEventDetail(id)
+            return mapPublicEventToVenue(response.data)
+          })
+        )
+
+        const fallbackSoloVenues = fallbackResponses
+          .filter((item): item is PromiseFulfilledResult<Venue> => item.status === 'fulfilled')
+          .map((item) => item.value)
+          .filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng))
+
+        const venueById = new Map<string, Venue>()
+        ;[...publicVenues, ...fallbackSoloVenues].forEach((venue) => {
+          venueById.set(venue.id, venue)
         })
 
         nearbyVenues.forEach((venue) => {
-          if (!mergedVenues.some((item) => item.id === venue.id)) {
-            mergedVenues.push(venue)
-          }
+          const current = venueById.get(venue.id)
+          venueById.set(venue.id, {
+            ...(current ?? venue),
+            ...venue,
+            radius: venue.radius,
+            geofenceEnabled: true,
+          })
         })
+
+        soloParticipationIds.forEach((venueId) => {
+          const current = venueById.get(venueId)
+          if (!current) return
+          venueById.set(venueId, {
+            ...current,
+            radius: current.radius > 0 ? current.radius : 300,
+            geofenceEnabled: true,
+          })
+        })
+
+        const mergedVenues = Array.from(venueById.values())
 
         setVenues(mergedVenues)
         setSelectedVenueId((current) => current ?? mergedVenues[0]?.id ?? null)

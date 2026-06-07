@@ -1,9 +1,18 @@
 import * as ImagePicker from 'expo-image-picker'
+import * as Location from 'expo-location'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { auth } from '../config/firebaseConfig'
-import { checkArrivalStatus, fetchAppGroups, fetchMyParticipations, gatherAppGroup, joinAppGroup, uploadFileToS3 } from '../services/api'
+import {
+  checkArrivalStatus,
+  fetchAppGroups,
+  fetchMyParticipations,
+  gatherAppGroup,
+  joinAppGroup,
+  uploadFileToS3,
+  verifyArrival,
+} from '../services/api'
 import type { AppGroup, EventParticipation } from '../types'
 
 const PREVIEW_LIMIT = 5
@@ -46,39 +55,53 @@ export default function GroupScreen() {
   const [participations, setParticipations] = useState<EventParticipation[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [arrivalVerifiedByGroupId, setArrivalVerifiedByGroupId] = useState<Record<number, boolean>>({})
+  const [arrivalVerifiedByVenueId, setArrivalVerifiedByVenueId] = useState<Record<string, boolean>>({})
+  const [verifyingVenueId, setVerifyingVenueId] = useState<string | null>(null)
   const [showAllGroups, setShowAllGroups] = useState(false)
   const [showAllParticipations, setShowAllParticipations] = useState(false)
   const insets = useSafeAreaInsets()
 
   const waitForAuthReady = useCallback(async () => {
-    if (auth.currentUser) return
-    await new Promise<void>((resolve) => {
+    if (auth.currentUser) return true
+    return await new Promise<boolean>((resolve) => {
       const unsub = auth.onAuthStateChanged((user) => {
         if (user) {
           unsub()
-          resolve()
+          resolve(true)
         }
       })
       setTimeout(() => {
         unsub()
-        resolve()
+        resolve(false)
       }, 3000)
     })
   }, [])
 
   const loadData = useCallback(async () => {
     try {
-      await waitForAuthReady()
-      const [groupRes, participationRes] = await Promise.all([
+      const ready = await waitForAuthReady()
+      if (!ready) {
+        throw new Error('로그인 정보가 아직 준비되지 않았습니다.')
+      }
+      const [groupRes, participationRes] = await Promise.allSettled([
         fetchAppGroups(),
         fetchMyParticipations(),
       ])
-      setGroups(groupRes.data)
-      setParticipations(participationRes.data)
+
+      if (groupRes.status === 'fulfilled') {
+        setGroups(groupRes.value.data)
+      } else {
+        console.error('그룹 목록 조회 실패:', groupRes.reason)
+      }
+
+      if (participationRes.status === 'fulfilled') {
+        setParticipations(participationRes.value.data)
+      } else {
+        console.error('참여 이력 조회 실패:', participationRes.reason)
+      }
     } catch (error) {
       console.error('그룹 목록 조회 실패:', error)
-      Alert.alert('오류', '그룹 정보를 불러오지 못했습니다.')
+      Alert.alert('오류', '그룹 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -89,34 +112,80 @@ export default function GroupScreen() {
     loadData()
   }, [loadData])
 
+  const trackedVenueIds = useMemo(() => {
+    const ids = [
+      ...groups.map((group) => group.event?.trim()),
+      ...participations.map((item) => item.eventContentId?.trim()),
+    ].filter((value): value is string => Boolean(value))
+    return Array.from(new Set(ids))
+  }, [groups, participations])
+
+  const resolveCurrentLocation = useCallback(async () => {
+    const permission = await Location.requestForegroundPermissionsAsync()
+    if (!permission.granted) {
+      Alert.alert('권한 필요', '지오펜싱 인증을 위해 위치 권한이 필요합니다.')
+      return null
+    }
+
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    })
+    return location.coords
+  }, [])
+
+  const verifyVenueArrival = useCallback(async (venueId: string, label?: string) => {
+    const normalizedVenueId = venueId.trim()
+    if (!normalizedVenueId) return
+
+    setVerifyingVenueId(normalizedVenueId)
+    try {
+      const coords = await resolveCurrentLocation()
+      if (!coords) return
+
+      const response = await verifyArrival(normalizedVenueId, coords.latitude, coords.longitude)
+      const verified = response.status === 200
+      if (!verified) {
+        Alert.alert('안내', '행사장 반경 밖입니다.')
+        return
+      }
+
+      setArrivalVerifiedByVenueId((current) => ({ ...current, [normalizedVenueId]: true }))
+      Alert.alert('완료', `${label ?? '행사'} 지오펜싱 인증이 완료되었습니다.`)
+    } catch (error) {
+      console.error('지오펜싱 인증 실패:', error)
+      Alert.alert('안내', '지오펜싱 인증에 실패했습니다. 위치 권한과 현재 위치를 확인해주세요.')
+    } finally {
+      setVerifyingVenueId(null)
+    }
+  }, [resolveCurrentLocation])
+
   useEffect(() => {
-    if (!groups.length) return
+    if (!trackedVenueIds.length) return
 
     let cancelled = false
     ;(async () => {
       const statuses = await Promise.allSettled(
-        groups.map(async (group) => {
-          if (!group.event) return [group.id, false] as const
-          const res = await checkArrivalStatus(group.event)
-          return [group.id, Boolean(res.data?.verified)] as const
+        trackedVenueIds.map(async (venueId) => {
+          const res = await checkArrivalStatus(venueId)
+          return [venueId, Boolean(res.data?.verified)] as const
         })
       )
 
       if (cancelled) return
-      const next: Record<number, boolean> = {}
+      const next: Record<string, boolean> = {}
       for (const item of statuses) {
         if (item.status === 'fulfilled') {
-          const [groupId, verified] = item.value
-          next[groupId] = verified
+          const [venueId, verified] = item.value
+          next[venueId] = verified
         }
       }
-      setArrivalVerifiedByGroupId(next)
+      setArrivalVerifiedByVenueId(next)
     })()
 
     return () => {
       cancelled = true
     }
-  }, [groups])
+  }, [trackedVenueIds])
 
   const upcomingParticipations = useMemo(
     () => participations.filter(isUpcomingParticipation),
@@ -166,7 +235,7 @@ export default function GroupScreen() {
         return
       }
 
-      if (!arrivalVerifiedByGroupId[group.id]) {
+      if (!group.event || !arrivalVerifiedByVenueId[group.event]) {
         Alert.alert('안내', '지오펜싱 참여 인증이 완료된 행사만 사진을 올릴 수 있습니다.')
         return
       }
@@ -189,6 +258,18 @@ export default function GroupScreen() {
       console.error('사진 업로드 실패:', error)
       Alert.alert('안내', '사진 업로드에 실패했습니다. 지오펜싱 인증 여부를 확인해주세요.')
     }
+  }
+
+  const handleGroupSecondaryAction = async (group: AppGroup) => {
+    if (!group.joined || !group.event) return
+
+    const verified = arrivalVerifiedByVenueId[group.event]
+    if (!verified) {
+      await verifyVenueArrival(group.event, group.title || group.event)
+      return
+    }
+
+    await handleUploadPhoto(group)
   }
 
   if (loading) {
@@ -235,11 +316,29 @@ export default function GroupScreen() {
           <View key={item.id} style={styles.card}>
             <View style={styles.badgeRow}>
               <Text style={styles.badge}>{item.participationType === 'SOLO' ? '혼자참여' : '그룹참여'}</Text>
-              <Text style={styles.statusBadge}>{formatVisitDate(item.visitDate)}</Text>
+              <Text style={styles.statusBadge}>
+                {arrivalVerifiedByVenueId[item.eventContentId] ? '지오펜싱 완료' : formatVisitDate(item.visitDate)}
+              </Text>
             </View>
             <Text style={styles.eventTitle}>{item.eventTitle || '행사명 미정'}</Text>
             <Text style={styles.meta}>행사 ID: {item.eventContentId}</Text>
             <Text style={styles.meta}>참여 방식: {item.participationType === 'SOLO' ? '혼자' : '모임'}</Text>
+            <TouchableOpacity
+              style={[
+                styles.secondaryButton,
+                (!item.eventContentId || verifyingVenueId === item.eventContentId) && styles.buttonDisabled,
+              ]}
+              disabled={!item.eventContentId || verifyingVenueId === item.eventContentId}
+              onPress={() => verifyVenueArrival(item.eventContentId, item.eventTitle)}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {verifyingVenueId === item.eventContentId
+                  ? '인증 중...'
+                  : arrivalVerifiedByVenueId[item.eventContentId]
+                    ? '지오펜싱 완료'
+                    : '지오펜싱 인증'}
+              </Text>
+            </TouchableOpacity>
           </View>
         ))
       )}
@@ -290,15 +389,24 @@ export default function GroupScreen() {
                   <Text style={styles.buttonText}>{group.gathered ? '인증 완료' : '모였다 인증'}</Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[styles.secondaryButton, (!group.joined || !arrivalVerifiedByGroupId[group.id]) && styles.buttonDisabled]}
-                disabled={!group.joined || !arrivalVerifiedByGroupId[group.id]}
-                onPress={() => handleUploadPhoto(group)}
-              >
-                <Text style={styles.secondaryButtonText}>
-                  {arrivalVerifiedByGroupId[group.id] ? '행사 사진 올리기' : '지오펜싱 인증 후 업로드'}
-                </Text>
-              </TouchableOpacity>
+              {group.joined && (
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryButton,
+                    (!group.event || verifyingVenueId === group.event) && styles.buttonDisabled,
+                  ]}
+                  disabled={!group.event || verifyingVenueId === group.event}
+                  onPress={() => handleGroupSecondaryAction(group)}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    {verifyingVenueId === group.event
+                      ? '인증 중...'
+                      : group.event && arrivalVerifiedByVenueId[group.event]
+                        ? '행사 사진 올리기'
+                        : '지오펜싱 인증'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )
         })
