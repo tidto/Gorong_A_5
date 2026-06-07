@@ -139,37 +139,6 @@ export default function AppRouter() {
                             </ProtectedRoute>
                         }
                     />
-
-
-                    <Route path="/groups/:id" element={<ProtectedRoute><GroupDetailPage /></ProtectedRoute>}/>
-                    <Route path="/group" element={<ProtectedRoute><GroupListPage /></ProtectedRoute>} />
-                    <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-                    <Route path="/minihompy" element={<Navigate to="/cattower" replace />} />
-                    <Route path="/cattower/user/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
-                    <Route path="/cattower/:userId" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
-                    <Route path="/cattower" element={<ProtectedRoute><CatTower /></ProtectedRoute>} />
-                    {import.meta.env.DEV ? (
-                        <Route path="/dev/rive-customizer" element={<ProtectedRoute><RiveCustomizerDevPage /></ProtectedRoute>} />
-                    ) : null}
-                    <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-                    <Route path="/mypage" element={<ProtectedRoute><MyPage /></ProtectedRoute>} />
-                    <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
-                    <Route path="/minihome" element={<Navigate to="/cattower" replace />} />
-                    <Route path="/minihome/:userId" element={<RedirectMiniHomeUserToCatTower />} />
-                    <Route path="/users/:userId/minihome" element={<RedirectMiniHomeUserToCatTower />} />
-                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                    <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-                    <Route
-                        path="*"
-                        element={
-                            <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-                                <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                                <p className="text-gray-600 mb-6">페이지를 찾을 수 없습니다.</p>
-                            </div>
-                        }
-                    />
-                </Routes>
-            </Layout>
                         <Route path="/error/:code" element={<ErrorPage />} />
                         <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
                         <Route path="/posting" element={<Navigate to="/reviews" replace />} />
@@ -193,7 +162,7 @@ export default function AppRouter() {
                         <Route path="/users/:userId/minihome" element={<RedirectMiniHomeUserToCatTower />} />
                         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                         <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-                        <Route
+                                                <Route
                             path="*"
                             element={
                                 <div className="max-w-6xl mx-auto px-4 py-16 text-center">
