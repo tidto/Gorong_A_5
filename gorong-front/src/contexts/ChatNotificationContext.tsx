@@ -75,16 +75,21 @@ export function ChatNotificationProvider({ children }: { children: ReactNode }) 
     const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // 현재 열려있는 채팅 그룹 ID (중복 알림 방지용)
-    const getActiveChatGroupId = (): number | null => {
-        const chatMatch  = window.location.pathname.match(/^\/chat\/(\d+)/)
-        const groupMatch = window.location.pathname.match(/^\/groups\/(\d+)/)
-        const m = chatMatch ?? groupMatch
-        return m ? Number(m[1]) : null
+    // source별로 구분:
+    //  - 'group'  : /chat/:id 에 있으면 해당 그룹의 모임채팅 알림을 억제
+    //  - 'public' : /groups/:id 에 있어도 공개채팅 알림은 억제하지 않음
+    //               (공개채팅은 그룹 상세 페이지에 임베드된 채팅이므로,
+    //                다른 사람의 입장·채팅 알림은 계속 받아야 함)
+    const getActiveChatGroupId = (source: 'group' | 'public'): number | null => {
+        const chatMatch = window.location.pathname.match(/^\/chat\/(\d+)/)
+        if (source === 'group' && chatMatch) return Number(chatMatch[1])
+        // public 채널은 /groups/:id 에 있어도 알림 허용 → null 반환
+        return null
     }
 
     // ── 알림 push ──────────────────────────────────────────────
     const pushNotification = useCallback((notif: Omit<ChatNotification, 'id' | 'receivedAt'>) => {
-        if (getActiveChatGroupId() === notif.groupId) return
+        if (getActiveChatGroupId(notif.source) === notif.groupId) return
 
         const newNotif: ChatNotification = {
             ...notif,

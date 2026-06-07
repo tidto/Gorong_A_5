@@ -1,6 +1,6 @@
 // 경로: src/pages/Group/GroupDetailPage.tsx
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import { useChatRoom } from '../../hooks/useChatRoom';
@@ -430,74 +430,63 @@ export default function GroupDetailPage() {
         </div>
     );
 
-    return (
-        <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'Pretendard, sans-serif', paddingBottom: '80px', marginTop: '-64px' }}>
+    // ── 카드 공통 스타일 ──
+    const card: React.CSSProperties = {
+        backgroundColor: 'white',
+        borderRadius: '18px',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        overflow: 'hidden',
+    };
 
-            {/* ── 히어로 헤더 ── */}
-            <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '80px 20px 40px', position: 'relative' }}>
-                <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    return (
+        <div style={{ backgroundColor: '#f5f5f0', minHeight: '100vh', fontFamily: "'Pretendard','Apple SD Gothic Neo',sans-serif", paddingBottom: '80px', marginTop: '-64px' }}>
+
+            {/* ══════════════════════════════════════════
+                히어로 헤더 — 더 크고 정보 밀도 높게
+            ══════════════════════════════════════════ */}
+            <div style={{ background: 'linear-gradient(135deg, #ff8a3d 0%, #ff5e00 100%)', padding: '88px 40px 48px', position: 'relative' }}>
+                {/* 배경 장식 원 */}
+                <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '320px', height: '320px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.06)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', bottom: '-80px', left: '10%', width: '200px', height: '200px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.04)', pointerEvents: 'none' }} />
+
+                <div style={{ maxWidth: '1280px', margin: '0 auto', position: 'relative' }}>
+                    {/* 뒤로가기 */}
                     <button
                         onClick={() => navigate('/group')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.18)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', marginBottom: '24px' }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.18)', border: 'none', color: 'white', padding: '9px 18px', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', marginBottom: '28px', backdropFilter: 'blur(4px)', transition: 'background 0.15s' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.28)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.18)' }}
                     >
                         ← 목록으로
                     </button>
 
-                    <div style={{ marginBottom: '12px' }}>
+                    {/* 배지 행 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
                         <span style={{
-                            display: 'inline-block',
-                            backgroundColor: isClosed ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.9)',
-                            color: isClosed ? 'white' : '#ff8a3d',
-                            padding: '4px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '800',
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            backgroundColor: isClosed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.92)',
+                            color: isClosed ? 'white' : '#ff5e00',
+                            padding: '5px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '800',
                         }}>
-                            {isClosed ? '모집완료' : post.status === 'IN_PROGRESS' ? '🟡 진행중' : '🟢 모집중'}
+                            <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: isClosed ? 'rgba(255,255,255,0.7)' : '#ff5e00', display: 'inline-block' }} />
+                            {isClosed ? '모집완료' : post.status === 'IN_PROGRESS' ? '진행중' : '모집중'}
                         </span>
                         {canEdit && (
-                            <span style={{ marginLeft: '8px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                            <span style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '5px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
                                 내 글
                             </span>
                         )}
-                    </div>
-
-                    <h1 style={{ fontSize: '28px', fontWeight: '900', color: 'white', margin: '0 0 16px', lineHeight: '1.3' }}>
-                        {post.title}
-                    </h1>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '14px', color: 'rgba(255,255,255,0.88)' }}>
-                        <span>
-                            👤 호스트:{' '}
-                            {post.author?.id ? (
-                                <button
-                                    type="button"
-                                    onClick={() => post.author?.id && openCatTower(post.author.id)}
-                                    style={{ border: 'none', background: 'transparent', padding: 0, color: 'white', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                                >
-                                    {post.authorName || '익명'}
-                                </button>
-                            ) : (
-                                <strong style={{ color: 'white' }}>{post.authorName || '익명'}</strong>
-                            )}
-                        </span>
-                        {post.event && <span>🎟️ {post.event}</span>}
-                        {post.meetingDate && <span>📅 {post.meetingDate}</span>}
-
-                        {/* 게시글 신고 버튼 – 자신의 게시글 제외 */}
-                        {post.author?.id && (
+                        {post.event && (
+                            <span style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white', padding: '5px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
+                                🎟️ {post.event}
+                            </span>
+                        )}
+                        {/* 신고 버튼 */}
+                        {post.author?.id && !canEdit && (
                             <button
                                 type="button"
                                 onClick={() => setShowPostReportModal(true)}
-                                style={{
-                                    marginLeft: 'auto',
-                                    border: '1px solid rgba(255,255,255,0.4)',
-                                    borderRadius: '8px',
-                                    background: 'rgba(255,255,255,0.12)',
-                                    color: 'rgba(255,255,255,0.85)',
-                                    fontSize: '12px',
-                                    fontWeight: '700',
-                                    padding: '5px 12px',
-                                    cursor: 'pointer',
-                                    transition: 'background 0.2s',
-                                }}
+                                style={{ marginLeft: 'auto', border: '1px solid rgba(255,255,255,0.4)', borderRadius: '8px', background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)', fontSize: '12px', fontWeight: '700', padding: '6px 14px', cursor: 'pointer', transition: 'background 0.2s' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.5)' }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)' }}
                             >
@@ -505,29 +494,64 @@ export default function GroupDetailPage() {
                             </button>
                         )}
                     </div>
+
+                    {/* 제목 */}
+                    <h1 style={{ fontSize: '34px', fontWeight: '900', color: 'white', margin: '0 0 20px', lineHeight: '1.25', maxWidth: '760px' }}>
+                        {post.title}
+                    </h1>
+
+                    {/* 메타 정보 행 */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', fontSize: '14px', color: 'rgba(255,255,255,0.88)', alignItems: 'center' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            👤 호스트:{' '}
+                            {post.author?.id ? (
+                                <button
+                                    type="button"
+                                    onClick={() => post.author?.id && openCatTower(post.author.id)}
+                                    style={{ border: 'none', background: 'transparent', padding: 0, color: 'white', fontWeight: '800', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '3px', fontSize: '14px' }}
+                                >
+                                    {post.authorName || '익명'}
+                                </button>
+                            ) : (
+                                <strong style={{ color: 'white', fontWeight: '800' }}>{post.authorName || '익명'}</strong>
+                            )}
+                        </span>
+                        {post.meetingDate && (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                📅 {post.meetingDate}
+                                {post.meetingTime && ` ${post.meetingTime}`}
+                            </span>
+                        )}
+                        {post.location && (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                📍 {post.location}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* 참여 현황 바 — 헤더 하단 */}
+                    <div style={{ marginTop: '28px', display: 'flex', alignItems: 'center', gap: '16px', maxWidth: '560px' }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ height: '8px', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: '99px', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, backgroundColor: 'white', borderRadius: '99px', transition: 'width 0.4s ease' }} />
+                            </div>
+                        </div>
+                        <span style={{ fontSize: '15px', fontWeight: '900', color: 'white', flexShrink: 0 }}>{current}/{max}명 ({pct}%)</span>
+                    </div>
                 </div>
             </div>
 
             {/* ── 게시글 신고 모달 ── */}
             {showPostReportModal && (
                 <div
-                    style={{
-                        position: 'fixed', inset: 0, zIndex: 2000,
-                        background: 'rgba(0,0,0,0.45)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
+                    style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={() => { setShowPostReportModal(false); setPostReportReason(''); }}
                 >
                     <div
-                        style={{
-                            background: 'white', borderRadius: '20px', padding: '28px 24px',
-                            width: '340px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-                        }}
+                        style={{ background: 'white', borderRadius: '20px', padding: '28px 24px', width: '360px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}
                         onClick={e => e.stopPropagation()}
                     >
-                        <h3 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: '800', color: '#1e293b' }}>
-                            🚨 게시글 신고
-                        </h3>
+                        <h3 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: '800', color: '#1e293b' }}>🚨 게시글 신고</h3>
                         <p style={{ margin: '0 0 16px', fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
                             <strong>{post?.authorName || '이 유저'}</strong>의 게시글을 신고합니다.<br />
                             허위 신고 시 불이익이 생길 수 있습니다.
@@ -538,121 +562,104 @@ export default function GroupDetailPage() {
                             placeholder="신고 사유를 입력해주세요 (필수)"
                             maxLength={300}
                             rows={4}
-                            style={{
-                                width: '100%', boxSizing: 'border-box',
-                                border: '1.5px solid #e2e8f0', borderRadius: '12px',
-                                padding: '10px 12px', fontSize: '13px',
-                                resize: 'none', outline: 'none', fontFamily: 'inherit',
-                                color: '#1e293b',
-                            }}
+                            style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '10px 12px', fontSize: '13px', resize: 'none', outline: 'none', fontFamily: 'inherit', color: '#1e293b' }}
                         />
                         <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
-                            <button
-                                onClick={() => { setShowPostReportModal(false); setPostReportReason(''); }}
-                                style={{
-                                    flex: 1, padding: '11px', borderRadius: '12px',
-                                    border: '1.5px solid #e2e8f0', background: 'white',
-                                    color: '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
-                                }}
-                            >
+                            <button onClick={() => { setShowPostReportModal(false); setPostReportReason(''); }}
+                                    style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1.5px solid #e2e8f0', background: 'white', color: '#64748b', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
                                 취소
                             </button>
-                            <button
-                                onClick={handlePostReport}
-                                disabled={postReporting || !postReportReason.trim()}
-                                style={{
-                                    flex: 1, padding: '11px', borderRadius: '12px',
-                                    border: 'none',
-                                    background: postReporting || !postReportReason.trim()
-                                        ? '#e2e8f0'
-                                        : 'linear-gradient(135deg, #ef4444, #dc2626)',
-                                    color: postReporting || !postReportReason.trim() ? '#94a3b8' : 'white',
-                                    fontWeight: '800', fontSize: '13px',
-                                    cursor: postReporting || !postReportReason.trim() ? 'default' : 'pointer',
-                                }}
-                            >
+                            <button onClick={handlePostReport} disabled={postReporting || !postReportReason.trim()}
+                                    style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: postReporting || !postReportReason.trim() ? '#e2e8f0' : 'linear-gradient(135deg, #ef4444, #dc2626)', color: postReporting || !postReportReason.trim() ? '#94a3b8' : 'white', fontWeight: '800', fontSize: '13px', cursor: postReporting || !postReportReason.trim() ? 'default' : 'pointer' }}>
                                 {postReporting ? '신고 중...' : '신고 접수'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
+
+            {/* ══════════════════════════════════════════
+                본문 — 2컬럼: 좌(정보·소개·지도) | 우(참여카드·채팅)
+            ══════════════════════════════════════════ */}
             <div style={{
-                maxWidth: '1200px',
-                margin: '32px auto 0',
-                padding: '0 20px',
+                maxWidth: '1280px',
+                margin: '36px auto 0',
+                padding: '0 40px',
                 display: 'grid',
-                gridTemplateColumns: '1fr 480px',
+                gridTemplateColumns: '1fr 460px',
                 gap: '28px',
-                alignItems: 'stretch',
+                alignItems: 'start',
             }}>
 
-                {/* ── 왼쪽: 상세 그룹 정보 ── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* ── 왼쪽 컬럼 ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-                    {/* 정원 진행 바 카드 */}
-                    <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '20px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>참여 현황</span>
-                                <span style={{ fontSize: '13px', fontWeight: '800', color: isFull ? '#94a3b8' : '#ff8a3d' }}>
-                                    {current} / {max}명
-                                </span>
-                            </div>
-                            <div style={{ height: '8px', backgroundColor: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isFull ? '#cbd5e1' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s ease' }} />
-                            </div>
+                    {/* 모임 정보 카드 — 4칸 그리드 */}
+                    <div style={{ ...card, padding: '28px 32px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '20px' }}>
+                            모임 정보
                         </div>
-                        <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                            <div style={{ fontSize: '22px', fontWeight: '900', color: isFull ? '#94a3b8' : '#ff8a3d' }}>{pct}%</div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>모집률</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            {[
+                                { icon: '📍', label: '모임 장소', value: post.location || '미정', accent: true },
+                                { icon: '📅', label: '모임 날짜', value: post.meetingDate || '미정', accent: false },
+                                { icon: '⏰', label: '모임 시간', value: post.meetingTime || '미정', accent: false },
+                                { icon: '📋', label: '참여 조건', value: post.condition || '제한 없음', accent: false },
+                            ].map(({ icon, label, value, accent }) => (
+                                <div key={label} style={{
+                                    padding: '18px 20px',
+                                    backgroundColor: accent ? '#fff8f4' : '#faf9f7',
+                                    borderRadius: '14px',
+                                    border: `1.5px solid ${accent ? '#ffd4b0' : '#ebe8e3'}`,
+                                }}>
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '700', marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        {icon} {label}
+                                    </div>
+                                    <div style={{ fontSize: '16px', color: accent ? '#ff5e00' : '#1e293b', fontWeight: '800', wordBreak: 'break-all', lineHeight: 1.35 }}>
+                                        {value}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    {/* 모임 정보 그리드 */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        {[
-                            { icon: '📍', label: '모임 장소', value: post.location || '미정', highlight: true },
-                            { icon: '⏰', label: '모임 시간', value: post.meetingTime || '미정' },
-                            { icon: '📅', label: '모임 날짜', value: post.meetingDate || '미정' },
-                            { icon: '📋', label: '참여 조건', value: post.condition || '제한 없음' },
-                        ].map(({ icon, label, value, highlight }) => (
-                            <div key={label} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: highlight ? '3px solid #ff8a3d' : '3px solid #f1f5f9' }}>
-                                <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>{icon} {label}</div>
-                                <div style={{ fontSize: '15px', color: '#1e293b', fontWeight: '700', wordBreak: 'break-all' }}>{value}</div>
+                    {/* 모임 소개 카드 */}
+                    {post.content && (
+                        <div style={{ ...card, padding: '28px 32px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '16px' }}>
+                                모임 소개
                             </div>
-                        ))}
-                    </div>
+                            <p style={{ fontSize: '15px', color: '#334155', lineHeight: '1.85', margin: 0, whiteSpace: 'pre-wrap' }}>
+                                {post.content}
+                            </p>
+                        </div>
+                    )}
 
-                    {/* 인라인 미니맵 카드 */}
+                    {/* 지도 카드 */}
                     {post.location && (
-                        <div style={{ backgroundColor: 'white', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', position: 'relative' }}>
-                            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                                    <span style={{ fontSize: '14px' }}>🗺️</span>
-                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>모임 위치</span>
-                                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>{post.location}</span>
+                        <div style={{ ...card }}>
+                            <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f0eee9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '16px' }}>🗺️</span>
+                                    <span style={{ fontSize: '14px', fontWeight: '700', color: '#334155' }}>모임 위치</span>
+                                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500' }}>{post.location}</span>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setShowFullMap(true)}
-                                    style={{ fontSize: '11px', fontWeight: '700', color: '#ff8a3d', background: '#fff4ed', border: 'none', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer' }}
+                                    style={{ fontSize: '12px', fontWeight: '700', color: '#ff8a3d', background: '#fff4ed', border: 'none', borderRadius: '9px', padding: '6px 12px', cursor: 'pointer', transition: 'background 0.15s' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#ffe5cc' }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff4ed' }}
                                 >
                                     크게 보기 ↗
                                 </button>
                             </div>
 
-                            <div
-                                onClick={() => setShowFullMap(true)}
-                                style={{ position: 'relative', cursor: 'pointer' }}
-                            >
-                                <div
-                                    ref={miniMapContainerRef}
-                                    style={{ width: '100%', height: '200px', backgroundColor: '#f8fafc' }}
-                                />
+                            <div onClick={() => setShowFullMap(true)} style={{ position: 'relative', cursor: 'pointer' }}>
+                                <div ref={miniMapContainerRef} style={{ width: '100%', height: '260px', backgroundColor: '#f8fafc' }} />
                                 {miniMapLoading && (
                                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b', fontSize: '13px', gap: '8px' }}>
-                                        <span style={{ fontSize: '18px' }}>⏳</span> 지도 불러오는 중...
+                                        <span>⏳</span> 지도 불러오는 중...
                                     </div>
                                 )}
                                 {miniMapError && (
@@ -661,94 +668,82 @@ export default function GroupDetailPage() {
                                     </div>
                                 )}
                                 {miniMapReady && !miniMapLoading && !miniMapError && (
-                                    <div style={{
-                                        position: 'absolute', bottom: '10px', right: '10px',
-                                        backgroundColor: 'rgba(15,23,42,0.65)', color: 'white',
-                                        fontSize: '11px', fontWeight: '700',
-                                        padding: '5px 10px', borderRadius: '8px',
-                                        pointerEvents: 'none',
-                                    }}>
+                                    <div style={{ position: 'absolute', bottom: '12px', right: '12px', backgroundColor: 'rgba(15,23,42,0.65)', color: 'white', fontSize: '11px', fontWeight: '700', padding: '5px 10px', borderRadius: '8px', pointerEvents: 'none' }}>
                                         클릭하면 크게 볼 수 있어요
                                     </div>
                                 )}
                             </div>
 
-                            <div style={{ padding: '12px 14px' }}>
+                            <div style={{ padding: '16px 20px' }}>
                                 <button
                                     type="button"
                                     onClick={handleOpenKakaoMapRoute}
                                     disabled={miniMapLoading || !!miniMapError}
-                                    style={{
-                                        width: '100%',
-                                        padding: '13px',
-                                        borderRadius: '12px',
-                                        border: 'none',
-                                        backgroundColor: miniMapLoading || miniMapError ? '#e2e8f0' : '#111827',
-                                        color: miniMapLoading || miniMapError ? '#94a3b8' : 'white',
-                                        fontWeight: '800',
-                                        fontSize: '13px',
-                                        cursor: miniMapLoading || miniMapError ? 'default' : 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                    }}
+                                    style={{ width: '100%', padding: '14px', borderRadius: '12px', border: 'none', backgroundColor: miniMapLoading || miniMapError ? '#e2e8f0' : '#111827', color: miniMapLoading || miniMapError ? '#94a3b8' : 'white', fontWeight: '800', fontSize: '14px', cursor: miniMapLoading || miniMapError ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'background 0.15s' }}
+                                    onMouseEnter={e => { if (!miniMapLoading && !miniMapError) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#1e293b' }}
+                                    onMouseLeave={e => { if (!miniMapLoading && !miniMapError) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#111827' }}
                                 >
-                                    <span>🚗</span>
-                                    <span>카카오맵으로 길찾기</span>
+                                    🚗 카카오맵으로 길찾기
                                 </button>
                             </div>
                         </div>
                     )}
-
-                    {/* 모임 소개 */}
-                    {post.content && (
-                        <div style={{ backgroundColor: 'white', borderRadius: '18px', padding: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
-                            <div style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '700', marginBottom: '12px' }}>📝 모임 소개</div>
-                            <p style={{ fontSize: '15px', color: '#334155', lineHeight: '1.8', margin: 0, whiteSpace: 'pre-wrap' }}>
-                                {post.content}
-                            </p>
-                        </div>
-                    )}
-
-                    {/* 액션 버튼 */}
-                    <div style={{ marginTop: 'auto' }}>
-                        {actionButtons}
-                    </div>
                 </div>
 
-                {/* ── 오른쪽: 공개 채팅방 ── */}
-                <div style={{ alignSelf: 'start', position: 'sticky', top: '80px' }}>
+                {/* ── 오른쪽 컬럼 — sticky ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'sticky', top: '80px' }}>
+
+                    {/* 참여 액션 카드 */}
+                    <div style={{ ...card, padding: '24px' }}>
+                        {/* 참여 현황 */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>참여 현황</span>
+                                <span style={{ fontSize: '15px', fontWeight: '900', color: isFull ? '#94a3b8' : '#ff8a3d' }}>{current} / {max}명</span>
+                            </div>
+                            <div style={{ height: '8px', backgroundColor: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, backgroundColor: isFull ? '#cbd5e1' : '#ff8a3d', borderRadius: '99px', transition: 'width 0.4s ease' }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+                                <span style={{ fontSize: '12px', fontWeight: '700', color: isFull ? '#94a3b8' : '#ff8a3d' }}>{pct}% 모집</span>
+                            </div>
+                        </div>
+
+                        {/* 액션 버튼 */}
+                        {actionButtons}
+                    </div>
+
+                    {/* 공개 채팅방 */}
                     <GroupPublicChatSection groupId={post.id} isClosed={isClosed} groupTitle={post.title} />
                 </div>
             </div>
 
-            {/* 풀스크린 지도 모달 */}
+            {/* ── 풀스크린 지도 모달 ── */}
             {showFullMap && (
                 <div
                     onClick={() => setShowFullMap(false)}
-                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '20px' }}
+                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '24px' }}
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        style={{ width: '800px', maxWidth: '96vw', maxHeight: '90vh', backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(15,23,42,0.3)', display: 'flex', flexDirection: 'column' }}
+                        style={{ width: '900px', maxWidth: '96vw', maxHeight: '90vh', backgroundColor: 'white', borderRadius: '22px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(15,23,42,0.3)', display: 'flex', flexDirection: 'column' }}
                     >
-                        <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexShrink: 0 }}>
+                        <div style={{ padding: '18px 24px', background: 'linear-gradient(135deg, #ff8a3d, #ff5e00)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexShrink: 0 }}>
                             <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: '16px', fontWeight: '900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.title}</div>
-                                <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {post.location}</div>
+                                <div style={{ fontSize: '17px', fontWeight: '900', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.title}</div>
+                                <div style={{ fontSize: '13px', opacity: 0.85, marginTop: '3px' }}>📍 {post.location}</div>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setShowFullMap(false)}
-                                style={{ border: 'none', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '6px 14px', cursor: 'pointer', fontWeight: '800', flexShrink: 0 }}
+                                style={{ border: 'none', borderRadius: '9px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', padding: '7px 18px', cursor: 'pointer', fontWeight: '800', flexShrink: 0, fontSize: '14px' }}
                             >
                                 닫기
                             </button>
                         </div>
 
-                        <div style={{ position: 'relative', flex: 1, minHeight: '400px' }}>
-                            <div ref={fullMapContainerRef} style={{ width: '100%', height: '460px', backgroundColor: '#f8fafc' }} />
+                        <div style={{ position: 'relative', flex: 1, minHeight: '440px' }}>
+                            <div ref={fullMapContainerRef} style={{ width: '100%', height: '500px', backgroundColor: '#f8fafc' }} />
                             {fullMapLoading && (
                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248,250,252,0.85)', fontWeight: '700', color: '#64748b' }}>
                                     지도를 불러오는 중...
@@ -761,29 +756,14 @@ export default function GroupDetailPage() {
                             )}
                         </div>
 
-                        <div style={{ padding: '14px 16px', borderTop: '1px solid #f1f5f9', flexShrink: 0 }}>
+                        <div style={{ padding: '16px 20px', borderTop: '1px solid #f1f5f9', flexShrink: 0 }}>
                             <button
                                 type="button"
                                 onClick={handleOpenKakaoMapRoute}
                                 disabled={fullMapLoading || !!fullMapError}
-                                style={{
-                                    width: '100%',
-                                    padding: '14px',
-                                    borderRadius: '14px',
-                                    border: 'none',
-                                    backgroundColor: fullMapLoading || fullMapError ? '#e2e8f0' : '#111827',
-                                    color: fullMapLoading || fullMapError ? '#94a3b8' : 'white',
-                                    fontWeight: '800',
-                                    fontSize: '14px',
-                                    cursor: fullMapLoading || fullMapError ? 'default' : 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px',
-                                }}
+                                style={{ width: '100%', padding: '15px', borderRadius: '14px', border: 'none', backgroundColor: fullMapLoading || fullMapError ? '#e2e8f0' : '#111827', color: fullMapLoading || fullMapError ? '#94a3b8' : 'white', fontWeight: '800', fontSize: '14px', cursor: fullMapLoading || fullMapError ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                             >
-                                <span>🚗</span>
-                                <span>카카오맵으로 실시간 길찾기 및 이동 경로 보기</span>
+                                🚗 카카오맵으로 실시간 길찾기 및 이동 경로 보기
                             </button>
                         </div>
                     </div>
