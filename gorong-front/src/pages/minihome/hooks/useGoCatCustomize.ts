@@ -33,10 +33,10 @@ export function useGoCatCustomize(
   );
 
   const saveAll = useCallback(async () => {
-    const equipOk = await decoration.saveDecoration();
+    const result = await decoration.saveDecoration();
     return {
-      equipOk,
-      draft: decoration.selectedEquipment,
+      equipOk: result.ok,
+      draft: result.draft,
     };
   }, [decoration]);
 

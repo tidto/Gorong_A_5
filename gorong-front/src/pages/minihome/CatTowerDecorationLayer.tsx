@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback } from "react";
 import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
 import type { MiniHomePage } from "../../types/minihome/minihome";
 import { useGoCatCustomize } from "./hooks/useGoCatCustomize";
-import { applyEquipDraftToPage } from "../../utils/minihome/gocat/items";
 import type { GrowthStage } from "../../utils/minihome/growth/growth";
 
 const DecorationModal = lazy(
@@ -23,8 +22,8 @@ type Props = {
   canEdit: boolean;
   onClose: () => void;
   onEquippedSaved: (draft: Record<SlotType, DecorItem | null>) => void;
-  onPageUpdate: (updater: (prev: MiniHomePage | null) => MiniHomePage | null) => void;
-  onReloadPage: () => Promise<void>;
+  onPageUpdate?: (updater: (prev: MiniHomePage | null) => MiniHomePage | null) => void;
+  onReloadPage?: () => Promise<void>;
 };
 
 /** 꾸미기 모달·API — 열릴 때만 마운트 (Rive 프리뷰 2중 로드 방지) */
@@ -36,8 +35,6 @@ export default function CatTowerDecorationLayer({
   canEdit,
   onClose,
   onEquippedSaved,
-  onPageUpdate,
-  onReloadPage,
 }: Props) {
   const cat = page?.miniHome?.cat ?? null;
 
@@ -54,11 +51,9 @@ export default function CatTowerDecorationLayer({
     const { equipOk, draft } = await customize.saveAll();
     if (equipOk) {
       onEquippedSaved(draft);
-      onPageUpdate((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
       onClose();
-      await onReloadPage();
     }
-  }, [customize, onClose, onEquippedSaved, onPageUpdate, onReloadPage]);
+  }, [customize, onClose, onEquippedSaved]);
 
   if (!open || !canEdit) return null;
 

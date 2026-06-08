@@ -5,7 +5,9 @@ import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import type {
   RoomDecorType,
   RoomDecorUnlockContext,
+  RoomDecorItem,
 } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
+import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 
 type CatTowerRoomDecorateModalProps = {
   open: boolean;
@@ -17,8 +19,13 @@ type CatTowerRoomDecorateModalProps = {
   growthStage?: GrowthStage;
   decorUnlockContext: RoomDecorUnlockContext;
   placedDecorTypes: Set<RoomDecorType>;
+  roomDecorItems?: RoomDecorItem[];
+  equipped?: EquipPreview | null;
+  activityCount?: number;
   onToggleDecor: (type: RoomDecorType) => void;
   onResetDecor?: () => void;
+  onMoveDecorItem?: (id: string, x: number, y: number) => void;
+  onRemoveDecorItem?: (id: string) => void;
   onSelect: (id: RoomBackgroundId) => void;
   onSave: () => void;
   onCatDecorate: () => void;
@@ -36,8 +43,13 @@ export default function CatTowerRoomDecorateModal({
   growthStage,
   decorUnlockContext,
   placedDecorTypes,
+  roomDecorItems = [],
+  equipped,
+  activityCount = 0,
   onToggleDecor,
   onResetDecor,
+  onMoveDecorItem,
+  onRemoveDecorItem,
   onSelect,
   onSave,
   onCatDecorate,
@@ -52,7 +64,7 @@ export default function CatTowerRoomDecorateModal({
       role="presentation"
     >
       <div
-        className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-emerald-100/90 bg-white shadow-2xl sm:rounded-3xl"
+        className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-emerald-100/90 bg-white shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -86,8 +98,13 @@ export default function CatTowerRoomDecorateModal({
             growthStage={growthStage}
             decorUnlockContext={decorUnlockContext}
             placedDecorTypes={placedDecorTypes}
+            roomDecorItems={roomDecorItems}
+            equipped={equipped}
+            activityCount={activityCount}
             onToggleDecor={onToggleDecor}
             onResetDecor={onResetDecor}
+            onMoveDecorItem={onMoveDecorItem}
+            onRemoveDecorItem={onRemoveDecorItem}
             onSelect={onSelect}
             onSave={onSave}
             onCatDecorate={() => {

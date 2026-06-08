@@ -3,7 +3,7 @@ import type { Equipment, UserItem } from "../../../types/minihome/item";
 import type { EquipItem, MiniHomePage } from "../../../types/minihome/minihome";
 import { findCatalogItem } from "./decorItemCatalog";
 import { normalizeEquipDraft } from "./gocatEquipMigration";
-import { sanitizeEquipDraft } from "./gocatMvp";
+import { toPresentationAppearancePayload } from "../cat-tower/catTowerPresentation";
 import type { GrowthStage } from "../growth/growth";
 import type { SlotType } from "./gocatSlots";
 import { GOCAT_SLOTS, emptySlotRecord, resolveItemSlot } from "./gocatSlots";
@@ -62,11 +62,10 @@ export function enrichEquipItems(equips: EquipItem[]): EquipItem[] {
 }
 
 export function equipItemsFromDraft(draft: Record<SlotType, DecorItem | null>): EquipItem[] {
-  const safe = sanitizeEquipDraft(draft);
   const out: EquipItem[] = [];
   let seq = 1;
   for (const slot of GOCAT_SLOTS) {
-    const item = safe[slot];
+    const item = draft[slot];
     if (!item) continue;
     const enriched = enrichEquipmentFields(item);
     out.push({
@@ -87,7 +86,30 @@ export function applyEquipDraftToPage(
   page: MiniHomePage,
   draft: Record<SlotType, DecorItem | null>
 ): MiniHomePage {
-  return { ...page, activeEquips: equipItemsFromDraft(draft) };
+  const appearance = toPresentationAppearancePayload(draft);
+  const cat = page.miniHome?.cat;
+  const nextAppearance = { ...(cat?.appearanceState ?? {}) } as Record<string, unknown>;
+
+  if (appearance.headItemCode) nextAppearance.headItemCode = appearance.headItemCode;
+  else delete nextAppearance.headItemCode;
+  if (appearance.faceItemCode) nextAppearance.faceItemCode = appearance.faceItemCode;
+  else delete nextAppearance.faceItemCode;
+  if (appearance.neckItemCode) nextAppearance.neckItemCode = appearance.neckItemCode;
+  else delete nextAppearance.neckItemCode;
+
+  return {
+    ...page,
+    activeEquips: equipItemsFromDraft(draft),
+    miniHome: {
+      ...page.miniHome,
+      cat: cat
+        ? {
+            ...cat,
+            appearanceState: nextAppearance,
+          }
+        : cat,
+    },
+  };
 }
 
 export function resolveEquipSlotLabel(

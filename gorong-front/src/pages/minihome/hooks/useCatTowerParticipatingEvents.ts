@@ -102,7 +102,24 @@ export function useCatTowerParticipatingEvents(enabled: boolean, refreshToken = 
   }, [enabled]);
 
   useEffect(() => {
-    void reload();
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) void reload();
+    };
+
+    if (typeof requestIdleCallback !== "undefined") {
+      const idleId = requestIdleCallback(run, { timeout: 2500 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(idleId);
+      };
+    }
+
+    const timerId = window.setTimeout(run, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+    };
   }, [reload, refreshToken]);
 
   return { items, loading, reload };

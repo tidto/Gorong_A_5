@@ -11,7 +11,7 @@ import {
 import { ownerEquipPreviewFromPage } from "../../utils/minihome/gocat/gocatEquippedStorage";
 import {
   loadNormalizedEquipDraft,
-  persistMigratedEquipDraft,
+  normalizeEquipDraft,
 } from "../../utils/minihome/gocat/gocatEquipMigration";
 import { getMyUserItems } from "../../api/minihome/itemApi";
 import { filterOwnedUserItems } from "../../utils/minihome/gocat/gocatItemCatalog";
@@ -21,6 +21,7 @@ import {
 } from "../../utils/minihome/gocat/gocatLockDebug";
 import { emptyDraft } from "../../utils/minihome/gocat/items";
 import type { DecorItem, SlotType } from "../../components/minihome/mini-home/DecorationModal";
+import type { UserItem } from "../../types/minihome/item";
 import { computeGrowthState } from "../../utils/minihome/growth/growth";
 import { needsGoCatSetup } from "../../utils/minihome/gocat/goCatSetup";
 import CatTowerDecorationLayer from "./CatTowerDecorationLayer";
@@ -52,6 +53,7 @@ export default function CatTower() {
   const [equippedDraft, setEquippedDraft] = useState<Record<SlotType, DecorItem | null>>(() =>
     emptyDraft()
   );
+  const [ownedItems, setOwnedItems] = useState<UserItem[]>([]);
 
   const growth = useMemo(() => computeGrowthState(page), [page]);
   const needsSetup = useMemo(() => needsGoCatSetup(page), [page]);
@@ -64,24 +66,24 @@ export default function CatTower() {
     setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
   }, [setPage]);
 
+  /** 장착 draft — 저장 직후 page 변경으로 덮어쓰지 않음 (refreshToken·방 주인 변경 시만 재동기화) */
   useEffect(() => {
-    if (!pageReady) return;
+    if (!pageReady || roomOwnerId == null) return;
     let cancelled = false;
     void getMyUserItems()
       .then((items) => {
         if (cancelled) return;
         const filtered = filterOwnedUserItems(items);
+        setOwnedItems(filtered);
         const raw = loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
-          useLocalStorage: canEdit,
+          useLocalStorage: false,
           growthStage: growth.stage,
           ownedItems: filtered,
         });
-        const normalized = canEdit
-          ? persistMigratedEquipDraft(raw, filtered, growth.stage)
-          : raw;
+        const normalized = normalizeEquipDraft(raw, filtered, growth.stage);
         setEquippedDraft(normalized);
         logGoCatLockAudit({
-          source: "CatTower page load",
+          source: "CatTower equip sync",
           growthStage: growth.stage,
           rawUserItems: items,
           pageEquips: page?.activeEquips,
@@ -93,26 +95,36 @@ export default function CatTower() {
       .catch(() => {
         if (cancelled) return;
         setEquippedDraft(
-          loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
-            useLocalStorage: canEdit,
-            growthStage: growth.stage,
-            ownedItems: [],
-          })
+          normalizeEquipDraft(
+            loadNormalizedEquipDraft(page?.activeEquips, cat?.appearanceState, {
+              useLocalStorage: false,
+              growthStage: growth.stage,
+              ownedItems: [],
+            }),
+            [],
+            growth.stage
+          )
         );
       });
     return () => {
       cancelled = true;
     };
-  }, [canEdit, pageReady, page?.activeEquips, cat?.appearanceState, growth.stage]);
+  }, [pageReady, roomOwnerId, refreshToken, growth.stage]);
 
   const myEquippedPreview = useMemo(
-    () => normalizeEquipPreview(equipPreviewFromDraft(equippedDraft)),
-    [equippedDraft]
+    () => normalizeEquipPreview(equipPreviewFromDraft(equippedDraft, ownedItems, growth.stage)),
+    [equippedDraft, ownedItems, growth.stage]
   );
 
   const ownerEquippedPreview = useMemo(
-    () => ownerEquipPreviewFromPage(page?.activeEquips, cat?.appearanceState, growth.stage),
-    [page?.activeEquips, cat?.appearanceState, growth.stage]
+    () =>
+      ownerEquipPreviewFromPage(
+        page?.activeEquips,
+        cat?.appearanceState,
+        growth.stage,
+        ownedItems
+      ),
+    [page?.activeEquips, cat?.appearanceState, growth.stage, ownedItems]
   );
 
   const displayEquipped = canEdit ? myEquippedPreview : ownerEquippedPreview;
@@ -127,8 +139,8 @@ export default function CatTower() {
   const handleBack = useCallback(() => navigate("/cattower"), [navigate]);
   const handleEvents = useCallback(() => navigate("/events"), [navigate]);
   const handleCloseDecorate = useCallback(() => setDecorateOpen(false), []);
-  const handleRefresh = useCallback(() => {
-    void loadPage();
+  const handleRefresh = useCallback(async () => {
+    await loadPage();
     setRefreshToken((t) => t + 1);
   }, [loadPage]);
 
@@ -178,7 +190,7 @@ export default function CatTower() {
         <div className="absolute bottom-32 left-1/4 h-48 w-48 rounded-full bg-rose-100/25 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto max-w-6xl px-4 py-4 sm:py-6">
+      <div className="relative mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
         <CatTowerDashboard
           nickname={ownerLabel}
           catName={catName}
@@ -200,6 +212,7 @@ export default function CatTower() {
           isOwner={isOwner}
           pageReady={pageReady}
           refreshToken={refreshToken}
+          catDecorateOpen={decorateOpen}
           onDecorate={handleDecorate}
           onBack={handleBack}
           onEvents={handleEvents}
@@ -221,8 +234,6 @@ export default function CatTower() {
           canEdit={canEdit}
           onClose={handleCloseDecorate}
           onEquippedSaved={handleEquippedSaved}
-          onPageUpdate={setPage}
-          onReloadPage={loadPage}
         />
       </div>
     </div>
