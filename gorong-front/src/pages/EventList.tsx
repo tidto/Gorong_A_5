@@ -297,10 +297,10 @@ export default function EventList() {
       <div className="max-w-7xl mx-auto px-4 py-8">
 
         {/* ── 헤더 ── */}
-        <div className="flex items-end justify-between mb-5">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900">🎉 행사 둘러보기</h1>
-            <p className="text-gray-500 mt-1">대구·경북 지역의 문화 행사를 찾아보세요</p>
+            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">행사 둘러보기</h1>
+            <p className="text-gray-400 mt-1 text-sm">대구·경북 지역의 문화 행사를 찾아보세요</p>
           </div>
           <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
             <button
@@ -309,7 +309,7 @@ export default function EventList() {
                     viewMode === 'list' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-              <LayoutGrid className="w-4 h-4" />목록
+              <LayoutGrid className="w-4 h-4" /> 목록
             </button>
             <button
                 onClick={() => setViewMode('map')}
@@ -317,36 +317,16 @@ export default function EventList() {
                     viewMode === 'map' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-              <Map className="w-4 h-4" />지도
+              <Map className="w-4 h-4" /> 지도
             </button>
           </div>
-        </div>
-
-        {/* ── 검색창 (상단 독립) ── */}
-        <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-              type="text"
-              placeholder="행사명 또는 주소로 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-10 py-3 border border-gray-200 rounded-2xl text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
-          />
-          {searchQuery && (
-              <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-          )}
         </div>
 
         {/* ── 사이드바 + 메인 2단 레이아웃 ── */}
         <div className="flex gap-6 items-start">
 
           {/* ── 왼쪽 사이드바 필터 ── */}
-          <aside className="w-48 flex-shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sticky top-6">
+          <aside className="w-56 flex-shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sticky top-6">
 
             {/* 카테고리 */}
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">카테고리</p>
@@ -424,7 +404,7 @@ export default function EventList() {
             {/* 필터 초기화 */}
             <button
                 onClick={resetFilters}
-                className="w-full py-2 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                className="w-full py-2 rounded-xl text-sm font-semibold text-orange-500 hover:bg-orange-50 transition-colors border border-orange-100"
             >
               필터 초기화
             </button>
@@ -433,17 +413,34 @@ export default function EventList() {
           {/* ── 오른쪽 메인 콘텐츠 ── */}
           <div className="flex-1 min-w-0">
 
+            {/* 검색창 */}
+            <div className="relative mb-5">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                  type="text"
+                  placeholder="행사명 또는 주소로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3 border border-gray-200 rounded-2xl text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-shadow"
+              />
+              {searchQuery && (
+                  <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+              )}
+            </div>
+
             {/* 결과 수 */}
             {!loading && !error && viewMode === 'list' && (
-                <p className="text-sm text-gray-500 mb-4">
-                  총 <span className="font-bold text-gray-900">{filteredEvents.length}</span>개 중{' '}
-                  <span className="font-bold text-gray-900">
-                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredEvents.length)}
-              </span>번째
+                <p className="text-sm text-gray-400 mb-4">
+                  총 <span className="font-bold text-gray-900">{filteredEvents.length}</span>개의 행사
                 </p>
             )}
             {!loading && !error && viewMode === 'map' && (
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-400 mb-4">
                   지도에 <span className="font-bold text-gray-900">{mapData.length}</span>개 마커 표시
                 </p>
             )}
@@ -537,7 +534,7 @@ export default function EventList() {
                                           className="group bg-white rounded-2xl border border-gray-100 overflow-hidden cursor-pointer hover:border-orange-200 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300"
                                       >
                                         {/* 이미지 */}
-                                        <div className="relative h-44 bg-gray-100 overflow-hidden">
+                                        <div className="relative h-52 bg-gray-100 overflow-hidden">
                                           <LazyImage
                                               src={event.firstimage || DEFAULT_IMAGE}
                                               alt={event.title}
@@ -546,37 +543,30 @@ export default function EventList() {
                                               onError={(e) => { ;(e.target as HTMLImageElement).src = DEFAULT_IMAGE }}
                                           />
                                           <span className="absolute top-3 left-3 px-2.5 py-1 bg-black/55 text-white text-[10px] font-bold rounded-full backdrop-blur-sm">
-                                  {categoryLabel}
-                                </span>
+                                            {categoryLabel}
+                                          </span>
                                           {accessible && (
                                               <span className="absolute top-3 right-3 px-2.5 py-1 bg-orange-50 text-orange-700 text-[10px] font-bold rounded-full border border-orange-200">
-                                    ♿ 배리어프리
-                                  </span>
+                                                ♿ 배리어프리
+                                              </span>
                                           )}
                                         </div>
 
                                         {/* 내용 */}
-                                        <div className="p-4">
+                                        <div className="p-5">
                                           <h3 className="font-bold text-gray-900 text-sm mb-1.5 line-clamp-1">
                                             {event.title}
                                           </h3>
-                                          <p className="text-xs text-gray-400 flex items-center gap-1 mb-3 line-clamp-1">
+                                          <p className="text-xs text-gray-400 flex items-center gap-1 line-clamp-1">
                                             <MapPin className="w-3 h-3 flex-shrink-0" />
                                             {event.addr1 || '주소 정보 없음'}
                                           </p>
 
                                           {isGuideDog && (
-                                              <div className="mb-3">
+                                              <div className="mt-3">
                                                 <IconLabel type="guideDog" />
                                               </div>
                                           )}
-
-                                          <button
-                                              onClick={(e) => { e.stopPropagation(); handleEventClick(event.contentid) }}
-                                              className="w-full py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 font-semibold text-xs rounded-xl transition-colors"
-                                          >
-                                            자세히 보기
-                                          </button>
                                         </div>
                                       </div>
                                   )

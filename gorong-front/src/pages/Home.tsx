@@ -41,7 +41,7 @@ const CATEGORY_TABS = [
     { id: 'A02',  label: '문화', icon: Theater },
     { id: 'A03',  label: '레저', icon: Tent },
     { id: 'A04',  label: '쇼핑', icon: ShoppingBag },
-    { id: 'A05',  label: '음식', icon: UtensilsCrossed },
+//    { id: 'A05',  label: '음식', icon: UtensilsCrossed },
 ]
 
 // ─── 유틸 훅 ──────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ function CategoryBadge({ cat }: { cat?: string }) {
         A02: { label: '문화', bg: '#ede7f6', text: '#5e35b1' },
         A03: { label: '레저', bg: '#e3f2fd', text: '#1565c0' },
         A04: { label: '쇼핑', bg: '#fce4ec', text: '#c62828' },
-        A05: { label: '음식', bg: '#fff8e1', text: '#e65100' },
+//        A05: { label: '음식', bg: '#fff8e1', text: '#e65100' },
         C01: { label: '추천', bg: '#fff3e0', text: '#e65100' },
     }
     const prefix = (cat || '').toUpperCase().slice(0, 3)
