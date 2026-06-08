@@ -52,6 +52,19 @@ export const useTrailStore = create<TrailStore>((set) => ({
     if (status !== 'granted') return
 
     set({ trail: [], isRecording: true, startedAt: Date.now() })
+
+    try {
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      set({
+        trail: [{
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        }],
+      })
+    } catch (error) {
+      console.warn('현재 위치 초기화 실패:', error)
+    }
+
     subscription = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.High, distanceInterval: 5 },
       ({ coords }) => {
@@ -84,8 +97,6 @@ export const useTrailStore = create<TrailStore>((set) => ({
     const startedAt = useTrailStore.getState().startedAt ?? Date.now()
     const endedAt = Date.now()
     set({ isRecording: false, startedAt: null })
-
-    if (snapshot.length < 2) return
 
     const resolvedVenueId = venueId ?? 'UNKNOWN_VENUE'
     let serverSaved = false
