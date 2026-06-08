@@ -15,4 +15,6 @@ public class NearbyVenueResponseDto {
     private String category;
     private String imageUrl;
     private String barrierFreeInfo;
+    private String eventStartDate;
+    private String eventEndDate;
 }

@@ -4,6 +4,7 @@ import EventList from '../pages/EventList'
 import EventDetail from '../pages/EventDetail'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
+import PostingDetail from '../pages/PostingDetail'
 import Chat from '../pages/Chat'
 import { lazy, Suspense, useEffect } from 'react'
 const CatTowerPage = lazy(() => import('../pages/minihome/CatTower'))
@@ -30,8 +31,8 @@ import { CatTowerPreviewProvider } from '../contexts/CatTowerPreviewContext'
 function ProtectedRoute({ children }: { children: JSX.Element }) {
     const auth = useAuth()
     const location = useLocation()
-    
-  // isLoading 중엔 판단 보류 : firebase 인증 상태가 아직 초기화되지 않았을 수 있음
+
+    // isLoading 중엔 판단 보류 : firebase 인증 상태가 아직 초기화되지 않았을 수 있음
     if (auth.isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -116,6 +117,28 @@ export default function AppRouter() {
                         }
                     />
 
+                    <Route path="/error/:code" element={<ErrorPage />} />
+                    <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
+                    <Route path="/posting" element={<Navigate to="/reviews" replace />} />
+                    <Route path="/posting/:id" element={<ProtectedRoute><PostingDetail /></ProtectedRoute>} />
+                    <Route path="/events/:id" element={<EventDetail />} />
+                    <Route path="/events/:id/review" element={<ProtectedRoute><Review /></ProtectedRoute>} />
+                    <Route
+                        path="/reviews"
+                        element={
+                            <ProtectedRoute>
+                                <ReviewPage />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/reviews/:id"
+                        element={
+                            <ProtectedRoute>
+                                <ReviewPage />
+                            </ProtectedRoute>
+                        }
+                    />
                         <Route path="/error/:code" element={<ErrorPage />} />
                         <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
                         <Route path="/posting" element={<Navigate to="/reviews" replace />} />
@@ -139,7 +162,7 @@ export default function AppRouter() {
                         <Route path="/users/:userId/minihome" element={<RedirectMiniHomeUserToCatTower />} />
                         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                         <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-                        <Route
+                                                <Route
                             path="*"
                             element={
                                 <div className="max-w-6xl mx-auto px-4 py-16 text-center">

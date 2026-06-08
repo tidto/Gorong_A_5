@@ -1,28 +1,99 @@
+// ──────────────────────────────────────────────────────────────
+// useGeofence.ts — 지오펜스 감지 + 도착 인증
+//
+// [핵심 버그 수정]
+//   기존: verifyArrival 호출이 watchPositionAsync 콜백 안에 있음
+//         → distanceInterval: 10m 조건으로 사용자가 정지 시 콜백 미발생
+//         → 8초 카운트다운은 되지만 인증이 절대 안 됨
+//   수정: setInterval 콜백 안에서 8초 도달 시 인증 트리거
+//         → 이동 여부와 무관하게 체류 시간만으로 인증
+// ──────────────────────────────────────────────────────────────
+
 import * as Location from 'expo-location'
 import { useEffect, useRef, useState } from 'react'
 import { verifyArrival } from '../services/api'
 import { Venue } from '../types'
 
+// 두 좌표 간 거리 계산 (Haversine, 단위: 미터)
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLon = (lon2 - lon1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+// 자동 인증까지 대기 시간 (초) — MapScreen에서 카운트다운 표시에 사용
+export const ENTER_DWELL_S = 8
+
 export function useGeofence(venues: Venue[]) {
   const [insideVenueId, setInsideVenueId] = useState<string | null>(null)
   const [isVerified, setIsVerified] = useState(false)
+  // 0 ~ ENTER_DWELL_S: 매초 증가, MapScreen 진행바에 사용
+  const [dwellSeconds, setDwellSeconds] = useState(0)
 
+  // 이미 인증된 venue ID 집합 (중복 인증 방지)
   const verifiedVenues = useRef<Set<string>>(new Set())
+  // 현재 진입 중인 venue ID (ref로 setInterval 클로저에서 최신값 참조)
   const currentInsideRef = useRef<string | null>(null)
+  // 진입 시각 (체류 시간 계산용)
   const enteredAt = useRef<number | null>(null)
+  // 마지막 GPS 좌표 (인증 API 호출 시 사용)
+  const lastCoordRef = useRef<{ latitude: number; longitude: number } | null>(null)
+  // 체류 타이머 ref
+  const dwellIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // GPS 경계값 흔들림을 줄이기 위한 규칙값
-  const ENTER_DWELL_MS = 8000
+  const stopDwellTimer = () => {
+    if (dwellIntervalRef.current) {
+      clearInterval(dwellIntervalRef.current)
+      dwellIntervalRef.current = null
+    }
+  }
+
+  const startDwellTimer = (venueId: string) => {
+    stopDwellTimer()
+    setDwellSeconds(0)
+    enteredAt.current = Date.now()
+
+    // ── [핵심 수정] setInterval 안에서 8초 도달 시 직접 인증 트리거 ──
+    // watchPositionAsync 콜백 의존 제거 → 정지 상태에서도 정상 동작
+    dwellIntervalRef.current = setInterval(async () => {
+      if (!enteredAt.current || !currentInsideRef.current) return
+      if (currentInsideRef.current !== venueId) {
+        // 다른 venue로 바뀌었으면 타이머 정지
+        stopDwellTimer()
+        return
+      }
+
+      const elapsed = Math.floor((Date.now() - enteredAt.current) / 1000)
+      const capped = Math.min(elapsed, ENTER_DWELL_S)
+      setDwellSeconds(capped)
+
+      // 8초 체류 달성 + 미인증 → 인증 실행
+      if (elapsed >= ENTER_DWELL_S && !verifiedVenues.current.has(venueId)) {
+        // 중복 실행 방지를 위해 타이머 먼저 중지
+        stopDwellTimer()
+
+        // 로컬 인증 먼저 처리 (UI 즉시 반영)
+        verifiedVenues.current.add(venueId)
+        setIsVerified(true)
+        setDwellSeconds(ENTER_DWELL_S)
+
+        // 백엔드 PostGIS 검증 (실패해도 로컬 인증은 유지)
+        if (lastCoordRef.current) {
+          try {
+            await verifyArrival(venueId, lastCoordRef.current.latitude, lastCoordRef.current.longitude)
+          } catch (err) {
+            console.warn('[Geofence] 백엔드 도착 인증 실패 (로컬 인증 유지):', err)
+          }
+        }
+      }
+    }, 1000)
+  }
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | undefined
@@ -32,55 +103,66 @@ export function useGeofence(venues: Venue[]) {
       if (status !== 'granted') return
 
       subscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
-        async (location) => {
+        {
+          accuracy: Location.Accuracy.High,
+          // distanceInterval 제거 → 시간 기반 업데이트 (정지 시에도 주기적 GPS 갱신)
+          timeInterval: 3000,
+          distanceInterval: 0,
+        },
+        (location) => {
           const { latitude, longitude } = location.coords
-          const now = Date.now()
 
+          // 최신 GPS 좌표 캐시
+          lastCoordRef.current = { latitude, longitude }
+
+          // 현재 진입한 지오펜스 찾기
           let enteredId: string | null = null
-          let enteredVenue: Venue | null = null
           for (const venue of venues) {
             if (venue.geofenceEnabled === false || venue.radius <= 0) continue
             const dist = getDistance(latitude, longitude, venue.lat, venue.lng)
             if (dist <= venue.radius) {
               enteredId = venue.id
-              enteredVenue = venue
               break
             }
           }
 
           const prevInside = currentInsideRef.current
+
+          // 진입/이탈 상태 변화 처리
           if (enteredId !== prevInside) {
             currentInsideRef.current = enteredId
             setInsideVenueId(enteredId)
+
             if (enteredId) {
-              enteredAt.current = now
-            }
-          }
-
-          // 반경 내부에서 N초 이상 유지되면 자동 도착 인증
-          if (enteredId && enteredVenue) {
-            if (!enteredAt.current) enteredAt.current = now
-
-            const dwellMs = now - enteredAt.current
-            if (dwellMs >= ENTER_DWELL_MS && !verifiedVenues.current.has(enteredId)) {
-              try {
-                // 최종 인증은 백엔드(PostGIS) 거리 검증으로 확정한다.
-                await verifyArrival(enteredId, latitude, longitude)
-                verifiedVenues.current.add(enteredId)
-                setIsVerified(true)
-              } catch (err) {
-                console.error('도착 인증 실패:', err)
+              // 새 지오펜스 진입 → 타이머 시작
+              const alreadyVerified = verifiedVenues.current.has(enteredId)
+              setIsVerified(alreadyVerified)
+              if (!alreadyVerified) {
+                startDwellTimer(enteredId)
+              } else {
+                // 이미 인증된 장소 재진입 → 타이머 불필요
+                setDwellSeconds(ENTER_DWELL_S)
               }
+            } else {
+              // 지오펜스 이탈
+              stopDwellTimer()
+              setDwellSeconds(0)
+              setIsVerified(false)
             }
-            return
           }
         }
       )
     })()
 
-    return () => subscription?.remove()
+    return () => {
+      subscription?.remove()
+      stopDwellTimer()
+    }
   }, [venues])
 
-  return { insideVenueId, isVerified }
+  return {
+    insideVenueId,
+    isVerified,
+    dwellSeconds,
+  }
 }

@@ -9,6 +9,7 @@ public class AppGroupResponseDto {
     private Long id;
     private String title;
     private String event;
+    private String eventContentId;
     private String location;
     private String meetingDate;
     private String meetingTime;

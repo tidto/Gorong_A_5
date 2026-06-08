@@ -1,253 +1,427 @@
-import React, { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ImagePlus, Loader2, PenSquare } from 'lucide-react'
 import Button from '../components/Button'
-import Input from '../components/Input'
-import Card from '../components/Card'
+import PawRating from '../components/PawRating'
 import { useAuth } from '../contexts/AuthContext'
-import { Send, Image, Flag, MessageCircle } from 'lucide-react'
+import { uploadFileToS3 } from '../api/fileApi'
+import {
+  getParticipatedEvents,
+  getPostingTemplate,
+  getPublishedPosts,
+  publishPosting,
+  deleteReview,
+  type ImagePayload,
+  type ParticipatedEvent,
+  type ReviewDetail,
+  type ReviewSummary,
+  updatePosting,
+} from '../api/reviewService'
+import { optimizeImageFile } from '../utils/imageUpload'
 
-const mockReviews = [
-  {
-    id: 1,
-    user: '행복한고양이',
-    rating: 5,
-    comment: '정말 좋은 행사였어요! Go냥이와 함께해서 더 즐거웠습니다.',
-    date: '2024-04-15',
-    images: ['https://via.placeholder.com/200x150?text=Review+1'],
-  },
-  {
-    id: 2,
-    user: '스포츠러버',
-    rating: 4,
-    comment: '시설이 깔끔하고 참가자들이 친절했어요.',
-    date: '2024-04-12',
-    images: [],
-  },
-  {
-    id: 3,
-    user: '요가초보',
-    rating: 5,
-    comment: '초보자도 쉽게 따라할 수 있었어요. 추천합니다!',
-    date: '2024-04-10',
-    images: ['https://via.placeholder.com/200x150?text=Review+2'],
-  },
-]
+
+
+type ComposerState = {
+  reviewId: number | null
+  eventId: number | null
+  title: string
+  reviewText: string
+  rating: number
+  contents: string
+  images: ImagePayload[]
+  status: 'REVIEW_ONLY' | 'PUBLISHED' | null
+  reviewMetaEditable: boolean
+}
+
+const initialComposer: ComposerState = {
+  reviewId: null,
+  eventId: null,
+  title: '',
+  reviewText: '',
+  rating: 0,
+  contents: '',
+  images: [],
+  status: null,
+  reviewMetaEditable: true,
+}
 
 export default function ReviewPage() {
-  const { id } = useParams()
   const auth = useAuth()
-  const [reviews, setReviews] = useState(mockReviews)
-  const [newReview, setNewReview] = useState('')
-  const [newRating, setNewRating] = useState(0)
-  const [newImages, setNewImages] = useState<File[]>([])
-  const [showWriteForm, setShowWriteForm] = useState(false)
+  const navigate = useNavigate()
+  const [posts, setPosts] = useState<ReviewSummary[]>([])
+  const [events, setEvents] = useState<ParticipatedEvent[]>([])
+  const [page, setPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [showComposer, setShowComposer] = useState(false)
+  const [composer, setComposer] = useState<ComposerState>(initialComposer)
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
-  const averageRating = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
-  const ratingDistribution = [5, 4, 3, 2, 1].map(rating =>
-    reviews.filter(review => review.rating === rating).length
-  )
+  const authorName = auth.user?.nickname?.trim() || auth.user?.email?.trim() || '익명'
 
-  const handleSubmitReview = () => {
-    if (!newReview.trim() || newRating === 0) return
+  const loadPosts = async (nextPage: number) => {
+    setLoading(true)
+    try {
+      const response = await getPublishedPosts(nextPage, 8)
+      setPosts(response.content)
+      setPage(response.page)
+      setTotalPages(Math.max(response.totalPages, 1))
+    } catch (error) {
+      console.error('포스팅 목록 조회 실패:', error)
+      setPosts([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    const review = {
-      id: reviews.length + 1,
-      user: auth.user?.nickname || '익명',
-      rating: newRating,
-      comment: newReview,
-      date: new Date().toISOString().split('T')[0],
-      images: newImages.map(() => 'https://via.placeholder.com/200x150?text=New+Review'),
+  const loadParticipatedEvents = async () => {
+    try {
+      setEvents(await getParticipatedEvents())
+    } catch (error) {
+      console.error('참여 행사 조회 실패:', error)
+      setEvents([])
+    }
+  }
+
+  useEffect(() => {
+    loadPosts(0)
+    loadParticipatedEvents()
+  }, [])
+
+  const openComposer = () => {
+    setComposer(initialComposer)
+    setShowComposer(true)
+  }
+
+  const applyTemplate = (template: ReviewDetail | null, eventId: number, eventTitle: string) => {
+    if (!template) {
+      setComposer({
+        ...initialComposer,
+        eventId,
+        title: `${eventTitle} 후기`,
+      })
+      return
     }
 
-    setReviews([review, ...reviews])
-    setNewReview('')
-    setNewRating(0)
-    setNewImages([])
-    setShowWriteForm(false)
+    setComposer({
+      reviewId: template.id,
+      eventId,
+      title: template.title?.trim() || `${eventTitle} 후기`,
+      reviewText: template.reviewText ?? '',
+      rating: template.rating ?? 0,
+      contents: template.contents ?? '',
+      images: template.images.map((image) => ({
+        imageUrl: image.imageUrl,
+        originalImgName: image.originalImgName ?? 'uploaded-image.webp',
+        saveImgName: image.saveImgName ?? image.imageUrl.split('/').pop() ?? 'image.webp',
+      })),
+      status: template.status,
+      reviewMetaEditable: template.reviewMetaEditable,
+    })
   }
 
-  const handleReport = (reviewId: number) => {
-    alert(`리뷰 ${reviewId}번을 신고했습니다.`)
+  const handleEventSelect = async (eventId: number) => {
+    const selectedEvent = events.find((event) => event.eventId === eventId)
+    setComposer((current) => ({
+      ...current,
+      eventId,
+      title: selectedEvent ? `${selectedEvent.title} 후기` : current.title,
+    }))
+    try {
+      const template = await getPostingTemplate(eventId)
+      applyTemplate(template, eventId, selectedEvent?.title ?? `행사 #${eventId}`)
+    } catch (error) {
+      console.error('포스팅 템플릿 조회 실패:', error)
+    }
   }
-  
+
+  const handleImageUpload = async (files: FileList | null) => {
+    if (!files?.length) return
+
+    const pickedFiles = Array.from(files)
+    if (composer.images.length + pickedFiles.length > 5) {
+      alert('이미지는 최대 5장까지 첨부할 수 있습니다.')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const uploaded: ImagePayload[] = []
+      for (const file of pickedFiles) {
+        const optimized = await optimizeImageFile(file)
+        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true)
+        uploaded.push({
+          imageUrl: response.fileUrl,
+          originalImgName: file.name,
+          saveImgName: String(response.key).split('/').pop() ?? file.name,
+        })
+      }
+
+      setComposer((current) => ({
+        ...current,
+        images: [...current.images, ...uploaded],
+      }))
+    } catch (error) {
+      console.error('이미지 업로드 실패:', error)
+      alert('이미지 업로드 중 오류가 발생했습니다.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!composer.eventId) {
+      alert('행사를 선택해 주세요.')
+      return
+    }
+    if (!composer.title.trim() || !composer.reviewText.trim() || composer.rating === 0) {
+      alert('제목, 한 줄 리뷰, 발자국 평점을 입력해 주세요.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const payload = {
+        reviewId: composer.reviewId,
+        eventId: composer.eventId,
+        title: composer.title.trim(),
+        reviewText: composer.reviewText.trim(),
+        rating: composer.rating,
+        contents: composer.contents.trim(),
+        authorName,
+        images: composer.images,
+      }
+
+      if (composer.reviewId) {
+        await updatePosting(composer.reviewId, payload)
+      } else {
+        await publishPosting(payload)
+      }
+
+      setShowComposer(false)
+      setComposer(initialComposer)
+      await loadPosts(0)
+    } catch (error: any) {
+      console.error('포스팅 저장 실패:', error)
+      alert(error?.response?.data?.error || '포스팅 저장 중 오류가 발생했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (
+  e: React.MouseEvent,
+  reviewId: number
+) => {
+  e.stopPropagation()
+
+  if (!window.confirm('정말 삭제하시겠습니까?')) {
+    return
+  }
+
+  try {
+    await deleteReview(reviewId)
+    await loadPosts(page)
+  } catch (error) {
+    console.error(error)
+    alert('삭제 실패')
+  }
+}
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-900">💬 리뷰</h1>
-          <p className="text-gray-600 mt-2">
-            행사 {id ? `#${id}` : ''} 참여자들의 솔직한 후기
-          </p>
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <section className="overflow-hidden rounded-[32px] bg-gradient-to-br from-orange-50 via-white to-amber-100 p-8 shadow-[0_20px_60px_rgba(251,146,60,0.18)]">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">Posting</p>
+            <h1 className="text-4xl font-black text-slate-900">참여한 행사의 경험을 공유해 보세요.</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              리뷰로 행사에 대한 경험을 남겨주세요. 사진과 자세한 후기는 다른 사람들에게 생생한 경험을 전달할 수 있습니다.
+            </p>
+          </div>
+          <Button className="inline-flex items-center gap-2 self-start px-6 py-3" onClick={openComposer}>
+            <PenSquare className="h-4 w-4" />
+            글쓰기
+          </Button>
         </div>
-        <Button onClick={() => setShowWriteForm(!showWriteForm)}>
-          {showWriteForm ? '취소' : '리뷰 작성'}
-        </Button>
-      </div>
+      </section>
 
-      {/* 리뷰 통계 */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card title="평균 젤리 점수">
-          <div className="text-center">
-            <div className="text-4xl font-bold text-primary-600 mb-2">
-              {averageRating.toFixed(1)}
+      {showComposer && (
+        <section className="mt-8 rounded-[28px] border border-orange-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">포스팅 작성</h2>
+              <p className="mt-1 text-sm text-slate-500">한줄평만 작성해도 등록할 수 있습니다.</p>
             </div>
-            <div className="flex items-center justify-center gap-1 mb-4">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <span
-                  key={star}
-                  className={`text-lg ${
-                    star <= Math.round(averageRating)
-                      ? 'text-primary-600'
-                      : 'text-gray-300'
-                  }`}
+            <Button variant="secondary" onClick={() => setShowComposer(false)}>닫기</Button>
+          </div>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">행사 선택</label>
+                <select
+                  className="w-full rounded-2xl border border-orange-100 bg-orange-50/40 px-4 py-3 outline-none"
+                  value={composer.eventId ?? ''}
+                  onChange={(event) => handleEventSelect(Number(event.target.value))}
                 >
-                  🐾
-                </span>
-              ))}
-            </div>
-            <p className="text-sm text-gray-600">{reviews.length}개의 리뷰</p>
-          </div>
-        </Card>
+                  <option value="">참여한 행사를 선택해 주세요</option>
+                  {events.map((event) => (
+                    <option key={event.eventId} value={event.eventId}>
+                      {event.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        <Card title="젤리 점수 분포">
-          <div className="space-y-2">
-            {[5, 4, 3, 2, 1].map((rating, index) => (
-              <div key={rating} className="flex items-center gap-3">
-                <span className="text-sm w-10">{rating}젤리</span>
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-primary-500 h-2 rounded-full"
-                    style={{ width: `${(ratingDistribution[index] / reviews.length) * 100}%` }}
+              {/* <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">게시글 제목</label>
+                <input
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                  value={composer.title}
+                  onChange={(event) => setComposer((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="예: 늦봄 야외 전시 방문 후기"
+                />
+              </div> */}
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">한 줄 리뷰</label>
+                <textarea
+                  className="min-h-[100px] w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                  value={composer.reviewText}
+                  onChange={(event) => setComposer((current) => ({ ...current, reviewText: event.target.value }))}
+                  disabled={!composer.reviewMetaEditable}
+                  placeholder="행사에 대한 인상을 한 줄로 남겨 주세요."
+                />
+                {!composer.reviewMetaEditable && (
+                  <p className="mt-2 text-xs font-medium text-rose-500">한 줄 리뷰와 평점은 작성 후 7일이 지나 수정이 잠겼습니다.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">발자국 평점</label>
+                <PawRating
+                  value={composer.rating}
+                  onChange={(rating) => setComposer((current) => ({ ...current, rating }))}
+                  readOnly={!composer.reviewMetaEditable}
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="block text-sm font-semibold text-slate-700">사진 첨부</label>
+                  <span className="text-xs text-slate-400">최대 5장, 업로드 전 WebP 압축</span>
+                </div>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-orange-300 bg-orange-50 px-4 py-5 text-sm font-medium text-orange-600">
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  {uploading ? '업로드 중...' : '사진 추가'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => void handleImageUpload(event.target.files)}
                   />
-                </div>
-                <span className="text-sm text-gray-600 w-8">{ratingDistribution[index]}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* 리뷰 작성 폼 */}
-      {showWriteForm && (
-        <Card title="리뷰 작성">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">젤리 점수</label>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setNewRating(value)}
-                    className="text-3xl transition-transform hover:-translate-y-1"
-                  >
-                    <span className={`${value <= newRating ? 'text-primary-600' : 'text-gray-300'}`}>
-                      🐾
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Input
-              label="리뷰 내용"
-              multiline
-              rows={4}
-              value={newReview}
-              onChange={(e) => setNewReview(e.target.value)}
-              placeholder="행사 참여 후기를 작성해주세요."
-            />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">사진 첨부</label>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={(e) => setNewImages(Array.from(e.target.files || []))}
-                className="hidden"
-                id="review-images"
-              />
-              <label
-                htmlFor="review-images"
-                className="flex items-center gap-2 cursor-pointer border border-gray-300 rounded-lg p-3 hover:border-primary-500"
-              >
-                <Image className="w-5 h-5 text-gray-500" />
-                <span className="text-sm text-gray-600">사진 선택</span>
-              </label>
-              {newImages.length > 0 && (
-                <p className="text-sm text-gray-500 mt-2">{newImages.length}개의 파일 선택됨</p>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <Button onClick={handleSubmitReview} disabled={!newReview.trim() || newRating === 0}>
-                리뷰 등록
-              </Button>
-              <Button variant="secondary" onClick={() => setShowWriteForm(false)}>
-                취소
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* 리뷰 리스트 */}
-      <div className="space-y-4">
-        {reviews.map((review) => (
-          <Card key={review.id}>
-            <div className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-semibold text-primary-700">
-                      {review.user.charAt(0)}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{review.user}</p>
-                    <p className="text-sm text-gray-500">{review.date}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <span
-                        key={star}
-                        className={`text-sm ${star <= review.rating ? 'text-primary-600' : 'text-gray-300'}`}
+                </label>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {composer.images.map((image, index) => (
+                    <div key={`${image.imageUrl}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
+                      <img src={image.imageUrl} alt={`업로드 이미지 ${index + 1}`} className="h-28 w-full object-cover" />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-xs text-white"
+                        onClick={() => setComposer((current) => ({
+                          ...current,
+                          images: current.images.filter((_, currentIndex) => currentIndex !== index),
+                        }))}
                       >
-                        🐾
-                      </span>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => handleReport(review.id)}
-                    className="text-gray-400 hover:text-red-500 p-1"
-                  >
-                    <Flag className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <p className="text-gray-700">{review.comment}</p>
-
-              {review.images.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto">
-                  {review.images.map((image, index) => (
-                    <img
-                      key={index}
-                      src={image}
-                      alt={`리뷰 이미지 ${index + 1}`}
-                      className="w-32 h-24 object-cover rounded-lg flex-shrink-0"
-                    />
+                        삭제
+                      </button>
+                    </div>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
-          </Card>
-        ))}
-      </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">본문</label>
+              <textarea
+                className="min-h-[420px] w-full rounded-[26px] border border-slate-200 bg-[linear-gradient(#ffffff,#ffffff),repeating-linear-gradient(transparent,transparent_31px,#f4f4f5_31px,#f4f4f5_32px)] px-5 py-4 text-[15px] leading-8 outline-none"
+                value={composer.contents}
+                onChange={(event) => setComposer((current) => ({ ...current, contents: event.target.value }))}
+                placeholder="템플릿 이미지와 한 줄 리뷰를 바탕으로, 블로그 글처럼 자세한 후기를 남겨 보세요."
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setShowComposer(false)}>취소</Button>
+            <Button onClick={() => void handleSubmit()} disabled={saving || uploading}>
+              {saving ? '저장 중...' : composer.status === 'PUBLISHED' ? '포스팅 수정' : '포스팅 게시'}
+            </Button>
+          </div>
+        </section>
+      )}
+
+      <section className="mt-10">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">리뷰 목록</h2>
+            <p className="mt-1 text-sm text-slate-500">다른 사용자들이 남긴 리뷰를 확인해 보세요.</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500">리뷰를 불러오는 중입니다.</div>
+        ) : posts.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">아직 공개된 포스팅이 없습니다.</div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2">
+            {posts.map((post) => (
+              <article
+                key={post.id}
+                className="cursor-pointer overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition-transform hover:-translate-y-1"
+                onClick={() => navigate(`/posting/${post.id}`)}
+              >
+                {post.images[0] && (
+                  <img src={post.images[0].imageUrl} alt={post.title} className="h-56 w-full object-cover" />
+                )}
+                <div className="space-y-4 p-6">
+                  <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
+                    <span className="rounded-full bg-orange-50 px-3 py-1 font-medium text-orange-600">{post.eventTitle}</span>
+                    <span>{new Date(post.createdAt).toLocaleDateString('ko-KR')}</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-slate-900">{post.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{post.contents || post.reviewText}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{post.authorName}</p>
+                      <p className="text-xs text-slate-400">간편 리뷰: {post.reviewText}</p>
+                    </div>
+                    <PawRating value={post.rating} readOnly size="sm" />
+                    <button
+                      onClick={(e) => handleDelete(e, post.id)}
+                      className="rounded bg-red-500 px-2 py-1 text-xs text-white"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <Button variant="secondary" onClick={() => void loadPosts(page - 1)} disabled={page <= 0}>이전</Button>
+          <span className="text-sm text-slate-500">{page + 1} / {totalPages}</span>
+          <Button variant="secondary" onClick={() => void loadPosts(page + 1)} disabled={page + 1 >= totalPages}>다음</Button>
+        </div>
+      </section>
     </div>
   )
 }
+

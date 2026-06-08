@@ -1,6 +1,8 @@
 package com.gorong.backend.domain.app.service;
 
 import com.gorong.backend.domain.app.dto.NearbyVenueResponseDto;
+import com.gorong.backend.domain.event.entity.Event;
+import com.gorong.backend.domain.event.repository.EventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,12 +25,37 @@ public class AppVenueService {
     @Value("${tour.api.service-key}")
     private String tourApiKey;
 
+    private final EventRepository eventRepository;
     private final Map<String, VenueGeo> venueGeoCache = new ConcurrentHashMap<>();
 
     public record VenueGeo(String id, double lat, double lng, int radius) {}
 
     public Optional<VenueGeo> findCachedVenueGeo(String venueId) {
         return Optional.ofNullable(venueGeoCache.get(venueId));
+    }
+
+    public Optional<VenueGeo> resolveVenueGeo(String venueId) {
+        if (venueId == null || venueId.isBlank()) {
+            return Optional.empty();
+        }
+
+        String normalizedVenueId = venueId.trim();
+        VenueGeo cached = venueGeoCache.get(normalizedVenueId);
+        if (cached != null) {
+            return Optional.of(cached);
+        }
+
+        try {
+            Long eventId = Long.parseLong(normalizedVenueId);
+            return eventRepository.findById(eventId)
+                    .flatMap(this::toVenueGeo)
+                    .map(geo -> {
+                        venueGeoCache.put(normalizedVenueId, geo);
+                        return geo;
+                    });
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
     }
 
     // TourAPI 호출 후 앱에 반환 (키는 백엔드에만 존재)
@@ -77,6 +104,8 @@ public class AppVenueService {
                     double venueLat = Double.parseDouble(String.valueOf(item.get("mapy")));
                     double venueLng = Double.parseDouble(String.valueOf(item.get("mapx")));
                     int geofenceRadius = 300;
+                    String eventStartDate = normalizeDate(item.get("eventstartdate"));
+                    String eventEndDate = normalizeDate(item.get("eventenddate"));
 
                     venueGeoCache.put(id, new VenueGeo(id, venueLat, venueLng, geofenceRadius));
 
@@ -89,6 +118,8 @@ public class AppVenueService {
                             .address(String.valueOf(item.get("addr1")))
                             .category(String.valueOf(item.get("cat1")))
                             .imageUrl(String.valueOf(item.getOrDefault("firstimage", "")))
+                            .eventStartDate(eventStartDate.isBlank() ? null : eventStartDate)
+                            .eventEndDate(eventEndDate.isBlank() ? null : eventEndDate)
                             .build());
                 }
             }
@@ -96,6 +127,29 @@ public class AppVenueService {
         } catch (Exception e) {
             log.error("TourAPI 호출 실패: {}", e.getMessage());
             return new ArrayList<>();
+        }
+    }
+
+    private String normalizeDate(Object value) {
+        if (value == null) return null;
+        String text = String.valueOf(value).trim();
+        if (text.isBlank() || "null".equalsIgnoreCase(text)) return null;
+        return text;
+    }
+
+    private Optional<VenueGeo> toVenueGeo(Event event) {
+        if (event == null || event.getMapX() == null || event.getMapY() == null) {
+            return Optional.empty();
+        }
+
+        try {
+            double lng = Double.parseDouble(event.getMapX().trim());
+            double lat = Double.parseDouble(event.getMapY().trim());
+            return Optional.of(new VenueGeo(String.valueOf(event.getId()), lat, lng, 300));
+        } catch (Exception e) {
+            log.warn("이벤트 좌표 파싱 실패: eventId={}, message={}",
+                    event.getId(), e.getMessage());
+            return Optional.empty();
         }
     }
 }

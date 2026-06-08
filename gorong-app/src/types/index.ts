@@ -76,6 +76,7 @@ export interface AppGroup {
   id: number
   title: string
   event: string
+  eventContentId?: string | null
   location: string
   meetingDate?: string
   meetingTime?: string
@@ -84,6 +85,17 @@ export interface AppGroup {
   joined: boolean       // 내가 이미 참가했는지
   gathered: boolean     // 모임 성사 인증 여부
   status: string
+}
+
+export interface EventParticipation {
+  id: number
+  eventContentId: string
+  eventTitle: string
+  groupPostId?: number | null
+  groupPostTitle?: string | null
+  participationType: 'SOLO' | 'GROUP'
+  visitDate?: string | null
+  appliedAt: string
 }
 
 // ─── 회원가입 요청 DTO (앱 → 백엔드) ─────────

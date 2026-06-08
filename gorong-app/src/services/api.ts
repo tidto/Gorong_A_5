@@ -1,7 +1,7 @@
 // src/services/api.ts
 import axios from 'axios'
 import { auth } from '../config/firebaseConfig'
-import { AppGroup, PublicEvent, Venue } from '../types'
+import { AppGroup, EventParticipation, PublicEvent, Venue } from '../types'
 
 const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1'
 const rootUrl = baseUrl.replace(/\/api\/v1$/, '')
@@ -94,6 +94,10 @@ export const fetchNearbyVenues = (lat: number, lng: number, radius = 5000) =>
 export const fetchPublicEvents = () =>
   publicApi.get<PublicEvent[]>('/api/public/map')
 
+// 공개 행사 상세 조회
+export const fetchPublicEventDetail = (id: string | number) =>
+  publicApi.get<PublicEvent>(`/api/public/map/${id}`)
+
 // 도착 인증 (위경도 포함 → 백엔드 PostGIS 검증)
 export const verifyArrival = (venueId: string, lat: number, lng: number) =>
   api.post<string>('/app/arrivals', { venueId, lat, lng })
@@ -101,6 +105,9 @@ export const verifyArrival = (venueId: string, lat: number, lng: number) =>
 // 앱 그룹 목록 조회 (웹에서 생성된 그룹 포함)
 export const fetchAppGroups = () =>
   api.get<AppGroup[]>('/app/groups')
+
+export const fetchMyParticipations = () =>
+  publicApi.get<EventParticipation[]>('/api/event-participation/me')
 
 // 앱 그룹 참가
 export const joinAppGroup = (groupId: number) =>

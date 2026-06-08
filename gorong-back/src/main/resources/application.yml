@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   datasource:
     url: jdbc:postgresql://gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com:5432/gorong_db?currentSchema=gorong_schema&option=-c%20search_path%3Dgorong_schema%2Cpublic
     username: ${DB_USERNAME}
@@ -7,7 +11,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
