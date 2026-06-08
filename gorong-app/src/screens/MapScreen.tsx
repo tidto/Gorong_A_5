@@ -10,6 +10,7 @@ import { fetchMyParticipations, fetchNearbyVenues, fetchPublicEventDetail, fetch
 import { useAuthStore } from '../store/authStore'
 import { useTrailStore } from '../store/trailStore'
 import { PublicEvent, Venue } from '../types'
+import { prepareImageForUpload } from '../utils/imageUpload'
 
 function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000
@@ -148,8 +149,8 @@ export default function MapScreen() {
       if (result.canceled || !result.assets.length) return
 
       const asset = result.assets[0]
-      const fileName = asset.fileName ?? `gallery-${venueId}-${Date.now()}.jpg`
-      const response = await uploadFileToS3(asset.uri, fileName, 'APP_PHOTO', true, venueId)
+      const prepared = await prepareImageForUpload(asset, `gallery-${venueId}-${Date.now()}.jpg`)
+      const response = await uploadFileToS3(prepared.uri, prepared.fileName, 'APP_PHOTO', true, venueId)
       Alert.alert('완료', response.data?.gallerySaved ? '사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
     } catch (error) {
       console.error('갤러리 업로드 실패:', error)

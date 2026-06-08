@@ -14,6 +14,7 @@ import {
   verifyArrival,
 } from '../services/api'
 import type { AppGroup, EventParticipation } from '../types'
+import { prepareImageForUpload } from '../utils/imageUpload'
 
 const PREVIEW_LIMIT = 5
 
@@ -258,9 +259,8 @@ export default function GroupScreen() {
       if (result.canceled || !result.assets.length) return
 
       const asset = result.assets[0]
-      const uri = asset.uri
-      const fileName = asset.fileName ?? `event-${venueId || group.id}-${Date.now()}.jpg`
-      const response = await uploadFileToS3(uri, fileName, 'APP_PHOTO', true, venueId)
+      const prepared = await prepareImageForUpload(asset, `event-${venueId || group.id}-${Date.now()}.jpg`)
+      const response = await uploadFileToS3(prepared.uri, prepared.fileName, 'APP_PHOTO', true, venueId)
       Alert.alert('완료', response.data?.gallerySaved ? '행사 사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
       loadData()
     } catch (error) {

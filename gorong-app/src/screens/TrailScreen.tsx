@@ -5,6 +5,7 @@ import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, A
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { uploadFileToS3 } from '../services/api'
 import { TRAIL_HISTORY_KEY, TrailHistoryEntry, useTrailStore } from '../store/trailStore'
+import { prepareImageForUpload } from '../utils/imageUpload'
 
 type TrailSessionDetail = TrailHistoryEntry & {
   localTrailSize?: number
@@ -95,8 +96,8 @@ export default function TrailScreen() {
       if (result.canceled || !result.assets.length) return
 
       const asset = result.assets[0]
-      const fileName = asset.fileName ?? `gallery-${Date.now()}.jpg`
-      const response = await uploadFileToS3(asset.uri, fileName, 'APP_PHOTO', true)
+      const prepared = await prepareImageForUpload(asset, `gallery-${Date.now()}.jpg`)
+      const response = await uploadFileToS3(prepared.uri, prepared.fileName, 'APP_PHOTO', true)
       Alert.alert('완료', response.data?.gallerySaved ? '사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
     } catch (error) {
       console.error('갤러리 업로드 실패:', error)
