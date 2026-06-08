@@ -208,12 +208,15 @@ export function useGoCatDecoration(
     [toast]
   );
 
-  const saveDecoration = useCallback(async (): Promise<boolean> => {
+  const saveDecoration = useCallback(async (): Promise<{
+    ok: boolean;
+    draft: Record<SlotType, DecorItem | null>;
+  }> => {
     if (!canEdit) {
       const msg = "다른 사용자 홈에서는 저장할 수 없습니다.";
       setDecorationErr(msg);
       toast(msg, "warning");
-      return false;
+      return { ok: false, draft: selectedEquipment };
     }
 
     setSaving(true);
@@ -239,26 +242,26 @@ export function useGoCatDecoration(
       setDecorationErr(msg);
       toast(msg, "error");
       setSaving(false);
-      return false;
+      return { ok: false, draft };
     }
 
     try {
       const slotIds = Object.fromEntries(
         GOCAT_SLOTS.map((slot) => [slot, resolveOwnedItemId(draft[slot], rawUserItems)])
-      ) as Record<typeof GOCAT_SLOTS[number], number | null>;
+      ) as Record<(typeof GOCAT_SLOTS)[number], number | null>;
       await saveMyEquipments(buildEquipmentsPayload(slotIds));
       await updateMyCatAppearance(toPresentationAppearancePayload(draft));
       options.onEquippedSaved?.(draft);
       setSaveInfo("장착 정보가 저장되었습니다.");
       toast("장착 정보가 저장되었습니다.", "success");
       setSaving(false);
-      return true;
+      return { ok: true, draft };
     } catch (e) {
       const msg = mapMiniHomeApiError(e, "장착 저장에 실패했습니다.");
       setDecorationErr(msg);
       toast(msg, "error");
       setSaving(false);
-      return false;
+      return { ok: false, draft };
     }
   }, [selectedEquipment, ownedItems, rawUserItems, growthStage, canEdit, toast, options]);
 

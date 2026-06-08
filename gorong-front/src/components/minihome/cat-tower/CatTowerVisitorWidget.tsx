@@ -8,8 +8,14 @@ type CatTowerVisitorWidgetProps = {
   loading?: boolean;
 };
 
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function AnimatedCount({ value }: { value: number }) {
-  const [display, setDisplay] = useState(0);
+  const reducedMotion = useRef(prefersReducedMotion());
+  const [display, setDisplay] = useState(reducedMotion.current ? value : 0);
   const rafRef = useRef<number | null>(null);
   const displayRef = useRef(0);
 
@@ -18,11 +24,16 @@ function AnimatedCount({ value }: { value: number }) {
   }, [display]);
 
   useEffect(() => {
+    if (reducedMotion.current) {
+      setDisplay(value);
+      return;
+    }
+
     const from = displayRef.current;
     const to = value;
     if (from === to) return;
 
-    const durationMs = 700;
+    const durationMs = 500;
     const startedAt = performance.now();
 
     const tick = (now: number) => {
@@ -59,22 +70,22 @@ export default function CatTowerVisitorWidget({
       transition={{ delay: 0.15, duration: 0.35 }}
       className="overflow-hidden rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/50 shadow-sm"
     >
-      <div className="flex items-center gap-2 border-b border-emerald-100/70 bg-emerald-500/90 px-3 py-1.5">
-        <Users className="h-3 w-3 text-white/90" />
-        <p className="text-[10px] font-extrabold text-white">방문자 현황</p>
+      <div className="flex items-center gap-2 border-b border-emerald-100/70 bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-2">
+        <Users className="h-3.5 w-3.5 text-white/95" />
+        <p className="text-xs font-extrabold text-white">방문자 현황</p>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-emerald-100/70 px-1 py-2.5">
+      <div className="grid grid-cols-2 divide-x divide-emerald-100/70 px-1 py-3">
         <div className="text-center">
-          <p className="text-lg font-extrabold tabular-nums text-emerald-700">
+          <p className="text-xl font-extrabold tabular-nums text-emerald-700">
             <AnimatedCount value={today} />
           </p>
-          <p className="text-[9px] font-bold text-emerald-800/55">오늘</p>
+          <p className="mt-0.5 text-xs font-semibold text-emerald-800/60">오늘</p>
         </div>
         <div className="text-center">
-          <p className="text-lg font-extrabold tabular-nums text-teal-700">
+          <p className="text-xl font-extrabold tabular-nums text-teal-700">
             <AnimatedCount value={total} />
           </p>
-          <p className="text-[9px] font-bold text-emerald-800/55">누적</p>
+          <p className="mt-0.5 text-xs font-semibold text-emerald-800/60">누적</p>
         </div>
       </div>
     </motion.div>

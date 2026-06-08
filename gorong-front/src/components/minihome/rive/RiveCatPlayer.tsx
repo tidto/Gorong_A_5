@@ -18,6 +18,10 @@ type RiveCatPlayerProps = {
   interactive?: boolean;
   /** 꼬리 흔들기·눈 깜빡임 (Rive SM/타임라인) */
   enableIdleLife?: boolean;
+  /** false면 로드 실패 시 PNG 대신 빈 영역 (3D 오버레이용) */
+  suppressFallback?: boolean;
+  /** false면 Rive 애니메이션 일시정지 (탭 숨김·캔버스 비활성) */
+  playbackActive?: boolean;
   className?: string;
   onTap?: () => void;
 };
@@ -27,6 +31,8 @@ export default function RiveCatPlayer({
   growthStage = "BASIC",
   interactive = false,
   enableIdleLife = false,
+  suppressFallback = false,
+  playbackActive = true,
   className = "",
   onTap,
 }: RiveCatPlayerProps) {
@@ -69,6 +75,16 @@ export default function RiveCatPlayer({
     if (!rive) return;
     playRiveIdle(rive as RiveRuntime, growthStage);
   }, [rive, growthStage]);
+
+  useEffect(() => {
+    if (!rive) return;
+    const r = rive as RiveRuntime & { pause?: () => void; play?: () => void };
+    if (playbackActive) {
+      r.play?.();
+    } else {
+      r.pause?.();
+    }
+  }, [rive, playbackActive]);
 
   /** 꼬리: 천천히 좌우 (Rive) */
   useEffect(() => {
@@ -128,6 +144,14 @@ export default function RiveCatPlayer({
     "riveLayer__canvas h-full w-full !bg-transparent [&>canvas]:!block [&>canvas]:!h-full [&>canvas]:!w-full [&>canvas]:!bg-transparent";
 
   if (loadFailed) {
+    if (suppressFallback) {
+      return (
+        <div
+          className={`absolute inset-0 bg-transparent ${className}`}
+          aria-hidden
+        />
+      );
+    }
     return (
       <div
         className={`absolute inset-0 flex items-center justify-center bg-transparent ${className}`}

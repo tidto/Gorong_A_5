@@ -16,6 +16,9 @@ type GoCatBodyStageProps = {
   showGlow?: boolean;
   /** false면 둥실거림 끔 (카드 정적 썸네일 등) */
   animateFloat?: boolean;
+  /** false면 로드 실패 PNG 숨김 */
+  suppressFallback?: boolean;
+  playbackActive?: boolean;
   riveClassName?: string;
 };
 
@@ -32,6 +35,8 @@ export default function GoCatBodyStage({
   onTap,
   showGlow = true,
   animateFloat = true,
+  suppressFallback = false,
+  playbackActive = true,
   riveClassName = "riveLayer relative z-[1]",
 }: GoCatBodyStageProps) {
   return (
@@ -47,6 +52,8 @@ export default function GoCatBodyStage({
         interactive={interactive}
         onTap={onTap}
         enableIdleLife={animateFloat}
+        suppressFallback={suppressFallback}
+        playbackActive={playbackActive}
         className={riveClassName}
       />
       <CatEquipOverlays

@@ -8,6 +8,7 @@ import PostingDetail from '../pages/PostingDetail'
 import Chat from '../pages/Chat'
 import { lazy, Suspense, useEffect } from 'react'
 const CatTowerPage = lazy(() => import('../pages/minihome/CatTower'))
+const CatTowerCreatePage = lazy(() => import('../pages/minihome/CatTowerCreatePage'))
 import History from '../pages/History'
 import MyPage from '../pages/user/MyPage'
 import Chatbot from '../pages/chatbot/Chatbot'
@@ -149,6 +150,7 @@ export default function AppRouter() {
                         <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
                         <Route path="/minihompy" element={<Navigate to="/cattower" replace />} />
                         <Route path="/cattower/user/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerPage /></Suspense></ProtectedRoute>} />
+                        <Route path="/cattower/create" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerCreatePage /></Suspense></ProtectedRoute>} />
                         <Route path="/cattower/:userId" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerPage /></Suspense></ProtectedRoute>} />
                         <Route path="/cattower" element={<ProtectedRoute><Suspense fallback={<CatTowerRouteFallback />}><CatTowerPage /></Suspense></ProtectedRoute>} />
                         {import.meta.env.DEV ? (

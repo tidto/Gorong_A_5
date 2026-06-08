@@ -2,6 +2,10 @@ import axiosInstance from "../axiosInstance";
 import type { Equipment, UserItem } from "../../types/minihome/item";
 import type { SlotType } from "../../utils/minihome/gocat/gocatSlots";
 import { GOCAT_SLOTS } from "../../utils/minihome/gocat/gocatSlots";
+import {
+  fetchCachedMyUserItems,
+  invalidateUserItemsCache,
+} from "../../utils/minihome/core/userItemsCache";
 import { getAuth } from "firebase/auth";
 
 async function getFirebaseIdTokenOrThrow(): Promise<string> {
@@ -36,10 +40,14 @@ export function buildEquipmentsPayload(
   };
 }
 
-export async function getMyUserItems(): Promise<UserItem[]> {
+async function fetchMyUserItemsFromApi(): Promise<UserItem[]> {
   const token = await getFirebaseIdTokenOrThrow();
   const res = await axiosInstance.get(`/minihomes/me/items`, authHeaders(token));
   return res.data;
+}
+
+export async function getMyUserItems(): Promise<UserItem[]> {
+  return fetchCachedMyUserItems(fetchMyUserItemsFromApi);
 }
 
 export async function getUserItems(userId: number): Promise<UserItem[]> {
@@ -78,6 +86,7 @@ export async function unequipSlot(userId: number, slotType: string): Promise<voi
 export async function saveMyEquipments(payload: SaveMyEquipmentsPayload): Promise<void> {
   const token = await getFirebaseIdTokenOrThrow();
   await axiosInstance.put(`/minihomes/me/equipments`, payload, authHeaders(token));
+  invalidateUserItemsCache();
 }
 
 export type ItemRewardResponse = {
