@@ -5,8 +5,12 @@ import LazyImage from '../components/common/LazyImage';
 import MapView from '../components/MapView';
 import IconLabel from '../components/IconLabel';
 import AccessibilityBadge from '../components/AccessibilityBadge';
+import PawRating from '../components/PawRating';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, Clock, Users, Wallet, Phone, Navigation, Loader2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { uploadFileToS3 } from '../api/fileApi';
+import { getEventReviews, saveQuickReview, type ImagePayload, type ReviewSummary } from '../api/reviewService';
+import { optimizeImageFile } from '../utils/imageUpload';
+import { ArrowLeft, Clock, ImagePlus, Users, Wallet, Phone, Navigation, Loader2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface EventData {
   overview?: string;
@@ -98,6 +102,25 @@ export default function EventDetail() {
   const [showDateModal,  setShowDateModal]  = useState(false);
   const [selectedDate,   setSelectedDate]   = useState('');
 
+  // ── Quick Review 상태 ──────────────────────────────────────────────
+  const [reviews,            setReviews]            = useState<ReviewSummary[]>([]);
+  const [reviewPage,         setReviewPage]         = useState(0);
+  const [reviewTotalPages,   setReviewTotalPages]   = useState(1);
+  const [reviewLoading,      setReviewLoading]      = useState(false);
+  const [reviewText,         setReviewText]         = useState('');
+  const [rating,             setRating]             = useState(0);
+  const [reviewMetaEditable, setReviewMetaEditable] = useState(true);
+  const [reviewImages,       setReviewImages]       = useState<ImagePayload[]>([]);
+  const [savingReview,       setSavingReview]       = useState(false);
+  const [uploadingImage,     setUploadingImage]     = useState(false);
+
+  const authorName = auth.user?.nickname?.trim() || auth.user?.email?.trim() || '익명';
+  const currentUserId = (() => {
+    const stored = localStorage.getItem('gorong-db-user');
+    if (!stored) return NaN;
+    try { return Number(JSON.parse(stored)?.id); } catch { return NaN; }
+  })();
+
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   const toastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -109,6 +132,7 @@ export default function EventDetail() {
 
   const DEFAULT_IMAGE = '/images/default-event.png';
 
+  // ── 행사 상세 로드 ────────────────────────────────────────────────
   useEffect(() => {
     const fetchEventDetail = async () => {
       if (!id) return;
@@ -149,6 +173,40 @@ export default function EventDetail() {
     }
   }, []);
 
+  // ── 리뷰 로드 ────────────────────────────────────────────────────
+  const loadReviews = async (page: number) => {
+    if (!id) return;
+    setReviewLoading(true);
+    try {
+      const response = await getEventReviews(Number(id), page, 10);
+      setReviews(response.content);
+      setReviewPage(response.page);
+      setReviewTotalPages(Math.max(response.totalPages, 1));
+
+      const mine = response.content.find((review) => review.userId === currentUserId);
+      if (mine) {
+        setReviewText(mine.reviewText ?? '');
+        setRating(mine.rating ?? 0);
+        setReviewMetaEditable(mine.reviewMetaEditable);
+        setReviewImages(mine.images.map((image) => ({
+          imageUrl: image.imageUrl,
+          originalImgName: image.originalImgName ?? 'uploaded-image.webp',
+          saveImgName: image.saveImgName ?? image.imageUrl.split('/').pop() ?? 'image.webp',
+        })));
+      }
+    } catch (error) {
+      console.error('행사 리뷰 조회 실패:', error);
+      setReviews([]);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadReviews(0);
+  }, [id]);
+
+  // ── 혼자 참여 ────────────────────────────────────────────────────
   const handleSoloCancel = async () => {
     if (!window.confirm('혼자 참여 신청을 취소하시겠습니까?')) return;
     try {
@@ -216,6 +274,61 @@ export default function EventDetail() {
     }
   };
 
+  // ── 리뷰 이미지 업로드 ───────────────────────────────────────────
+  const handleImageUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    if (reviewImages.length + files.length > 5) {
+      showToast('이미지는 최대 5장까지 첨부할 수 있습니다.', 'error');
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const uploaded: ImagePayload[] = [];
+      for (const file of Array.from(files)) {
+        const optimized = await optimizeImageFile(file);
+        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true);
+        uploaded.push({
+          imageUrl: response.fileUrl,
+          originalImgName: file.name,
+          saveImgName: String(response.key).split('/').pop() ?? file.name,
+        });
+      }
+      setReviewImages((current) => [...current, ...uploaded]);
+    } catch (error) {
+      console.error('리뷰 이미지 업로드 실패:', error);
+      showToast('이미지 업로드에 실패했습니다.', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // ── 간편 리뷰 저장 ───────────────────────────────────────────────
+  const handleSaveQuickReview = async () => {
+    if (!id) return;
+    if (!reviewText.trim() || rating === 0) {
+      showToast('한 줄 리뷰와 발자국 평점을 입력해 주세요.', 'error');
+      return;
+    }
+    setSavingReview(true);
+    try {
+      const saved = await saveQuickReview(Number(id), {
+        reviewText: reviewText.trim(),
+        rating,
+        authorName,
+        images: reviewImages,
+      });
+      setReviewMetaEditable(saved.reviewMetaEditable);
+      await loadReviews(0);
+      showToast('간편 리뷰가 저장되었습니다.', 'success');
+    } catch (error: any) {
+      console.error('간편 리뷰 저장 실패:', error);
+      showToast(error?.response?.data?.error || '간편 리뷰 저장 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setSavingReview(false);
+    }
+  };
+
+  // ── 로딩 / 에러 상태 ─────────────────────────────────────────────
   if (loading) {
     return (
         <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -341,7 +454,6 @@ export default function EventDetail() {
 
         {/* ── 히어로 이미지 섹션 ── */}
         <div className="relative h-[60vh] min-h-[420px] max-h-[600px] bg-gray-900 overflow-hidden">
-          {/* 이미지 슬라이더 */}
           <div
               style={{
                 display: 'flex',
@@ -368,10 +480,8 @@ export default function EventDetail() {
             )}
           </div>
 
-          {/* 다크 그라디언트 오버레이 */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
-          {/* 뒤로가기 버튼 */}
           <button
               onClick={() => navigate(-1)}
               className="absolute top-5 left-5 z-20 flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-4 py-2 rounded-full font-medium transition-all text-sm border border-white/30"
@@ -379,14 +489,12 @@ export default function EventDetail() {
             <ArrowLeft className="w-4 h-4" /> 뒤로가기
           </button>
 
-          {/* 이미지 카운터 */}
           {images.length > 1 && (
               <div className="absolute top-5 right-5 z-20 bg-black/40 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
                 {slideIndex + 1} / {images.length}
               </div>
           )}
 
-          {/* 슬라이더 화살표 */}
           {images.length > 1 && (
               <>
                 <button
@@ -403,7 +511,6 @@ export default function EventDetail() {
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
-                {/* 닷 인디케이터 */}
                 <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
                   {images.map((_, idx) => (
                       <button
@@ -416,7 +523,6 @@ export default function EventDetail() {
               </>
           )}
 
-          {/* 히어로 타이틀 영역 */}
           <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 pointer-events-none">
             {event.cat3 && (
                 <span className="inline-block bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full mb-3 tracking-wide uppercase">
@@ -446,12 +552,12 @@ export default function EventDetail() {
                   label="기간"
                   value={periodText ?? '상시 운영'}
               />
-                <SummaryChip
-                    icon={<Wallet className="w-4 h-4 text-orange-500" />}
-                    label="요금"
-                    value={event.usefee || '무료'}
-                    highlight={!event.usefee}
-                />
+              <SummaryChip
+                  icon={<Wallet className="w-4 h-4 text-orange-500" />}
+                  label="요금"
+                  value={event.usefee || '무료'}
+                  highlight={!event.usefee}
+              />
               <SummaryChip
                   icon={<Users className="w-4 h-4 text-orange-500" />}
                   label="분류"
@@ -469,19 +575,17 @@ export default function EventDetail() {
             {/* 좌측 메인 컬럼 */}
             <div className="lg:col-span-2 space-y-8">
 
-              {/* 행사 소개 */}
               {event.description && (
-                 <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                         <span className="w-1 h-6 bg-orange-500 rounded-full inline-block"></span>
-                         행사 소개
-                     </h2>
-                     <p className="text-gray-600 leading-relaxed text-sm sm:text-base">{event.description}</p>
-                 </section>
+                  <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <span className="w-1 h-6 bg-orange-500 rounded-full inline-block"></span>
+                      행사 소개
+                    </h2>
+                    <p className="text-gray-600 leading-relaxed text-sm sm:text-base">{event.description}</p>
+                  </section>
               )}
 
-              {/* 접근성 정보 */}
-                <section className="bg-orange-50/40 rounded-2xl border border-orange-100 shadow-sm p-6 sm:p-8">
+              <section className="bg-orange-50/40 rounded-2xl border border-orange-100 shadow-sm p-6 sm:p-8">
                 <h2 className="text-xl font-bold text-gray-900 mb-5 flex items-center gap-2">
                   <span className="w-1 h-6 bg-orange-500 rounded-full inline-block"></span>
                   접근성 정보
@@ -562,9 +666,8 @@ export default function EventDetail() {
             </div>
 
             {/* 우측 사이드바 */}
-              <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+            <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
 
-              {/* 위치 카드 */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="h-60">
                   <MapView
@@ -595,7 +698,6 @@ export default function EventDetail() {
                 </div>
               </div>
 
-              {/* CTA 버튼 카드 */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
                 <p className="text-xs text-gray-400 font-medium text-center">이 행사에 참여하고 싶으세요?</p>
 
@@ -634,24 +736,178 @@ export default function EventDetail() {
               </div>
             </div>
           </div>
+
+          {/* ── Quick Review 섹션 (맨 하단) ── */}
+          <section className="mt-10 rounded-[32px] border border-orange-100 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-500">Quick Review</p>
+                <h2 className="text-3xl font-black text-slate-900">참여 버튼 아래에서 바로 남기는 간편 리뷰</h2>
+                <p className="mt-2 text-sm text-slate-500">한 줄 리뷰와 발자국 평점은 작성 후 7일이 지나면 잠기고, 사진은 캣타워 갤러리에도 자동 저장됩니다.</p>
+              </div>
+              <button
+                  className="rounded-full border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600 whitespace-nowrap"
+                  onClick={() => navigate('/reviews')}
+              >
+                정식 포스팅으로 이어쓰기
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+              {/* 리뷰 입력 폼 */}
+              <div className="space-y-5 rounded-[28px] bg-orange-50/70 p-5">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">한 줄 리뷰</label>
+                  <textarea
+                      className="min-h-[110px] w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 outline-none resize-none focus:border-orange-300 transition-colors"
+                      value={reviewText}
+                      onChange={(e) => setReviewText(e.target.value)}
+                      disabled={!reviewMetaEditable}
+                      placeholder="행사를 다녀온 한 줄 감상을 남겨 주세요."
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">발자국 평점</label>
+                  <PawRating value={rating} onChange={setRating} readOnly={!reviewMetaEditable} />
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="block text-sm font-semibold text-slate-700">사진 첨부</label>
+                    <span className="text-xs text-slate-400">최대 5장</span>
+                  </div>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-orange-300 bg-white px-4 py-4 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors">
+                    {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                    {uploadingImage ? '업로드 중...' : '사진 추가'}
+                    <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => void handleImageUpload(e.target.files)}
+                    />
+                  </label>
+                  {reviewImages.length > 0 && (
+                      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {reviewImages.map((image, index) => (
+                            <div key={`${image.imageUrl}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
+                              <img src={image.imageUrl} alt={`리뷰 이미지 ${index + 1}`} className="h-24 w-full object-cover" />
+                              <button
+                                  type="button"
+                                  className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white"
+                                  onClick={() => setReviewImages((curr) => curr.filter((_, i) => i !== index))}
+                              >
+                                삭제
+                              </button>
+                            </div>
+                        ))}
+                      </div>
+                  )}
+                </div>
+
+                <button
+                    onClick={() => void handleSaveQuickReview()}
+                    disabled={savingReview || uploadingImage}
+                    className="w-full rounded-2xl bg-slate-900 py-3 font-semibold text-white hover:bg-slate-800 transition-colors disabled:opacity-60"
+                >
+                  {savingReview ? '저장 중...' : '간편 리뷰 저장'}
+                </button>
+              </div>
+
+              {/* 리뷰 목록 */}
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-900">리뷰 목록</h3>
+                  <span className="text-sm text-slate-400">{reviews.length}개 표시 중</span>
+                </div>
+
+                <div className="space-y-4">
+                  {reviewLoading ? (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-500">
+                        리뷰를 불러오는 중입니다.
+                      </div>
+                  ) : reviews.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+                        아직 등록된 리뷰가 없습니다.
+                      </div>
+                  ) : (
+                      reviews.map((review) => (
+                          <article key={review.id} className="rounded-[26px] border border-slate-200 bg-white p-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <p className="font-semibold text-slate-900">{review.authorName}</p>
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {new Date(review.createdAt).toLocaleDateString('ko-KR')}
+                                </p>
+                              </div>
+                              <PawRating value={review.rating} readOnly size="sm" />
+                            </div>
+                            <p className="mt-4 text-sm leading-6 text-slate-700">{review.reviewText}</p>
+                            {review.images.length > 0 && (
+                                <div className="mt-4 flex gap-2 overflow-x-auto">
+                                  {review.images.map((image, index) => (
+                                      <img
+                                          key={`${image.imageUrl}-${index}`}
+                                          src={image.imageUrl}
+                                          alt={`리뷰 이미지 ${index + 1}`}
+                                          className="h-24 w-32 rounded-2xl object-cover flex-shrink-0"
+                                      />
+                                  ))}
+                                </div>
+                            )}
+                            {review.status === 'PUBLISHED' && (
+                                <button
+                                    className="mt-4 rounded-full bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-600 hover:bg-orange-100 transition-colors"
+                                    onClick={() => navigate(`/posting/${review.id}`)}
+                                >
+                                  정식 포스팅 보러가기
+                                </button>
+                            )}
+                          </article>
+                      ))
+                  )}
+                </div>
+
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <button
+                      className="rounded-full border border-slate-200 px-4 py-2 text-sm disabled:opacity-40 hover:bg-slate-50 transition-colors"
+                      onClick={() => void loadReviews(reviewPage - 1)}
+                      disabled={reviewPage <= 0}
+                  >
+                    이전
+                  </button>
+                  <span className="text-sm text-slate-500">{reviewPage + 1} / {reviewTotalPages}</span>
+                  <button
+                      className="rounded-full border border-slate-200 px-4 py-2 text-sm disabled:opacity-40 hover:bg-slate-50 transition-colors"
+                      onClick={() => void loadReviews(reviewPage + 1)}
+                      disabled={reviewPage + 1 >= reviewTotalPages}
+                  >
+                    다음
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
         </div>
       </div>
   );
 }
 
 function SummaryChip({ icon, label, value, highlight }: {
-    icon: React.ReactNode; label: string; value: string; highlight?: boolean
+  icon: React.ReactNode; label: string; value: string; highlight?: boolean
 }) {
-    return (
-        <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex-shrink-0">{icon}</div>
-            <div className="min-w-0">
-                <p className="text-[11px] text-gray-400 font-medium mb-0.5">{label}</p>
-                {highlight
-                    ? <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">무료</span>
-                    : <p className="text-sm font-semibold text-gray-800 truncate">{value}</p>
-                }
-            </div>
+  return (
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex-shrink-0">{icon}</div>
+        <div className="min-w-0">
+          <p className="text-[11px] text-gray-400 font-medium mb-0.5">{label}</p>
+          {highlight
+              ? <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">무료</span>
+              : <p className="text-sm font-semibold text-gray-800 truncate">{value}</p>
+          }
         </div>
-    );
+      </div>
+  );
 }
