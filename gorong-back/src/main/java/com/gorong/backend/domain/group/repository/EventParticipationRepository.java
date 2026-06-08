@@ -13,9 +13,13 @@ public interface EventParticipationRepository extends JpaRepository<EventPartici
     boolean existsByUserIdAndEventContentIdAndParticipationType(
             Long userId, String eventContentId, ParticipationType type);
 
-    /** 유저 + 행사 + 그룹으로 중복 확인 (그룹 참여 중복 방지) */
+    /** 유저 + 행사 + 그룹으로 중복 확인 */
     boolean existsByUserIdAndEventContentIdAndGroupPostId(
             Long userId, String eventContentId, Long groupPostId);
+
+    /** ✅ 유저 + 그룹으로 기존 레코드 조회 (중복 INSERT 방지용) */
+    Optional<EventParticipation> findByUserIdAndGroupPostId(
+            Long userId, Long groupPostId);
 
     /** 혼자 참여 취소 */
     @org.springframework.transaction.annotation.Transactional
@@ -27,17 +31,13 @@ public interface EventParticipationRepository extends JpaRepository<EventPartici
     void deleteByUserIdAndEventContentIdAndGroupPostId(
             Long userId, String eventContentId, Long groupPostId);
 
-    /** 유저의 전체 참여 이력 조회 (마이페이지 등에서 활용) */
+    /** 유저의 전체 참여 이력 조회 */
     List<EventParticipation> findByUserIdOrderByAppliedAtDesc(Long userId);
 
     /** 특정 행사에 대한 유저의 참여 기록 조회 */
     Optional<EventParticipation> findByUserIdAndEventContentIdAndParticipationType(
             Long userId, String eventContentId, ParticipationType type);
 
-    /**
-     * 참여 수 기준 인기 행사 TOP N 조회.
-     * SOLO + GROUP 모두 집계 → eventContentId별 count 내림차순.
-     */
     @org.springframework.data.jpa.repository.Query(
             "SELECT ep.eventContentId, COUNT(ep) AS cnt " +
                     "FROM EventParticipation ep " +
