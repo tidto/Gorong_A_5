@@ -63,10 +63,18 @@ public class TourApiService {
                 .collect(Collectors.toList());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public TourItemDto getEventDetail(Long id) {
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("해당 행사를 찾을 수 없습니다."));
+
+        if (event.getDescription() == null || event.getDescription().isBlank()) {
+            TourItemDto dto = mapToDtoFromEntity(event);
+            fillBarrierFreeDetail(dto);
+            fillOverview(dto);
+            event.updateFromDto(dto);
+        }
+
         return mapToDtoFromEntity(event);
     }
 
@@ -85,6 +93,7 @@ public class TourApiService {
             if (dto.getContentid() == null || dto.getContentid().isEmpty()) continue;
             try {
                 fillBarrierFreeDetail(dto);
+                fillOverview(dto);
                 fillGalleryImages(dto);
                 Long eventId = Long.parseLong(dto.getContentid());
                 eventRepository.findById(eventId)
@@ -135,7 +144,10 @@ public class TourApiService {
                     }
 
                     JSONObject json = new JSONObject(res);
-                    JSONObject body = json.optJSONObject("response").optJSONObject("body");
+                    JSONObject response = json.optJSONObject("response");
+                    if (response == null) continue;
+                    JSONObject body = response.optJSONObject("body");
+                    if (body == null) continue;
                     Object itemsObj = body.opt("items");
 
                     if (itemsObj instanceof JSONObject) {
@@ -170,7 +182,10 @@ public class TourApiService {
             if (res == null || res.startsWith("<")) return;
 
             JSONObject json = new JSONObject(res);
-            JSONObject body = json.optJSONObject("response").optJSONObject("body");
+            JSONObject response = json.optJSONObject("response");
+            if (response == null) return;
+            JSONObject body = response.optJSONObject("body");
+            if (body == null) return;
             Object itemsObj = body.opt("items");
 
             if (itemsObj instanceof JSONObject) {
@@ -181,9 +196,7 @@ public class TourApiService {
                     dto.setElevator(detail.optString("elevator"));
                     dto.setRestroom(detail.optString("restroom"));
                     dto.setRoute(detail.optString("route"));
-                    dto.setOverview(detail.optString("overview"));
 
-                    // 무장애 추가 필드
                     dto.setWheelchair(detail.optString("wheelchair"));
                     dto.setExit(detail.optString("exit"));
                     dto.setPublicTransport(detail.optString("publictransport"));
@@ -200,6 +213,35 @@ public class TourApiService {
         }
     }
 
+    private void fillOverview(TourItemDto dto) {
+        String url = "https://apis.data.go.kr/B551011/KorService2/detailCommon2"
+                + "?serviceKey=" + tourApiConfig.getServiceKey()
+                + "&contentId=" + dto.getContentid()
+                + "&defaultYN=Y&overviewYN=Y"
+                + "&MobileOS=ETC&MobileApp=Gorong&_type=json";
+        try {
+            String res = restTemplate.getForObject(url, String.class);
+            if (res == null || res.startsWith("<")) return;
+
+            JSONObject json = new JSONObject(res);
+            JSONObject response = json.optJSONObject("response");
+            if (response == null) return;
+            JSONObject body = response.optJSONObject("body");
+            if (body == null) return;
+            Object itemsObj = body.opt("items");
+
+            if (itemsObj instanceof JSONObject) {
+                JSONArray arr = ((JSONObject) itemsObj).optJSONArray("item");
+                if (arr != null && arr.length() > 0) {
+                    String overview = arr.getJSONObject(0).optString("overview", "").trim();
+                    if (!overview.isEmpty()) dto.setOverview(overview);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("🚨 overview 호출 실패 (ID: " + dto.getContentid() + ")");
+        }
+    }
+
     private void fillGalleryImages(TourItemDto dto) {
         String galleryUrl = "https://apis.data.go.kr/B551011/KorService2/detailImage2"
                 + "?serviceKey=" + tourApiConfig.getServiceKey()
@@ -212,7 +254,10 @@ public class TourApiService {
             if (res == null || res.startsWith("<")) return;
 
             JSONObject json = new JSONObject(res);
-            JSONObject body = json.optJSONObject("response").optJSONObject("body");
+            JSONObject response = json.optJSONObject("response");
+            if (response == null) return;
+            JSONObject body = response.optJSONObject("body");
+            if (body == null) return;
             Object itemsObj = body.opt("items");
 
             if (itemsObj instanceof JSONObject) {
@@ -286,7 +331,6 @@ public class TourApiService {
         dto.setEventEndDate(event.getEventEndDate());
         dto.setTel(event.getTel());
 
-        // 무장애 추가 필드
         dto.setWheelchair(event.getWheelchair());
         dto.setExit(event.getExit());
         dto.setPublicTransport(event.getPublicTransport());
