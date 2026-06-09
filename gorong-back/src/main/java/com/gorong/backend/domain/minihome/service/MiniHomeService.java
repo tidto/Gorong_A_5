@@ -21,6 +21,7 @@ import com.gorong.backend.domain.minihome.entity.MiniHome;
 import com.gorong.backend.domain.minihome.entity.MiniHomeGallery;
 import com.gorong.backend.domain.minihome.entity.UserItem;
 import com.gorong.backend.domain.minihome.exception.GalleryNotFoundException;
+import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.exception.MiniHomeNotFoundException;
 import com.gorong.backend.domain.minihome.repository.ActivityLogRepository;
 import com.gorong.backend.domain.minihome.repository.CatEquipRepository;
@@ -70,11 +71,26 @@ public class MiniHomeService {
     private final GroupRepository groupRepository;
 
     public MiniHomeResponseDto getMiniHome(Long userId) {
-        requireUserId(userId);
-        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
-                .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
+        return getMiniHome(userId, null);
+    }
+
+    public MiniHomeResponseDto getMiniHome(Long userId, Long viewerUserId) {
+        MiniHome miniHome = requireViewableMiniHome(userId, viewerUserId);
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
         return MiniHomeResponseDto.from(miniHome, cat);
+    }
+
+    /** 비공개 미니홈은 주인만 조회 가능 */
+    public MiniHome requireViewableMiniHome(Long ownerUserId, Long viewerUserId) {
+        requireUserId(ownerUserId);
+        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(ownerUserId)
+                .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + ownerUserId));
+
+        if (Boolean.FALSE.equals(miniHome.getIsPublic())
+                && (viewerUserId == null || !viewerUserId.equals(ownerUserId))) {
+            throw new MiniHomeForbiddenException("비공개 미니홈입니다. 주인만 볼 수 있어요.");
+        }
+        return miniHome;
     }
 
     @Transactional
@@ -139,7 +155,7 @@ public class MiniHomeService {
         } else {
             seedStarterItems(userId);
         }
-        return getMiniHomePage(userId);
+        return getMiniHomePage(userId, userId);
     }
 
     @Transactional
@@ -160,10 +176,11 @@ public class MiniHomeService {
     }
 
     public MiniHomePageResponseDto getMiniHomePage(Long userId) {
-        requireUserId(userId);
+        return getMiniHomePage(userId, null);
+    }
 
-        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
-                .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
+    public MiniHomePageResponseDto getMiniHomePage(Long userId, Long viewerUserId) {
+        MiniHome miniHome = requireViewableMiniHome(userId, viewerUserId);
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
 
         List<ActivityLog> activities = activityLogRepository.findByUserIdOrderByCreateAtDesc(

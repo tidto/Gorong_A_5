@@ -14,6 +14,7 @@ import com.gorong.backend.domain.minihome.dto.MiniHomeItemDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomePageResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeUpdateRequestDto;
+import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.service.EventCategoryItemRewardService;
 import com.gorong.backend.domain.minihome.service.MiniHomeService;
 import com.gorong.backend.domain.minihome.service.MiniHomeUserResolver;
@@ -45,6 +46,12 @@ public class MiniHomeController {
     private final MiniHomeUserResolver miniHomeUserResolver;
     private final EventCategoryItemRewardService eventCategoryItemRewardService;
 
+    @GetMapping("/me")
+    public MiniHomeResponseDto getMyMiniHome(Authentication authentication) {
+        Long userId = resolveUserId(authentication);
+        return miniHomeService.getMiniHome(userId, userId);
+    }
+
     @GetMapping("/me/page")
     public MiniHomePageResponseDto getMyMiniHomePage(Authentication authentication) {
         log.info("[MiniHomeController] ENTER GET /api/minihomes/me/page");
@@ -62,6 +69,33 @@ public class MiniHomeController {
         log.info("[MiniHomeController] ENTER POST /api/minihomes/me");
         Long userId = resolveUserId(authentication);
         return miniHomeService.createMiniHome(userId, req);
+    }
+
+    /** 미니홈 설정 — 공개 여부·소개·테마 */
+    @PatchMapping("/me")
+    public MiniHomeResponseDto updateMyMiniHome(
+            Authentication authentication,
+            @RequestBody MiniHomeUpdateRequestDto req
+    ) {
+        return patchMyMiniHomeSettings(authentication, req);
+    }
+
+    /** PATCH 미지원 프록시/구버전 배포 호환 */
+    @PutMapping("/me")
+    public MiniHomeResponseDto putMyMiniHome(
+            Authentication authentication,
+            @RequestBody MiniHomeUpdateRequestDto req
+    ) {
+        return patchMyMiniHomeSettings(authentication, req);
+    }
+
+    private MiniHomeResponseDto patchMyMiniHomeSettings(
+            Authentication authentication,
+            MiniHomeUpdateRequestDto req
+    ) {
+        Long userId = resolveUserId(authentication);
+        log.info("[MiniHomeController] PATCH /me settings userId={} isPublic={}", userId, req.getIsPublic());
+        return miniHomeService.updateMiniHome(userId, req);
     }
 
     @GetMapping("/me/items")
@@ -135,8 +169,12 @@ public class MiniHomeController {
     }
 
     @GetMapping("/{userId}")
-    public MiniHomeResponseDto getMiniHome(@PathVariable Long userId) {
-        return miniHomeService.getMiniHome(userId);
+    public MiniHomeResponseDto getMiniHome(
+            @PathVariable Long userId,
+            Authentication authentication
+    ) {
+        Long viewerUserId = miniHomeUserResolver.resolveUserIdOptional(authentication);
+        return miniHomeService.getMiniHome(userId, viewerUserId);
     }
 
     @PostMapping("/{userId}")
@@ -148,13 +186,44 @@ public class MiniHomeController {
     }
 
     @PatchMapping("/{userId}")
-    public MiniHomeResponseDto updateMiniHome(@PathVariable Long userId, @RequestBody MiniHomeUpdateRequestDto req) {
+    public MiniHomeResponseDto updateMiniHome(
+            @PathVariable Long userId,
+            Authentication authentication,
+            @RequestBody MiniHomeUpdateRequestDto req
+    ) {
+        return patchMiniHomeSettings(userId, authentication, req);
+    }
+
+    /** PATCH 미지원 프록시/구버전 배포 호환 */
+    @PutMapping("/{userId}")
+    public MiniHomeResponseDto putMiniHome(
+            @PathVariable Long userId,
+            Authentication authentication,
+            @RequestBody MiniHomeUpdateRequestDto req
+    ) {
+        return patchMiniHomeSettings(userId, authentication, req);
+    }
+
+    private MiniHomeResponseDto patchMiniHomeSettings(
+            Long userId,
+            Authentication authentication,
+            MiniHomeUpdateRequestDto req
+    ) {
+        Long callerUserId = miniHomeUserResolver.resolveUserId(authentication);
+        if (!callerUserId.equals(userId)) {
+            throw new MiniHomeForbiddenException("본인 미니홈만 수정할 수 있어요.");
+        }
+        log.info("[MiniHomeController] PATCH /{} settings isPublic={}", userId, req.getIsPublic());
         return miniHomeService.updateMiniHome(userId, req);
     }
 
     @GetMapping("/{userId}/page")
-    public MiniHomePageResponseDto getMiniHomePage(@PathVariable Long userId) {
-        return miniHomeService.getMiniHomePage(userId);
+    public MiniHomePageResponseDto getMiniHomePage(
+            @PathVariable Long userId,
+            Authentication authentication
+    ) {
+        Long viewerUserId = miniHomeUserResolver.resolveUserIdOptional(authentication);
+        return miniHomeService.getMiniHomePage(userId, viewerUserId);
     }
 
     @PostMapping("/{userId}/activities")

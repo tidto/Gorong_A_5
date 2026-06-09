@@ -84,6 +84,17 @@ public class GroupService {
                 .collect(Collectors.toList());
     }
 
+    /** 참여 중이면서 모집 중(RECRUITING)인 그룹만 — CatTower 등 표시용 */
+    @Transactional(readOnly = true)
+    public List<GroupPost> getJoinedRecruitingGroupsByUserId(Long userId) {
+        return groupPostRepository.findRecruitingGroupPostsByUserId(userId).stream()
+                .collect(Collectors.toMap(GroupPost::getId, post -> post, (a, b) -> a))
+                .values()
+                .stream()
+                .sorted((a, b) -> Long.compare(b.getId(), a.getId()))
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public void leaveGroup(Long groupId, Long userId) {
         GroupPost post = groupPostRepository.findById(groupId)

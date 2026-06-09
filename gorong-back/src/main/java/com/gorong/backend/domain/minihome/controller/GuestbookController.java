@@ -23,8 +23,12 @@ public class GuestbookController {
 
     /** 방명록 목록 — 최신순 */
     @GetMapping("/{roomOwnerId}")
-    public List<GuestbookResponseDto> list(@PathVariable Long roomOwnerId) {
-        return guestbookService.listByRoomOwner(roomOwnerId);
+    public List<GuestbookResponseDto> list(
+            @PathVariable Long roomOwnerId,
+            Authentication authentication
+    ) {
+        Long viewerUserId = miniHomeUserResolver.resolveUserIdOptional(authentication);
+        return guestbookService.listByRoomOwner(roomOwnerId, viewerUserId);
     }
 
     /** 방명록 작성 — 로그인 필수, 타인 캣타워만 */

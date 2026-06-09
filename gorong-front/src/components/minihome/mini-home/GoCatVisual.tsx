@@ -3,6 +3,7 @@ import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import { getCatVisualByStage } from "../../../utils/minihome/gocat/catVisual";
 import { normalizeEquipPreview, type EquipPreview } from "../../../utils/minihome/gocat/items";
 import { growthStageScaleClass } from "../../../utils/minihome/growth/growthStageVisual";
+import { DEFAULT_CAT_TOWER_ROOM_DISPLAY } from "../../../utils/minihome/cat-tower/cattowerDisplayPrefs";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import GoCatBodyStage from "../rive/GoCatBodyStage";
 import DecorateCatPreview from "../rive/DecorateCatPreview";
@@ -18,6 +19,9 @@ type GoCatVisualProps = {
   /** room 계열 — 박스 안에서 수직 중앙 (미리보기 모달) */
   centerInBox?: boolean;
   playbackActive?: boolean;
+  /** room-3d — 저장된 표시 크기 (localStorage) */
+  room3dBoxPx?: number;
+  room3dDisplayScale?: number;
 };
 
 function CompactCatRig({
@@ -27,6 +31,8 @@ function CompactCatRig({
   interactive,
   centerInBox,
   playbackActive = true,
+  room3dBoxPx = DEFAULT_CAT_TOWER_ROOM_DISPLAY.catBoxPx,
+  room3dDisplayScale = DEFAULT_CAT_TOWER_ROOM_DISPLAY.catDisplayScale,
 }: {
   stage: GrowthStage;
   equipped?: EquipPreview | null;
@@ -34,13 +40,15 @@ function CompactCatRig({
   interactive: boolean;
   centerInBox?: boolean;
   playbackActive?: boolean;
+  room3dBoxPx?: number;
+  room3dDisplayScale?: number;
 }) {
   const isMaster = stage === "MASTER";
   const isRoomLike = variant === "room" || variant === "room-preview" || variant === "room-3d";
   const isRoom3d = variant === "room-3d";
   const box =
     variant === "room-3d"
-      ? 140
+      ? room3dBoxPx
       : variant === "room"
         ? 420
         : variant === "room-preview"
@@ -51,7 +59,12 @@ function CompactCatRig({
   const safeEquipped = normalizeEquipPreview(equipped);
 
   const roomSizeStyle = isRoom3d
-    ? { width: box, height: box }
+    ? {
+        width: box,
+        height: box,
+        transform: `scale(${room3dDisplayScale})`,
+        transformOrigin: "bottom center",
+      }
     : isRoomLike
       ? {
           width: variant === "room-preview" ? "min(260px, 62vw)" : "min(420px, 78vw)",
@@ -75,7 +88,7 @@ function CompactCatRig({
       <div
         className={`relative h-full w-full bg-transparent ${
           isRoom3d
-            ? "origin-bottom scale-100"
+            ? "origin-bottom"
             : `transition-transform duration-500 ${growthStageScaleClass(stage)} ${
                 centerInBox && isRoomLike ? "origin-center" : "origin-bottom"
               }`
@@ -107,6 +120,8 @@ function GoCatVisual({
   activityCount,
   centerInBox = false,
   playbackActive = true,
+  room3dBoxPx,
+  room3dDisplayScale,
 }: GoCatVisualProps) {
   const visual = useMemo(() => getCatVisualByStage(stage), [stage]);
   const safeEquipped = useMemo(() => normalizeEquipPreview(equipped), [equipped]);
@@ -141,6 +156,8 @@ function GoCatVisual({
           interactive={interactive}
           centerInBox={centerInBox}
           playbackActive={playbackActive}
+          room3dBoxPx={room3dBoxPx}
+          room3dDisplayScale={room3dDisplayScale}
         />
       </div>
 

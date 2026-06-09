@@ -549,6 +549,22 @@ export function useChatRoom() {
  * 만약 향후 백엔드가 author를 @JsonIgnore 처리하면,
  * GroupController에 별도 authorEmail 필드를 추가해야 합니다.
  */
+function mapRawGroupPost(g: RawGroupPost): JoinedGroup {
+    return {
+        id:              g.id,
+        title:           g.title,
+        location:        g.location ?? '',
+        currentCapacity: g.currentCapacity ?? 0,
+        maxCapacity:     g.maxCapacity ?? 0,
+        status:          g.status ?? 'RECRUITING',
+        event:           g.event,
+        meetingDate:     g.meetingDate,
+        meetingTime:     g.meetingTime,
+        authorName:      g.authorName,
+        authorEmail:     g.author?.email,
+    }
+}
+
 export async function fetchJoinedGroups(): Promise<JoinedGroup[]> {
     try {
         const [idsRes, groupsRes] = await Promise.all([
@@ -560,22 +576,20 @@ export async function fetchJoinedGroups(): Promise<JoinedGroup[]> {
 
         return groupsRes.data
             .filter((g) => joinedIds.includes(g.id))
-            .map((g): JoinedGroup => ({
-                id:              g.id,
-                title:           g.title,
-                location:        g.location ?? '',
-                currentCapacity: g.currentCapacity ?? 0,
-                maxCapacity:     g.maxCapacity ?? 0,
-                status:          g.status ?? 'RECRUITING',
-                event:           g.event,
-                meetingDate:     g.meetingDate,
-                meetingTime:     g.meetingTime,
-                authorName:      g.authorName,
-                // 권한 판정용: 백엔드 author 객체에서 이메일 직접 추출
-                authorEmail:     g.author?.email,
-            }))
+            .map(mapRawGroupPost)
     } catch (e) {
         debugLog('fetchJoinedGroups', '그룹 목록 로드 실패', e)
+        return []
+    }
+}
+
+/** 모집 중(RECRUITING)인 참여 그룹만 — CatTower 참여 이벤트 표시용 */
+export async function fetchRecruitingJoinedGroups(): Promise<JoinedGroup[]> {
+    try {
+        const res = await axiosInstance.get<RawGroupPost[]>('/groups/joined-recruiting')
+        return res.data.map(mapRawGroupPost)
+    } catch (e) {
+        debugLog('fetchRecruitingJoinedGroups', '모집 중 그룹 로드 실패', e)
         return []
     }
 }

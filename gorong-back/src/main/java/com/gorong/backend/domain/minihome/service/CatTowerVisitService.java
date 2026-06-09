@@ -2,9 +2,7 @@ package com.gorong.backend.domain.minihome.service;
 
 import com.gorong.backend.domain.minihome.dto.CatTowerVisitorStatsDto;
 import com.gorong.backend.domain.minihome.entity.CatTowerVisit;
-import com.gorong.backend.domain.minihome.exception.MiniHomeNotFoundException;
 import com.gorong.backend.domain.minihome.repository.CatTowerVisitRepository;
-import com.gorong.backend.domain.minihome.repository.MiniHomeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +19,12 @@ public class CatTowerVisitService {
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
     private final CatTowerVisitRepository catTowerVisitRepository;
-    private final MiniHomeRepository miniHomeRepository;
+    private final MiniHomeService miniHomeService;
     private final EventCategoryItemRewardService eventCategoryItemRewardService;
 
-    public CatTowerVisitorStatsDto getStats(Long roomOwnerId) {
+    public CatTowerVisitorStatsDto getStats(Long roomOwnerId, Long viewerUserId) {
         requireUserId(roomOwnerId);
-        ensureRoomOwnerExists(roomOwnerId);
+        miniHomeService.requireViewableMiniHome(roomOwnerId, viewerUserId);
         return buildStats(roomOwnerId);
     }
 
@@ -36,10 +34,11 @@ public class CatTowerVisitService {
         requireUserId(visitorUserId);
 
         if (roomOwnerId.equals(visitorUserId)) {
+            miniHomeService.requireViewableMiniHome(roomOwnerId, visitorUserId);
             return buildStats(roomOwnerId);
         }
 
-        ensureRoomOwnerExists(roomOwnerId);
+        miniHomeService.requireViewableMiniHome(roomOwnerId, visitorUserId);
 
         catTowerVisitRepository.save(CatTowerVisit.builder()
                 .roomOwnerUserId(roomOwnerId)
@@ -63,11 +62,6 @@ public class CatTowerVisitService {
                 .todayCount(todayCount)
                 .totalCount(totalCount)
                 .build();
-    }
-
-    private void ensureRoomOwnerExists(Long roomOwnerId) {
-        miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(roomOwnerId)
-                .orElseThrow(() -> new MiniHomeNotFoundException("캣타워(미니홈)가 없습니다. userId=" + roomOwnerId));
     }
 
     private static Long requireUserId(Long userId) {

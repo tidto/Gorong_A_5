@@ -83,6 +83,8 @@ axiosInstance.interceptors.response.use(
         if (status === 401) {
             _cachedToken = null;
             _tokenExpiresAt = 0;
+            const { invalidateMiniHomeMeCache } = await import('../utils/minihome/core/miniHomeMeCache');
+            invalidateMiniHomeMeCache();
             await signOut(auth);
             localStorage.removeItem('gorong-db-user');
             localStorage.removeItem('gorong-firebase-uid');
