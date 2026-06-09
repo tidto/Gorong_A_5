@@ -52,6 +52,11 @@ public class ReviewService {
         assertReviewMetaEditable(review, rating, reviewText);
 
         review.updateQuickReview(rating, reviewText);
+
+        // ⭐️ [수정 사항] DB의 content 컬럼 NOT NULL 제약조건 에러를 막기 위해
+        // 간편 리뷰 저장 시에도 본문(content) 자리에 한 줄 리뷰 텍스트를 채워줍니다.
+        review.updateContent(review.getTitle(), normalizeText(reviewText));
+
         syncImages(review, images);
         return reviewRepository.save(review);
     }
