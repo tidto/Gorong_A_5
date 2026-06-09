@@ -8,6 +8,4 @@ import lombok.Setter;
 public class MiniHomeUpdateRequestDto {
     private String description;
     private String themeCode;
-    private Boolean isPublic;
 }
-

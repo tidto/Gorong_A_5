@@ -106,12 +106,12 @@ function CatTowerParticipatingEvents({ enabled = true, refreshToken = 0 }: Props
   if (!enabled) return null;
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-rose-100/90 bg-gradient-to-b from-rose-50/95 via-white to-orange-50/30 shadow-[0_4px_20px_rgba(244,63,94,0.08)]">
-      <div className="border-b border-rose-100/70 bg-gradient-to-r from-rose-400 to-orange-400 px-3 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-white">
+    <section className="sidebar-card w-full max-w-full border-rose-100/90 bg-gradient-to-b from-rose-50/95 via-white to-orange-50/30">
+      <div className="sidebar-card-header justify-center border-rose-100/70 bg-gradient-to-r from-rose-400 to-orange-400">
         🌸 참여 중인 이벤트
       </div>
 
-      <div className="space-y-2.5 p-3">
+      <div className="sidebar-card-body">
         <p className="text-center text-[9px] font-bold text-rose-700/70">
           {loading ? "불러오는 중…" : `${items.length}개 참여 중 · 만남 날짜 순`}
         </p>

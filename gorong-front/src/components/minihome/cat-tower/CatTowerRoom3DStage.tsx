@@ -10,7 +10,7 @@ import {
 import type { RoomDecorItem } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 import CatTowerSpeechBubble from "./CatTowerSpeechBubble";
 import CatTowerRoom3DCanvas from "./room-3d/CatTowerRoom3DCanvas";
-import { CATTOWER_ROOM_3D_CANVAS_H } from "./catTowerLayout";
+import { getCatTowerRoomDisplayPrefs } from "../../../utils/minihome/cat-tower/cattowerDisplayPrefs";
 
 type Props = {
   growthStage: GrowthStage;
@@ -47,10 +47,17 @@ function CatTowerRoom3DStage({
     [safeEquipped]
   );
   const bg = ROOM_BACKGROUND_BY_ID[roomBackground] ?? ROOM_BACKGROUND_BY_ID.BASIC_ROOM;
+  const display = useMemo(() => getCatTowerRoomDisplayPrefs(), []);
+  const canvasHeightStyle = useMemo(
+    () => ({
+      height: `clamp(${display.canvasHeightMobile}px, 52vw, ${display.canvasHeightDesktop}px)`,
+    }),
+    [display.canvasHeightDesktop, display.canvasHeightMobile]
+  );
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-[1.75rem] border border-orange-100/90 bg-gradient-to-b from-[#fffaf5] to-orange-50/50 shadow-[0_8px_32px_rgba(255,140,80,0.08)] ring-1 ring-orange-50">
-      <div className={`relative z-20 border-b px-3 py-2.5 text-center ${bg.headerBgClass}`}>
+    <div className="sidebar-card relative flex flex-col border-orange-100/90 bg-gradient-to-b from-[#fffaf5] to-orange-50/50">
+      <div className={`sidebar-card-header relative z-20 justify-center ${bg.headerBgClass}`}>
         <p className="text-xs font-extrabold tracking-wide text-slate-800 sm:text-sm">
           {catName}의 3D 방 · {bg.label}
         </p>
@@ -64,10 +71,11 @@ function CatTowerRoom3DStage({
         />
       </div>
 
-      <div className="relative bg-gradient-to-b from-orange-50/30 to-transparent p-2 sm:p-3">
-        <div className="overflow-hidden rounded-xl ring-1 ring-orange-100/90 shadow-inner">
+      <div className="relative bg-gradient-to-b from-orange-50/30 to-transparent p-1 sm:p-1.5">
+        <div className="overflow-visible rounded-xl ring-1 ring-orange-100/90 shadow-inner">
         <CatTowerRoom3DCanvas
-          className={`${CATTOWER_ROOM_3D_CANVAS_H} w-full rounded-xl`}
+          className="w-full rounded-xl"
+          style={canvasHeightStyle}
           roomBackground={roomBackground}
           roomDecorItems={roomDecorItems}
           growthStage={growthStage}

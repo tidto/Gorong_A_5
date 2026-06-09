@@ -50,15 +50,13 @@ function TabPanelShell({
   children: ReactNode;
 }) {
   return (
-    <div
-      className={`flex ${CATTOWER_STAGE_MIN_H} flex-col overflow-hidden rounded-[1.75rem] border border-orange-100/90 bg-gradient-to-b from-white via-[#fffaf5] to-orange-50/40 shadow-[0_8px_32px_rgba(255,140,80,0.08)] ring-1 ring-orange-50`}
-    >
-      <div className="shrink-0 border-b border-orange-100/70 bg-gradient-to-r from-orange-50 to-amber-50/80 px-4 py-3 text-center">
-        <p className="text-sm font-extrabold tracking-wide text-orange-900/80">
+    <div className={`sidebar-card flex ${CATTOWER_STAGE_MIN_H} flex-col border-orange-100/90 bg-gradient-to-b from-white via-[#fffaf5] to-orange-50/40`}>
+      <div className="sidebar-card-header shrink-0 justify-center border-orange-100/70 bg-gradient-to-r from-orange-400 to-amber-400 text-orange-50">
+        <p>
           {emoji} {title}
         </p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">{children}</div>
+      <div className="sidebar-card-body min-h-0 flex-1 overflow-y-auto !space-y-0">{children}</div>
     </div>
   );
 }

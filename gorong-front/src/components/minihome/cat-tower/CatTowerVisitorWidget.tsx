@@ -68,13 +68,14 @@ export default function CatTowerVisitorWidget({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15, duration: 0.35 }}
-      className="overflow-hidden rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/50 shadow-sm"
+      className="sidebar-card w-full max-w-full border-emerald-100/90 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/50"
+      style={{ width: "100%" }}
     >
-      <div className="flex items-center gap-2 border-b border-emerald-100/70 bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-2">
-        <Users className="h-3.5 w-3.5 text-white/95" />
-        <p className="text-xs font-extrabold text-white">방문자 현황</p>
+      <div className="sidebar-card-header justify-center border-emerald-100/70 bg-gradient-to-r from-emerald-500 to-teal-500">
+        <Users className="h-3.5 w-3.5 shrink-0 text-white/95" />
+        <p>방문자 현황</p>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-emerald-100/70 px-1 py-3">
+      <div className="sidebar-card-body !space-y-0 grid grid-cols-2 divide-x divide-emerald-100/70 !p-0 py-3">
         <div className="text-center">
           <p className="text-xl font-extrabold tabular-nums text-emerald-700">
             <AnimatedCount value={today} />

@@ -20,7 +20,6 @@ type CatTowerDashboardProps = {
   nickname: string;
   catName: string;
   growth: GrowthState;
-  isPublic: boolean;
   equipped: EquipPreview;
   appearanceState?: Record<string, unknown> | null;
   activities: ActivityItem[];
@@ -50,7 +49,6 @@ function CatTowerDashboard({
   nickname,
   catName,
   growth,
-  isPublic,
   equipped,
   appearanceState,
   activities,
@@ -175,13 +173,12 @@ function CatTowerDashboard({
         </div>
       </header>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(200px,240px)_1fr_minmax(168px,200px)]">
-        <div className="order-2 lg:order-1">
+      <div className="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
+        <div className="sidebar-column-shell order-1 lg:order-1">
           <CatTowerProfilePanel
           nickname={nickname}
           catName={catName}
           growth={growth}
-          isPublic={isPublic}
           galleryCount={galleryCount}
           loading={loading}
           showParticipatingEvents={!isReadOnly}
@@ -190,7 +187,7 @@ function CatTowerDashboard({
         />
         </div>
 
-        <div className="order-1 flex flex-col gap-2 lg:order-2">
+        <div className="order-2 flex flex-col gap-2 lg:order-2">
           <CatTowerMobileTabs
             activePanel={centerPanel}
             onPanelChange={setCenterPanel}
@@ -220,7 +217,7 @@ function CatTowerDashboard({
         />
         </div>
 
-        <div className="order-3 lg:order-3">
+        <div className="sidebar-column-shell order-3 lg:order-3">
           <CatTowerVisitorBlock
           busy={busy}
           loading={loading}

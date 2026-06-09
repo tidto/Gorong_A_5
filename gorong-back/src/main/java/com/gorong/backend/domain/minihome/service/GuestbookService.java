@@ -4,9 +4,7 @@ import com.gorong.backend.domain.minihome.dto.GuestbookCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GuestbookResponseDto;
 import com.gorong.backend.domain.minihome.entity.Guestbook;
 import com.gorong.backend.domain.minihome.exception.GuestbookNotFoundException;
-import com.gorong.backend.domain.minihome.exception.MiniHomeNotFoundException;
 import com.gorong.backend.domain.minihome.repository.GuestbookRepository;
-import com.gorong.backend.domain.minihome.repository.MiniHomeRepository;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
 import com.gorong.backend.domain.user.repository.UserRepository;
@@ -22,14 +20,14 @@ import java.util.List;
 public class GuestbookService {
 
     private final GuestbookRepository guestbookRepository;
-    private final MiniHomeRepository miniHomeRepository;
+    private final MiniHomeService miniHomeService;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final GoCatItemUnlockService goCatItemUnlockService;
 
-    public List<GuestbookResponseDto> listByRoomOwner(Long roomOwnerId) {
+    public List<GuestbookResponseDto> listByRoomOwner(Long roomOwnerId, Long viewerUserId) {
         requireUserId(roomOwnerId);
-        ensureRoomOwnerExists(roomOwnerId);
+        miniHomeService.requireViewableMiniHome(roomOwnerId, viewerUserId);
 
         return guestbookRepository
                 .findByRoomOwnerUserIdAndParentGuestbookIdIsNullOrderByCreateAtDesc(roomOwnerId)
@@ -48,7 +46,7 @@ public class GuestbookService {
             throw new IllegalArgumentException("본인 캣타워에는 방명록을 남길 수 없습니다.");
         }
 
-        ensureRoomOwnerExists(roomOwnerId);
+        miniHomeService.requireViewableMiniHome(roomOwnerId, authorUserId);
         ensureAuthorExists(authorUserId);
 
         AuthorProfile authorProfile = resolveAuthorProfile(authorUserId);
@@ -82,11 +80,6 @@ public class GuestbookService {
         }
 
         guestbookRepository.delete(entry);
-    }
-
-    private void ensureRoomOwnerExists(Long roomOwnerId) {
-        miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(roomOwnerId)
-                .orElseThrow(() -> new MiniHomeNotFoundException("캣타워(미니홈)가 없습니다. userId=" + roomOwnerId));
     }
 
     private void ensureAuthorExists(Long authorUserId) {

@@ -8,6 +8,8 @@ type Props = {
   equipped?: EquipPreview | null;
   interactive?: boolean;
   playbackActive?: boolean;
+  catBoxPx?: number;
+  catDisplayScale?: number;
 };
 
 /** 3D 캔버스 위 Go냥이 — 발 위치가 부모 anchor(바닥 중앙)에 맞춰짐 */
@@ -17,6 +19,8 @@ export default function GoCatRoomOverlay({
   equipped,
   interactive = true,
   playbackActive = true,
+  catBoxPx,
+  catDisplayScale,
 }: Props) {
   return (
     <div
@@ -32,10 +36,12 @@ export default function GoCatRoomOverlay({
           activityCount={activityCount}
           interactive={interactive}
           playbackActive={playbackActive}
+          room3dBoxPx={catBoxPx}
+          room3dDisplayScale={catDisplayScale}
         />
       </div>
       <div
-        className="pointer-events-none absolute bottom-0 left-1/2 h-2.5 w-14 -translate-x-1/2 translate-y-2 rounded-[100%] bg-black/25 blur-sm"
+        className="pointer-events-none absolute bottom-0 left-1/2 h-2.5 w-16 -translate-x-1/2 translate-y-2 rounded-[100%] bg-black/25 blur-sm"
         aria-hidden
       />
     </div>

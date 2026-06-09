@@ -15,6 +15,9 @@ type Props = {
   roomDecorItems: RoomDecorItem[];
   editable?: boolean;
   lightweight?: boolean;
+  sceneScale?: number;
+  orbitMinDistance?: number;
+  orbitMaxDistance?: number;
   onMoveItem?: (id: string, x: number, y: number) => void;
   onRemoveItem?: (id: string) => void;
 };
@@ -25,6 +28,9 @@ export default function CatTowerRoom3DScene({
   roomDecorItems,
   editable = false,
   lightweight = false,
+  sceneScale = 1,
+  orbitMinDistance = 4.5,
+  orbitMaxDistance = 10,
   onMoveItem,
   onRemoveItem,
 }: Props) {
@@ -56,18 +62,20 @@ export default function CatTowerRoom3DScene({
         color={theme.pointColor}
       />
 
-      <Room3DShell roomBackground={roomBackground} />
-      <Room3DAmbience roomBackground={roomBackground} lightweight={lightweight} />
+      <group scale={sceneScale}>
+        <Room3DShell roomBackground={roomBackground} />
+        <Room3DAmbience roomBackground={roomBackground} lightweight={lightweight} />
 
-      {roomDecorItems.map((item) => (
-        <DraggableFurniture3D
-          key={item.id}
-          item={item}
-          editable={editable}
-          onMove={onMoveItem}
-          onRemove={onRemoveItem}
-        />
-      ))}
+        {roomDecorItems.map((item) => (
+          <DraggableFurniture3D
+            key={item.id}
+            item={item}
+            editable={editable}
+            onMove={onMoveItem}
+            onRemove={onRemoveItem}
+          />
+        ))}
+      </group>
 
       {!lightweight ? (
         <ContactShadows
@@ -84,9 +92,9 @@ export default function CatTowerRoom3DScene({
         enableDamping={false}
         minPolarAngle={0.35}
         maxPolarAngle={1.35}
-        minDistance={5}
-        maxDistance={11}
-        target={[0, 0.8, 0.3]}
+        minDistance={orbitMinDistance}
+        maxDistance={orbitMaxDistance}
+        target={[0, 1.15, 0.75]}
         onChange={() => invalidate()}
       />
     </>

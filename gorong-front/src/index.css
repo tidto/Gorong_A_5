@@ -59,6 +59,39 @@
   .icon-label {
     @apply inline-flex items-center gap-2 px-2 py-1 bg-gray-100 rounded-full text-sm text-gray-700;
   }
+
+  /* CatTower 좌·우 사이드바 + 중앙 패널 카드 공통 */
+  .sidebar-column-shell {
+    @apply box-border w-full min-w-0 max-w-full lg:w-[240px] lg:max-w-[240px] lg:shrink-0;
+  }
+
+  .sidebar-column {
+    @apply box-border flex w-full min-w-0 max-w-full flex-col items-stretch gap-5;
+  }
+
+  .sidebar-column > * {
+    @apply box-border w-full min-w-0 max-w-full self-stretch;
+  }
+
+  .sidebar-card {
+    @apply box-border w-full max-w-full overflow-hidden rounded-3xl border shadow-sm;
+  }
+
+  .sidebar-card-header {
+    @apply box-border flex items-center gap-2 border-b px-3 py-2.5 text-center text-xs font-extrabold tracking-wide text-white;
+  }
+
+  .sidebar-card-body {
+    @apply box-border space-y-2.5 p-3;
+  }
+
+  .sidebar-card-actions-grid {
+    @apply grid w-full grid-cols-2 gap-2;
+  }
+
+  .sidebar-action-btn {
+    @apply box-border flex w-full items-center justify-center gap-1.5 rounded-xl border bg-white py-2 text-[11px] font-bold shadow-sm transition hover:shadow-md;
+  }
 }
 
 @layer utilities {

@@ -26,6 +26,14 @@ public class MiniHomeUserResolver {
                 ));
     }
 
+    /** 비로그인·토큰 없음 → null (방문자 조회용) */
+    public Long resolveUserIdOptional(Authentication authentication) {
+        if (authentication == null) return null;
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof FirebaseToken firebaseToken)) return null;
+        return userRepository.findByFirebaseUid(firebaseToken.getUid()).map(u -> u.getId()).orElse(null);
+    }
+
     /** FirebaseTokenFilter는 principal만 설정할 수 있어 isAuthenticated 검사는 생략합니다. */
     private static FirebaseToken requireFirebaseToken(Authentication authentication) {
         if (authentication == null) {
