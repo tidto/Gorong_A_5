@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
@@ -9,83 +9,24 @@ type CatTowerProfilePanelProps = {
   nickname: string;
   catName: string;
   growth: GrowthState;
-  isPublic: boolean;
   galleryCount?: number;
   loading?: boolean;
-  canEdit?: boolean;
   showParticipatingEvents?: boolean;
   guestView?: boolean;
   refreshToken?: number;
-  onVisibilityChange?: (isPublic: boolean) => Promise<void>;
 };
-
-function VisibilityBadge({
-  isPublic,
-  canEdit,
-  saving,
-  onToggle,
-}: {
-  isPublic: boolean;
-  canEdit: boolean;
-  saving: boolean;
-  onToggle: () => void;
-}) {
-  const className = `inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold transition ${
-    isPublic
-      ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200/90"
-      : "bg-slate-100 text-slate-600 hover:bg-slate-200/90"
-  } ${canEdit ? "cursor-pointer ring-1 ring-transparent hover:ring-emerald-200/80" : ""} ${
-    saving ? "opacity-60" : ""
-  }`;
-
-  const label = saving ? "저장 중…" : isPublic ? "🌍 공개" : "🔒 비공개";
-
-  if (!canEdit) {
-    return <span className={className.replace("cursor-pointer", "")}>{label}</span>;
-  }
-
-  return (
-    <button
-      type="button"
-      disabled={saving}
-      onClick={onToggle}
-      className={className}
-      title={isPublic ? "비공개로 전환" : "공개로 전환"}
-      aria-label={isPublic ? "미니홈 비공개로 전환" : "미니홈 공개로 전환"}
-    >
-      {label}
-    </button>
-  );
-}
 
 /** 왼쪽 — Go냥이 프로필 카드 + 오늘의 한마디 */
 export default function CatTowerProfilePanel({
   nickname,
   catName,
   growth,
-  isPublic,
   galleryCount = 0,
   loading,
-  canEdit = false,
   showParticipatingEvents = false,
   guestView = false,
   refreshToken = 0,
-  onVisibilityChange,
 }: CatTowerProfilePanelProps) {
-  const [savingVisibility, setSavingVisibility] = useState(false);
-
-  async function handleToggleVisibility() {
-    if (!canEdit || !onVisibilityChange || savingVisibility) return;
-    setSavingVisibility(true);
-    try {
-      await onVisibilityChange(!isPublic);
-    } catch {
-      /* CatTower에서 토스트 처리 */
-    } finally {
-      setSavingVisibility(false);
-    }
-  }
-
   return (
     <aside className="sidebar-column">
       <motion.div
@@ -93,21 +34,17 @@ export default function CatTowerProfilePanel({
         className={`sidebar-card w-full max-w-full bg-gradient-to-b via-white to-rose-50/30 ${
           guestView
             ? "border-sky-100/90 from-sky-50/95"
-            : !isPublic
-              ? "border-slate-200/90 from-slate-50/95"
-              : "border-emerald-100/90 from-emerald-50/95"
+            : "border-emerald-100/90 from-emerald-50/95"
         }`}
       >
         <div
           className={`sidebar-card-header justify-center sm:text-sm ${
             guestView
               ? "border-sky-100/70 bg-gradient-to-r from-sky-500 to-violet-500"
-              : !isPublic
-                ? "border-slate-200/70 bg-gradient-to-r from-slate-500 to-slate-600"
-                : "border-emerald-100/70 bg-gradient-to-r from-[#5DB08E] to-teal-500"
+              : "border-emerald-100/70 bg-gradient-to-r from-[#5DB08E] to-teal-500"
           }`}
         >
-          {guestView ? `👀 ${catName} 프로필` : !isPublic ? "🔒 MY Go냥이 프로필" : "🌿 MY Go냥이 프로필"}
+          {guestView ? `👀 ${catName} 프로필` : "🌿 MY Go냥이 프로필"}
         </div>
 
         <div className="sidebar-card-body space-y-4">
@@ -136,27 +73,11 @@ export default function CatTowerProfilePanel({
               compact
               glow
             />
-            {!guestView ? (
-              <VisibilityBadge
-                isPublic={isPublic}
-                canEdit={canEdit}
-                saving={savingVisibility}
-                onToggle={handleToggleVisibility}
-              />
-            ) : null}
           </div>
 
-          {canEdit && !guestView ? (
-            <p
-              className={`rounded-xl px-3 py-2 text-center text-[11px] font-semibold leading-relaxed ${
-                isPublic
-                  ? "bg-emerald-50/80 text-emerald-800/70"
-                  : "bg-slate-100 text-slate-600"
-              }`}
-            >
-              {isPublic
-                ? "🌍 공개 중 — 다른 사람이 내 CatTower를 방문할 수 있어요."
-                : "🔒 비공개 중 — 다른 사람은 내 CatTower에 들어올 수 없어요. 뱃지를 탭하면 공개로 바꿀 수 있어요."}
+          {!guestView ? (
+            <p className="rounded-xl bg-emerald-50/80 px-3 py-2 text-center text-[11px] font-semibold leading-relaxed text-emerald-800/70">
+              🌍 다른 사람이 내 CatTower를 방문하고 활동을 구경할 수 있어요.
             </p>
           ) : null}
 

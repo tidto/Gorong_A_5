@@ -24,14 +24,9 @@ import type { DecorItem, SlotType } from "../../components/minihome/mini-home/De
 import type { UserItem } from "../../types/minihome/item";
 import { computeGrowthState } from "../../utils/minihome/growth/growth";
 import { needsGoCatSetup } from "../../utils/minihome/gocat/goCatSetup";
-import { resolveMiniHomeIsPublic, updateMyMiniHome } from "../../api/minihome/miniHomeApi";
-import { useNotification } from "../../contexts/NotificationContext";
-import { mapMiniHomeApiError } from "../../utils/minihome/core/minihomeApiError";
-import CatTowerPrivateBlocked from "../../components/minihome/cat-tower/CatTowerPrivateBlocked";
 import CatTowerDecorationLayer from "./CatTowerDecorationLayer";
 
 export default function CatTower() {
-  const { toast } = useNotification();
   const navigate = useNavigate();
   const { userId: routeUserId } = useParams<{ userId?: string }>();
   const { displayName, firebaseUser, loadingUserId, userIdError, isReady } = useMiniHomeUserId();
@@ -41,8 +36,6 @@ export default function CatTower() {
     page,
     loading,
     err,
-    privateBlocked,
-    viewedUserId,
     canEdit,
     isReadOnly,
     isOwner,
@@ -73,7 +66,6 @@ export default function CatTower() {
     setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
   }, [setPage]);
 
-  /** 장착 draft — 저장 직후 page 변경으로 덮어쓰지 않음 (refreshToken·방 주인 변경 시만 재동기화) */
   useEffect(() => {
     if (!pageReady || roomOwnerId == null) return;
     let cancelled = false;
@@ -137,10 +129,8 @@ export default function CatTower() {
   const displayEquipped = canEdit ? myEquippedPreview : ownerEquippedPreview;
 
   const handleReport = useCallback(() => {
-    const targetId = page?.miniHome?.userId;
-    console.log("[CatTower] report", { targetUserId: targetId, catName: page?.miniHome?.cat?.catName });
     window.alert("신고 기능은 준비 중입니다.");
-  }, [page?.miniHome?.userId, page?.miniHome?.cat?.catName]);
+  }, []);
 
   const handleDecorate = useCallback(() => setDecorateOpen(true), []);
   const handleBack = useCallback(() => navigate("/cattower"), [navigate]);
@@ -151,40 +141,9 @@ export default function CatTower() {
     setRefreshToken((t) => t + 1);
   }, [loadPage]);
 
-  const handleVisibilityChange = useCallback(
-    async (nextPublic: boolean) => {
-      if (roomOwnerId == null) {
-        toast("사용자 정보를 확인할 수 없습니다.", "error");
-        return;
-      }
-      try {
-        const updated = await updateMyMiniHome(roomOwnerId, { isPublic: nextPublic });
-        const savedPublic = resolveMiniHomeIsPublic(updated?.isPublic, nextPublic);
-        setPage((prev) =>
-          prev
-            ? {
-                ...prev,
-                miniHome: { ...prev.miniHome, isPublic: savedPublic },
-              }
-            : prev
-        );
-        toast(
-          savedPublic ? "미니홈이 공개로 설정되었습니다." : "미니홈이 비공개로 설정되었습니다.",
-          "success"
-        );
-        await loadPage();
-      } catch (e: unknown) {
-        toast(mapMiniHomeApiError(e, "공개 설정 저장에 실패했습니다."), "error");
-        throw e;
-      }
-    },
-    [roomOwnerId, setPage, toast, loadPage]
-  );
-
   const pageLoaded = Boolean(page) && !loading;
   const gateReady = !loadingUserId && isReady && Boolean(firebaseUser) && pageLoaded;
 
-  /** 본인 /cattower — 미설정 시 생성 페이지로 (온보딩 UI는 캣타워에 표시하지 않음) */
   useEffect(() => {
     if (!gateReady || !canEdit || !isOwnTower) return;
     if (needsSetup) {
@@ -221,35 +180,33 @@ export default function CatTower() {
 
       <div className="relative mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
         {showMain ? (
-        <CatTowerDashboard
-          nickname={ownerLabel}
-          catName={catName}
-          growth={growth}
-          isPublic={resolveMiniHomeIsPublic(page?.miniHome?.isPublic)}
-          equipped={displayEquipped}
-          appearanceState={cat?.appearanceState}
-          activities={page?.activities ?? []}
-          galleries={page?.galleries ?? []}
-          activityCount={page?.stats?.activityCount ?? growth.activityCount}
-          galleryCount={page?.stats?.galleryCount ?? page?.galleries?.length ?? 0}
-          loading={loading && !page}
-          busy={loading}
-          canEdit={canEdit}
-          isReadOnly={isReadOnly}
-          resolvingOwner={resolvingOwner}
-          roomOwnerId={roomOwnerId}
-          myUserId={myUserId}
-          isOwner={isOwner}
-          pageReady={pageReady}
-          refreshToken={refreshToken}
-          catDecorateOpen={decorateOpen}
-          onDecorate={handleDecorate}
-          onBack={handleBack}
-          onEvents={handleEvents}
-          onRefresh={handleRefresh}
-          onReport={isReadOnly ? handleReport : undefined}
-          onVisibilityChange={canEdit ? handleVisibilityChange : undefined}
-        />
+          <CatTowerDashboard
+            nickname={ownerLabel}
+            catName={catName}
+            growth={growth}
+            equipped={displayEquipped}
+            appearanceState={cat?.appearanceState}
+            activities={page?.activities ?? []}
+            galleries={page?.galleries ?? []}
+            activityCount={page?.stats?.activityCount ?? growth.activityCount}
+            galleryCount={page?.stats?.galleryCount ?? page?.galleries?.length ?? 0}
+            loading={loading && !page}
+            busy={loading}
+            canEdit={canEdit}
+            isReadOnly={isReadOnly}
+            resolvingOwner={resolvingOwner}
+            roomOwnerId={roomOwnerId}
+            myUserId={myUserId}
+            isOwner={isOwner}
+            pageReady={pageReady}
+            refreshToken={refreshToken}
+            catDecorateOpen={decorateOpen}
+            onDecorate={handleDecorate}
+            onBack={handleBack}
+            onEvents={handleEvents}
+            onRefresh={handleRefresh}
+            onReport={isReadOnly ? handleReport : undefined}
+          />
         ) : null}
 
         <CatTowerDecorationLayer
@@ -273,16 +230,6 @@ export default function CatTower() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
-      </div>
-    );
-  }
-
-  if (privateBlocked && viewedUserId != null) {
-    return (
-      <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
-        <div className="relative mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
-          <CatTowerPrivateBlocked message={err ?? undefined} onBack={handleBack} />
-        </div>
       </div>
     );
   }

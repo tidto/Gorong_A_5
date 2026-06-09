@@ -21,7 +21,6 @@ import com.gorong.backend.domain.minihome.entity.MiniHome;
 import com.gorong.backend.domain.minihome.entity.MiniHomeGallery;
 import com.gorong.backend.domain.minihome.entity.UserItem;
 import com.gorong.backend.domain.minihome.exception.GalleryNotFoundException;
-import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.exception.MiniHomeNotFoundException;
 import com.gorong.backend.domain.minihome.repository.ActivityLogRepository;
 import com.gorong.backend.domain.minihome.repository.CatEquipRepository;
@@ -80,17 +79,11 @@ public class MiniHomeService {
         return MiniHomeResponseDto.from(miniHome, cat);
     }
 
-    /** 비공개 미니홈은 주인만 조회 가능 */
+    /** 미니홈 존재 확인 — CatTower·방명록·방문자 등 공통 */
     public MiniHome requireViewableMiniHome(Long ownerUserId, Long viewerUserId) {
         requireUserId(ownerUserId);
-        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(ownerUserId)
+        return miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(ownerUserId)
                 .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + ownerUserId));
-
-        if (Boolean.FALSE.equals(miniHome.getIsPublic())
-                && (viewerUserId == null || !viewerUserId.equals(ownerUserId))) {
-            throw new MiniHomeForbiddenException("비공개 미니홈입니다. 주인만 볼 수 있어요.");
-        }
-        return miniHome;
     }
 
     @Transactional
@@ -168,7 +161,6 @@ public class MiniHomeService {
 
         if (req.getDescription() != null) miniHome.setDescription(req.getDescription());
         if (req.getThemeCode() != null) miniHome.setThemeCode(req.getThemeCode());
-        if (req.getIsPublic() != null) miniHome.setIsPublic(req.getIsPublic());
 
         miniHomeRepository.save(miniHome);
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);

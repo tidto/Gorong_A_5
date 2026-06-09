@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ExternalLink, X } from "lucide-react";
-import { getMiniHomePage, resolveMiniHomeIsPublic } from "../../../api/minihome/miniHomeApi";
-import { fetchCachedMyUserId } from "../../../utils/minihome/core/miniHomeMeCache";
+import { getMiniHomePage } from "../../../api/minihome/miniHomeApi";
 import type { MiniHomePage } from "../../../types/minihome/minihome";
 import { computeGrowthState } from "../../../utils/minihome/growth/growth";
 import { enrichEquipItems, normalizeEquipPreview } from "../../../utils/minihome/gocat/items";
 import { ownerEquipPreviewFromPage } from "../../../utils/minihome/gocat/gocatEquippedStorage";
-import {
-  isPrivateMiniHomeForbidden,
-  mapMiniHomeApiError,
-} from "../../../utils/minihome/core/minihomeApiError";
+import { mapMiniHomeApiError } from "../../../utils/minihome/core/minihomeApiError";
 import { parseRoomBackgroundFromAppearance } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
 import CatTowerPreviewStage from "./CatTowerPreviewStage";
@@ -30,50 +26,24 @@ export default function CatTowerPreviewOverlay({
   const [page, setPage] = useState<MiniHomePage | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [privateBlocked, setPrivateBlocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setErr(null);
-    setPrivateBlocked(false);
     setPage(null);
 
-    Promise.all([
-      fetchCachedMyUserId().catch(() => null),
-      getMiniHomePage(userId),
-    ])
-      .then(([myId, data]) => {
+    getMiniHomePage(userId)
+      .then((data) => {
         if (cancelled) return;
-
-        const ownerId = data.miniHome?.userId ?? userId;
-        const isPublic = resolveMiniHomeIsPublic(data.miniHome?.isPublic);
-        const isGuestViewer = myId == null || myId !== ownerId;
-
-        if (!isPublic && isGuestViewer) {
-          setPrivateBlocked(true);
-          setErr("비공개 미니홈입니다. 주인만 볼 수 있어요.");
-          setPage(null);
-          return;
-        }
-
         setPage({
           ...data,
-          miniHome: { ...data.miniHome, isPublic },
           activeEquips: enrichEquipItems(data.activeEquips ?? []),
         });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        const blocked = isPrivateMiniHomeForbidden(e);
-        setPrivateBlocked(blocked);
-        setErr(
-          mapMiniHomeApiError(
-            e,
-            blocked ? "비공개 미니홈입니다. 주인만 볼 수 있어요." : "캣타워를 불러오지 못했습니다."
-          )
-        );
-        setPage(null);
+        setErr(mapMiniHomeApiError(e, "캣타워를 불러오지 못했습니다."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -151,11 +121,7 @@ export default function CatTowerPreviewOverlay({
                 {loading ? "불러오는 중…" : `${catName}의 CatTower`}
               </h2>
               <p className="truncate text-[10px] font-medium text-white/75">
-                {loading
-                  ? "잠시만 기다려 주세요"
-                  : privateBlocked
-                    ? "비공개 미니홈이에요"
-                    : `${nickname}님의 공간을 살짝 구경해요 🐾`}
+                {loading ? "잠시만 기다려 주세요" : `${nickname}님의 공간을 살짝 구경해요 🐾`}
               </p>
             </div>
             <button
@@ -175,21 +141,9 @@ export default function CatTowerPreviewOverlay({
               </div>
             ) : err ? (
               <div className="flex-1 overflow-y-auto px-4 py-3">
-                <div
-                  className={`rounded-2xl px-4 py-8 text-center ${
-                    privateBlocked
-                      ? "border border-slate-200 bg-gradient-to-b from-slate-50 to-white"
-                      : "border border-red-200 bg-red-50"
-                  }`}
-                >
-                  <p className="text-3xl">{privateBlocked ? "🔒" : "⚠️"}</p>
-                  <p
-                    className={`mt-3 text-sm font-semibold leading-relaxed ${
-                      privateBlocked ? "text-slate-600" : "text-red-700"
-                    }`}
-                  >
-                    {err}
-                  </p>
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-8 text-center">
+                  <p className="text-3xl">⚠️</p>
+                  <p className="mt-3 text-sm font-semibold leading-relaxed text-red-700">{err}</p>
                 </div>
               </div>
             ) : (

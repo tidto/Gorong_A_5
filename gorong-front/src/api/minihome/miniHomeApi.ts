@@ -108,58 +108,16 @@ export type GoCatSetupPayload = {
 };
 
 export type MiniHomeSettingsPayload = {
-  isPublic?: boolean;
   description?: string;
   themeCode?: string;
 };
 
-/** API가 isPublic을 생략하면 undefined — Boolean(undefined)는 false라 UI만 비공개로 보이는 버그 방지 */
-export function resolveMiniHomeIsPublic(
-  value: boolean | undefined | null,
-  fallback = true
-): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function normalizeMiniHomeResponse(
-  data: MiniHome,
-  fallbackIsPublic?: boolean
-): MiniHome {
-  return {
-    ...data,
-    isPublic: resolveMiniHomeIsPublic(data?.isPublic, fallbackIsPublic),
-  };
-}
-
 function shouldFallbackMiniHomeUpdate(status: number | undefined): boolean {
-  // /me 미배포·서버 오류 시 /{userId} 재시도
   return status === 404 || status === 405 || status === 500;
-}
-
-function throwIsPublicSaveFailed(): never {
-  const err = new Error("IS_PUBLIC_SAVE_FAILED") as Error & {
-    response?: { status?: number; data?: { message?: string } };
-  };
-  err.response = {
-    status: 500,
-    data: { message: "공개 설정이 서버에 저장되지 않았습니다. 잠시 후 다시 시도해 주세요." },
-  };
-  throw err;
-}
-
-/** 본인 설정 확인 — GET /me (비공개여도 주인은 항상 조회 가능) */
-async function verifyMiniHomeIsPublic(userId: number, expected: boolean): Promise<MiniHome> {
-  const res = await axiosInstance.get(`/minihomes/me`);
-  const verified = normalizeMiniHomeResponse(res.data as MiniHome);
-  if (verified.userId !== userId || verified.isPublic !== expected) {
-    throwIsPublicSaveFailed();
-  }
-  return verified;
 }
 
 async function patchOrPutMiniHome(
   path: string,
-  userId: number,
   payload: MiniHomeSettingsPayload
 ): Promise<MiniHome> {
   const methods: Array<"patch" | "put"> = ["patch", "put"];
@@ -171,14 +129,7 @@ async function patchOrPutMiniHome(
         method === "patch"
           ? await axiosInstance.patch(path, payload)
           : await axiosInstance.put(path, payload);
-      const updated = normalizeMiniHomeResponse(res.data as MiniHome);
-
-      if (typeof payload.isPublic === "boolean") {
-        if (updated.isPublic === payload.isPublic) return updated;
-        return verifyMiniHomeIsPublic(userId, payload.isPublic);
-      }
-
-      return updated;
+      return res.data as MiniHome;
     } catch (e: unknown) {
       lastError = e;
       const status = (e as { response?: { status?: number } })?.response?.status;
@@ -190,7 +141,7 @@ async function patchOrPutMiniHome(
   throw lastError;
 }
 
-/** PATCH — 공개·소개·테마 (/me 우선, 실패 시 /{userId} 폴백) */
+/** PATCH — 소개·테마 (/me 우선, 실패 시 /{userId} 폴백) */
 export async function updateMyMiniHome(
   userId: number,
   payload: MiniHomeSettingsPayload
@@ -203,7 +154,7 @@ export async function updateMyMiniHome(
 
   for (const path of paths) {
     try {
-      return await patchOrPutMiniHome(path, userId, payload);
+      return await patchOrPutMiniHome(path, payload);
     } catch (e: unknown) {
       lastError = e;
       const status = (e as { response?: { status?: number } })?.response?.status;

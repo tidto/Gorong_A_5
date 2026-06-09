@@ -20,7 +20,6 @@ type CatTowerDashboardProps = {
   nickname: string;
   catName: string;
   growth: GrowthState;
-  isPublic: boolean;
   equipped: EquipPreview;
   appearanceState?: Record<string, unknown> | null;
   activities: ActivityItem[];
@@ -44,14 +43,12 @@ type CatTowerDashboardProps = {
   onEvents: () => void;
   onRefresh: () => void;
   onReport?: () => void;
-  onVisibilityChange?: (isPublic: boolean) => Promise<void>;
 };
 
 function CatTowerDashboard({
   nickname,
   catName,
   growth,
-  isPublic,
   equipped,
   appearanceState,
   activities,
@@ -74,7 +71,6 @@ function CatTowerDashboard({
   onEvents,
   onRefresh,
   onReport,
-  onVisibilityChange,
 }: CatTowerDashboardProps) {
   const { toast } = useNotification();
   const [centerPanel, setCenterPanel] = useState<CatTowerCenterPanelId>("room");
@@ -183,14 +179,11 @@ function CatTowerDashboard({
           nickname={nickname}
           catName={catName}
           growth={growth}
-          isPublic={isPublic}
           galleryCount={galleryCount}
           loading={loading}
-          canEdit={canEdit}
           showParticipatingEvents={!isReadOnly}
           guestView={isReadOnly}
           refreshToken={refreshToken}
-          onVisibilityChange={canEdit ? onVisibilityChange : undefined}
         />
         </div>
 

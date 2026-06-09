@@ -94,7 +94,7 @@ public class MiniHomeController {
             MiniHomeUpdateRequestDto req
     ) {
         Long userId = resolveUserId(authentication);
-        log.info("[MiniHomeController] PATCH /me settings userId={} isPublic={}", userId, req.getIsPublic());
+        log.info("[MiniHomeController] PATCH /me settings userId={}", userId);
         return miniHomeService.updateMiniHome(userId, req);
     }
 
@@ -213,7 +213,7 @@ public class MiniHomeController {
         if (!callerUserId.equals(userId)) {
             throw new MiniHomeForbiddenException("본인 미니홈만 수정할 수 있어요.");
         }
-        log.info("[MiniHomeController] PATCH /{} settings isPublic={}", userId, req.getIsPublic());
+        log.info("[MiniHomeController] PATCH /{} settings", userId);
         return miniHomeService.updateMiniHome(userId, req);
     }
 
