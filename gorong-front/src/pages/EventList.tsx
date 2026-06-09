@@ -52,7 +52,7 @@ const SORT_OPTIONS: { value: SortKey; label: string; icon: React.ReactNode }[] =
   { value: 'distance',      label: '가까운순',       icon: <Navigation    className="w-3.5 h-3.5" /> },
   { value: 'title_asc',     label: '이름 오름차순',  icon: <ArrowUpAZ     className="w-3.5 h-3.5" /> },
   { value: 'title_desc',    label: '이름 내림차순',  icon: <ArrowDownAZ   className="w-3.5 h-3.5" /> },
-  { value: 'barrier_first', label: '배리어프리 우선', icon: <Accessibility className="w-3.5 h-3.5" /> },
+//  { value: 'barrier_first', label: '배리어프리 우선', icon: <Accessibility className="w-3.5 h-3.5" /> },
 ]
 
 const DEFAULT_IMAGE = '/images/default-event.png'

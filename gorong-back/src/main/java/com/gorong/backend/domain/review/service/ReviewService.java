@@ -46,6 +46,7 @@ public class ReviewService {
                         .eventId(eventId)
                         .authorName(authorName)
                         .title("임시 포스팅")
+                        .content("")
                         .reviewDate(OffsetDateTime.now())
                         .build());
 
