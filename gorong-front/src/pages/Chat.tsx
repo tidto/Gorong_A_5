@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Send, Users, MessageSquare, Wifi, WifiOff, Loader2, Home, X, ChevronRight, SlidersHorizontal, Search } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCatTowerPreview } from '../contexts/CatTowerPreviewContext'
+import axiosInstance from '../api/axiosInstance'
 import { useChatRoom, fetchJoinedGroups, JoinedGroup } from '../hooks/useChatRoom'
 
 type FilterType = 'all' | 'open' | 'inProgress' | 'closed'
@@ -44,6 +45,31 @@ export default function Chat() {
     userId?: number | null
     isMe?: boolean
   } | null>(null)
+
+  // 신고 모달 state
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reporting, setReporting] = useState(false)
+
+  const handleReport = async () => {
+    if (!reportReason.trim()) { alert('신고 사유를 입력해주세요.'); return }
+    if (!selectedProfile?.userId) { alert('신고할 수 없는 사용자입니다.'); return }
+    setReporting(true)
+    try {
+      await axiosInstance.post('/v1/users/report', {
+        reportedUserId: selectedProfile.userId,
+        reason: reportReason.trim(),
+      })
+      alert('신고가 접수되었습니다. 관리자가 검토 후 처리합니다.')
+      setShowReportModal(false)
+      setSelectedProfile(null)
+      setReportReason('')
+    } catch (e: any) {
+      alert(e?.response?.data?.message || '신고 접수에 실패했습니다.')
+    } finally {
+      setReporting(false)
+    }
+  }
 
   const [filter, setFilter] = useState<FilterType>('all')
   const [sort, setSort] = useState<SortType>('date')
@@ -857,6 +883,26 @@ export default function Chat() {
                     <Home size={14} />
                     CatTower 미리보기
                   </button>
+                  {/* 신고 버튼 – 자기 자신에게는 숨김 */}
+                  {!selectedProfile.isMe && (
+                      <button
+                          type="button"
+                          onClick={() => setShowReportModal(true)}
+                          disabled={!selectedProfile.userId}
+                          style={{
+                            width: '100%', border: '1px solid',
+                            borderColor: selectedProfile.userId ? '#FECACA' : '#E9ECEF',
+                            borderRadius: '8px', padding: '10px 14px',
+                            backgroundColor: selectedProfile.userId ? '#FFF5F5' : '#F8F9FA',
+                            color: selectedProfile.userId ? '#EF4444' : '#ADB5BD',
+                            fontWeight: '600', cursor: selectedProfile.userId ? 'pointer' : 'default',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            fontSize: '13px', marginBottom: '6px', transition: 'all 0.12s',
+                          }}
+                      >
+                        🚨 신고하기
+                      </button>
+                  )}
                   <button
                       type="button"
                       onClick={() => setSelectedProfile(null)}
@@ -870,6 +916,83 @@ export default function Chat() {
                   >
                     닫기
                   </button>
+                </div>
+              </div>
+            </div>
+        )}
+
+        {/* 신고 모달 */}
+        {showReportModal && (
+            <div
+                onClick={() => { setShowReportModal(false); setReportReason('') }}
+                style={{
+                  position: 'fixed', inset: 0,
+                  backgroundColor: 'rgba(0,0,0,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  zIndex: 1400, padding: '20px',
+                }}
+            >
+              <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    width: '300px', backgroundColor: 'white',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                    overflow: 'hidden',
+                    border: '1px solid #E9ECEF',
+                  }}
+              >
+                <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid #F1F3F5' }}>
+                  <div style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', marginBottom: '4px' }}>
+                    🚨 신고하기
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b' }}>
+                    <strong>{selectedProfile ? getDisplayName(selectedProfile.name, selectedProfile.email) : ''}</strong> 님을 신고합니다.<br />
+                    허위 신고 시 불이익이 생길 수 있습니다.
+                  </div>
+                </div>
+                <div style={{ padding: '14px 20px 20px' }}>
+                <textarea
+                    value={reportReason}
+                    onChange={e => setReportReason(e.target.value)}
+                    placeholder="신고 사유를 입력해주세요 (필수)"
+                    rows={4}
+                    style={{
+                      width: '100%', border: '1.5px solid #E2E8F0',
+                      borderRadius: '8px', padding: '10px 12px',
+                      fontSize: '13px', resize: 'none', outline: 'none',
+                      fontFamily: 'inherit', color: '#334155', boxSizing: 'border-box',
+                    }}
+                />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    <button
+                        type="button"
+                        onClick={() => { setShowReportModal(false); setReportReason('') }}
+                        style={{
+                          flex: 1, padding: '11px', borderRadius: '8px',
+                          border: '1px solid #DEE2E6', background: 'white',
+                          color: '#495057', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
+                        }}
+                    >
+                      취소
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleReport}
+                        disabled={reporting || !reportReason.trim()}
+                        style={{
+                          flex: 1, padding: '11px', borderRadius: '8px', border: 'none',
+                          background: reporting || !reportReason.trim()
+                              ? '#E2E8F0'
+                              : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                          color: reporting || !reportReason.trim() ? '#94a3b8' : 'white',
+                          fontWeight: '800', fontSize: '13px',
+                          cursor: reporting || !reportReason.trim() ? 'default' : 'pointer',
+                        }}
+                    >
+                      {reporting ? '신고 중...' : '신고 접수'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

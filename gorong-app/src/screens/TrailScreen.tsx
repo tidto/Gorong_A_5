@@ -1,25 +1,16 @@
 // ──────────────────────────────────────────────────────────────
 // TrailScreen.tsx — 트레일 기록 히스토리 + 행사별 사진 조회
-//
-// 자연스러운 연결 구조:
-//   트레일 히스토리(venueId)  →  갤러리(referenceId)  →  사진 목록
-//
-//   trailHistory[].venueId === gallery.referenceId 일 때
-//   해당 카드 아래에 사진 썸네일을 붙여서 보여줌
-//
-//   "전체 사진" 버튼은 맨 위 요약 섹션에만 두고,
-//   각 히스토리 카드는 해당 행사 사진만 표시
 // ──────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import React, { useCallback, useEffect, useState } from 'react'
 import * as ImagePicker from 'expo-image-picker'
 import {
+  Alert,
   Dimensions,
   Image,
   Modal,
   RefreshControl,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -32,7 +23,7 @@ import api, { uploadFileToS3 } from '../services/api'
 import { prepareImageForUpload } from '../utils/imageUpload'
 
 const SCREEN_W = Dimensions.get('window').width
-const THUMB = (SCREEN_W - 32 - 8 * 2) / 4   // 4열 썸네일
+const THUMB = (SCREEN_W - 32 - 8 * 2) / 4
 
 // ── 백엔드 갤러리 타입 ────────────────────────────────────────
 interface GalleryImage {
@@ -41,12 +32,11 @@ interface GalleryImage {
   locationName: string | null
   takenAt: string | null
   createAt: string
-
 }
 interface Gallery {
   galleryId: number
   title: string
-  referenceId: string | null  // venueId 와 매핑
+  referenceId: string | null
   images: GalleryImage[]
 }
 
@@ -74,6 +64,18 @@ function formatDate(iso: string | null) {
   } catch { return '' }
 }
 
+// ── venueId → 사람이 읽기 좋은 이름으로 변환 ─────────────────
+function formatVenueName(venueId: string | null | undefined): string {
+  if (!venueId || venueId === 'UNKNOWN_VENUE' || venueId.trim() === '') {
+    return '장소 미지정'
+  }
+  // 숫자 ID면 "행사 #1234567" 형태로 표시
+  if (/^\d+$/.test(venueId.trim())) {
+    return `행사 #${venueId.trim()}`
+  }
+  return venueId
+}
+
 export default function TrailScreen() {
   const insets = useSafeAreaInsets()
   const { isRecording, trail, startRecording, stopRecording, startedAt } = useTrailStore()
@@ -82,10 +84,12 @@ export default function TrailScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [galleryUploading, setGalleryUploading] = useState(false)
 
-  // ── 갤러리 데이터 (venueId → 사진 목록 매핑) ──────────────
+  // ── 갤러리 데이터 ──────────────────────────────────────────
   const [galleryMap, setGalleryMap] = useState<Record<string, GalleryImage[]>>({})
   const [allImages, setAllImages] = useState<(GalleryImage & { venueId: string })[]>([])
-  // 전체 사진 미리보기
+  const [galleryLoadError, setGalleryLoadError] = useState(false)
+
+  // ── 이미지 미리보기 모달 ───────────────────────────────────
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   const loadHistory = useCallback(async () => {
@@ -107,25 +111,27 @@ export default function TrailScreen() {
   }, [])
 
   // ── 갤러리 로드: GET /api/minihomes/me/page ───────────────
-  // referenceId가 있는 갤러리만 venueId 기준으로 map 생성
+  // [수정 1] 404 등 에러 시 조용히 처리하되 상태 추적, URL 경로는 /api/v1/minihomes/me/page
   const loadGallery = useCallback(async () => {
     try {
+      setGalleryLoadError(false)
+      // api 인스턴스의 baseURL은 /api/v1 이므로 /minihomes/me/page 로 호출
       const res = await api.get<{ galleries: Gallery[] }>('/minihomes/me/page')
       const galleries = res.data.galleries ?? []
 
-      // venueId(referenceId) → 이미지 배열 매핑
       const map: Record<string, GalleryImage[]> = {}
       const flat: (GalleryImage & { venueId: string })[] = []
 
       for (const g of galleries) {
         if (!g.images.length) continue
         if (g.referenceId) {
-          // 행사별 사진 (upload 시 referenceId = venueId 로 저장된 것)
           map[g.referenceId] = [...(map[g.referenceId] ?? []), ...g.images]
         }
-        // 전체 사진 목록 (venueId 있는 것만)
         for (const img of g.images) {
-          flat.push({ ...img, venueId: g.referenceId ?? '' })
+          // [수정 1] imageUrl이 실제로 있는 것만 포함
+          if (img.imageUrl && img.imageUrl.trim() !== '') {
+            flat.push({ ...img, venueId: g.referenceId ?? '' })
+          }
         }
       }
 
@@ -133,11 +139,56 @@ export default function TrailScreen() {
       setAllImages(flat.sort((a, b) =>
         new Date(b.createAt ?? 0).getTime() - new Date(a.createAt ?? 0).getTime()
       ))
-    } catch (err) {
-      // 갤러리 로드 실패는 조용히 처리 (트레일 히스토리는 정상 표시)
+    } catch (err: any) {
+      // 404 = 미니홈 미생성 상태 → 정상으로 처리 (사진 없음)
+      const status = err?.response?.status
+      if (status === 404) {
+        setGalleryMap({})
+        setAllImages([])
+        return
+      }
       console.warn('[TrailScreen] 갤러리 로드 실패:', err)
+      setGalleryLoadError(true)
     }
   }, [])
+
+  const uploadSelectedImages = useCallback(async (assets: ImagePicker.ImagePickerAsset[]) => {
+    const normalizedAssets = assets.slice(0, 10)
+    if (normalizedAssets.length === 0) return
+
+    setGalleryUploading(true)
+    try {
+      const results = await Promise.allSettled(
+        normalizedAssets.map(async (asset, index) => {
+          const prepared = await prepareImageForUpload(
+            asset,
+            `gallery-${Date.now()}-${index + 1}.jpg`,
+          )
+          return uploadFileToS3(prepared.uri, prepared.fileName, 'APP_PHOTO', true)
+        })
+      )
+
+      const successCount = results.filter((item) => item.status === 'fulfilled').length
+      const failureCount = results.length - successCount
+
+      if (successCount > 0) {
+        await loadGallery()
+      }
+
+      if (successCount > 0 && failureCount === 0) {
+        Alert.alert('완료', `${successCount}장의 사진이 갤러리에 저장되었습니다.`)
+      } else if (successCount > 0) {
+        Alert.alert('부분 완료', `${successCount}장은 저장되었고 ${failureCount}장은 실패했습니다.`)
+      } else {
+        Alert.alert('안내', '사진 업로드에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('사진 업로드 실패:', error)
+      Alert.alert('안내', '사진 업로드에 실패했습니다.')
+    } finally {
+      setGalleryUploading(false)
+    }
+  }, [loadGallery])
 
   useEffect(() => {
     loadHistory()
@@ -165,7 +216,6 @@ export default function TrailScreen() {
 
   const handleGalleryUpload = useCallback(async () => {
     try {
-      setGalleryUploading(true)
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (!permission.granted) {
         Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.')
@@ -176,22 +226,44 @@ export default function TrailScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
         allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
       })
 
       if (result.canceled || !result.assets.length) return
 
-      const asset = result.assets[0]
-      const prepared = await prepareImageForUpload(asset, `gallery-${Date.now()}.jpg`)
-      const response = await uploadFileToS3(prepared.uri, prepared.fileName, 'APP_PHOTO', true)
-      Alert.alert('완료', response.data?.gallerySaved ? '사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
-      await loadGallery()
+      await uploadSelectedImages(result.assets)
     } catch (error) {
       console.error('갤러리 업로드 실패:', error)
       Alert.alert('안내', '갤러리 업로드에 실패했습니다.')
-    } finally {
-      setGalleryUploading(false)
     }
-  }, [loadGallery])
+  }, [uploadSelectedImages])
+
+  // ── [수정 2] 기록 삭제 ────────────────────────────────────
+  const handleDeleteHistory = useCallback(async (itemId: string) => {
+    Alert.alert('기록 삭제', '이 트레일 기록을 삭제하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // 히스토리 목록에서 제거
+            const raw = await AsyncStorage.getItem(TRAIL_HISTORY_KEY)
+            const current = raw ? (JSON.parse(raw) as TrailHistoryEntry[]) : []
+            const updated = current.filter((e) => e.id !== itemId)
+            await AsyncStorage.setItem(TRAIL_HISTORY_KEY, JSON.stringify(updated))
+            // 세션 좌표 데이터도 제거
+            await AsyncStorage.removeItem(`gorong-trail-session-${itemId}`)
+            setHistory((prev) => prev.filter((e) => e.id !== itemId))
+          } catch (err) {
+            console.error('기록 삭제 실패:', err)
+            Alert.alert('오류', '기록 삭제에 실패했습니다.')
+          }
+        },
+      },
+    ])
+  }, [])
 
   return (
     <>
@@ -206,18 +278,17 @@ export default function TrailScreen() {
         {/* 헤더 */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>🐾 트레일 기록 히스토리</Text>
-          <Text style={styles.headerSub}>
-            현재 기록과 행사별 사진을 확인할 수 있습니다.
-          </Text>
+          <Text style={styles.headerSub}>현재 기록과 행사별 사진을 확인할 수 있습니다.</Text>
         </View>
 
+        {/* 사진 업로드 카드 */}
         <View style={styles.uploadCard}>
           <View style={styles.rowBetween}>
             <Text style={styles.sectionTitle}>내 사진 업로드</Text>
             <Text style={styles.photoCount}>항상 표시</Text>
           </View>
           <Text style={styles.uploadHint}>
-            트레일 참여 여부와 상관없이 사진을 갤러리에 올리고, 아래에서 내가 올린 사진을 확인할 수 있습니다.
+            트레일 참여 여부와 상관없이 사진을 여러 장 선택해서 갤러리에 올리고, 아래에서 내가 올린 사진을 확인할 수 있습니다.
           </Text>
           <TouchableOpacity
             style={[styles.uploadBtn, galleryUploading && styles.uploadBtnDisabled]}
@@ -230,38 +301,51 @@ export default function TrailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── 최근 사진 요약 (전체 사진이 있을 때만 표시) ──────── */}
+        {/* ── 최근 사진 요약 ───────────────────────────────── */}
         <View style={styles.photoSummaryCard}>
           <View style={styles.rowBetween}>
             <Text style={styles.sectionTitle}>내가 올린 사진</Text>
             <Text style={styles.photoCount}>총 {allImages.length}장</Text>
           </View>
-          {allImages.length === 0 ? (
+
+          {/* [수정 1] 갤러리 오류 안내 */}
+          {galleryLoadError && (
+            <Text style={styles.errorText}>갤러리를 불러오지 못했습니다. 새로 고침 해주세요.</Text>
+          )}
+
+          {!galleryLoadError && allImages.length === 0 ? (
             <Text style={styles.emptyText}>
               아직 업로드한 사진이 없습니다. 위 버튼으로 첫 사진을 올려보세요.
             </Text>
           ) : (
-            <>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.thumbRow}
-              >
-                {allImages.slice(0, 8).map((img) => (
-                  <TouchableOpacity
-                    key={img.galleryImageId}
-                    onPress={() => setPreviewUrl(img.imageUrl)}
-                    activeOpacity={0.85}
-                  >
-                    <Image source={{ uri: img.imageUrl }} style={styles.summaryThumb} resizeMode="cover" />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.thumbRow}
+            >
+              {allImages.slice(0, 8).map((img) => (
+                <TouchableOpacity
+                  key={img.galleryImageId}
+                  onPress={() => setPreviewUrl(img.imageUrl)}
+                  activeOpacity={0.85}
+                >
+                  {/* [수정 1] 이미지 URL 유효성 재확인 후 렌더 */}
+                  <Image
+                    source={{ uri: img.imageUrl }}
+                    style={styles.summaryThumb}
+                    resizeMode="cover"
+                    onError={() => {
+                      // 깨진 이미지는 목록에서 제거
+                      setAllImages((prev) => prev.filter((i) => i.galleryImageId !== img.galleryImageId))
+                    }}
+                  />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
         </View>
 
-        {/* ── 현재 세션 카드 ─────────────────────────────────── */}
+        {/* ── 현재 세션 카드 ─────────────────────────────── */}
         <View style={styles.activeCard}>
           <View style={styles.rowBetween}>
             <Text style={styles.sectionTitle}>현재 세션</Text>
@@ -288,7 +372,7 @@ export default function TrailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── 종료된 기록 목록 ───────────────────────────────── */}
+        {/* ── 종료된 기록 목록 ───────────────────────────── */}
         <View style={styles.rowBetween}>
           <Text style={styles.sectionTitle}>종료된 기록</Text>
           <Text style={styles.photoCount}>{history.length}개</Text>
@@ -303,21 +387,33 @@ export default function TrailScreen() {
           </View>
         ) : (
           history.map((item) => {
-            // ── 이 트레일 세션의 행사 사진 찾기 ──────────────
-            // venueId === gallery.referenceId 로 매핑
-            const sessionPhotos = item.venueId ? (galleryMap[item.venueId] ?? []) : []
+            // [수정 3] venueId로 갤러리 이미지 찾기
+            const sessionPhotos = item.venueId && item.venueId !== 'UNKNOWN_VENUE'
+              ? (galleryMap[item.venueId] ?? []).filter((img) => img.imageUrl && img.imageUrl.trim() !== '')
+              : []
 
             return (
               <View key={item.id} style={styles.historyCard}>
-                {/* 세션 헤더 */}
+                {/* 세션 헤더 — [수정 2] 삭제 버튼, [수정 4] venueId 표시 개선 */}
                 <View style={styles.rowBetween}>
                   <Text style={styles.historyTitle} numberOfLines={1}>
-                    {item.venueId ?? '알 수 없는 행사장'}
+                    {formatVenueName(item.venueId)}
                   </Text>
-                  <Text style={[styles.statusPill, item.serverSaved ? styles.statusOn : styles.statusOff]}>
-                    {item.serverSaved ? '서버 저장' : '로컬만'}
-                  </Text>
+                  <View style={styles.historyHeaderRight}>
+                    <Text style={[styles.statusPill, item.serverSaved ? styles.statusOn : styles.statusOff]}>
+                      {item.serverSaved ? '서버 저장' : '로컬만'}
+                    </Text>
+                    {/* [수정 2] 삭제 버튼 */}
+                    <TouchableOpacity
+                      style={styles.deleteBtn}
+                      onPress={() => handleDeleteHistory(item.id)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.deleteBtnText}>🗑</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
+
                 <Text style={styles.historyMeta}>시작: {formatTime(item.startedAt)}</Text>
                 <Text style={styles.historyMeta}>종료: {formatTime(item.endedAt)}</Text>
                 <Text style={styles.historyMeta}>
@@ -332,7 +428,7 @@ export default function TrailScreen() {
                     : '행사장 이탈 후 종료'}
                 </Text>
 
-                {/* ── 행사별 사진 (venueId 매핑된 것만 표시) ── */}
+                {/* ── [수정 3] 트레일 캡처 이미지 (행사별 사진 + 탭 시 오버레이) ── */}
                 {sessionPhotos.length > 0 && (
                   <View style={styles.sessionPhotos}>
                     <View style={styles.rowBetween}>
@@ -356,6 +452,14 @@ export default function TrailScreen() {
                             source={{ uri: img.imageUrl }}
                             style={styles.sessionThumb}
                             resizeMode="cover"
+                            onError={() => {
+                              setGalleryMap((prev) => ({
+                                ...prev,
+                                [item.venueId]: (prev[item.venueId] ?? []).filter(
+                                  (i) => i.galleryImageId !== img.galleryImageId
+                                ),
+                              }))
+                            }}
                           />
                           {img.takenAt && (
                             <View style={styles.thumbDateOverlay}>
@@ -369,7 +473,7 @@ export default function TrailScreen() {
                 )}
 
                 {/* 도착 인증한 행사인데 사진이 없을 때 안내 */}
-                {item.venueId && sessionPhotos.length === 0 && (
+                {item.venueId && item.venueId !== 'UNKNOWN_VENUE' && sessionPhotos.length === 0 && (
                   <Text style={styles.noPhotoHint}>
                     아직 이 행사에서 올린 사진이 없습니다
                   </Text>
@@ -380,12 +484,13 @@ export default function TrailScreen() {
         )}
       </ScrollView>
 
-      {/* ── 전체 화면 사진 미리보기 모달 ──────────────────────── */}
+      {/* ── [수정 3] 전체 화면 이미지 오버레이 모달 ──────────── */}
       <Modal
         visible={Boolean(previewUrl)}
         transparent
         animationType="fade"
         onRequestClose={() => setPreviewUrl(null)}
+        statusBarTranslucent
       >
         <TouchableOpacity
           style={styles.previewBg}
@@ -393,13 +498,17 @@ export default function TrailScreen() {
           onPress={() => setPreviewUrl(null)}
         >
           {previewUrl && (
-            <Image
-              source={{ uri: previewUrl }}
-              style={styles.previewImg}
-              resizeMode="contain"
-            />
+            <>
+              <Image
+                source={{ uri: previewUrl }}
+                style={styles.previewImg}
+                resizeMode="contain"
+              />
+              <View style={styles.previewCloseArea}>
+                <Text style={styles.previewClose}>✕ 닫기</Text>
+              </View>
+            </>
           )}
-          <Text style={styles.previewClose}>✕ 닫기</Text>
         </TouchableOpacity>
       </Modal>
     </>
@@ -417,8 +526,9 @@ const styles = StyleSheet.create({
   rowBetween:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   sectionTitle:        { fontSize: 15, fontWeight: '800', color: '#111827' },
   photoCount:          { fontSize: 12, color: '#6b7280', fontWeight: '600' },
+  errorText:           { fontSize: 12, color: '#ef4444', marginBottom: 6 },
 
-  // 최근 사진 요약 카드
+  // 사진 요약 카드
   photoSummaryCard:    { backgroundColor: '#fff', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
   uploadCard:          { backgroundColor: '#fff', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1, gap: 10 },
   thumbRow:            { gap: 6, paddingVertical: 4 },
@@ -444,9 +554,14 @@ const styles = StyleSheet.create({
   emptyTitle:          { fontSize: 14, fontWeight: '800', color: '#111827', marginBottom: 6 },
   emptyText:           { fontSize: 12, color: '#6b7280', textAlign: 'center', lineHeight: 18 },
   historyCard:         { backgroundColor: '#fff', borderRadius: 18, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1, gap: 5 },
+  historyHeaderRight:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
   historyTitle:        { fontSize: 14, fontWeight: '800', color: '#111827', flex: 1, paddingRight: 8 },
   historyMeta:         { fontSize: 12, color: '#374151', lineHeight: 18 },
   historyReason:       { fontSize: 12, color: '#FF6B35', fontWeight: '700' },
+
+  // [수정 2] 삭제 버튼
+  deleteBtn:           { padding: 4, borderRadius: 8, backgroundColor: '#FEE2E2' },
+  deleteBtnText:       { fontSize: 14 },
 
   // 세션별 사진 영역
   sessionPhotos:       { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f1f1' },
@@ -457,8 +572,9 @@ const styles = StyleSheet.create({
   thumbDateText:       { color: '#fff', fontSize: 9, textAlign: 'center' },
   noPhotoHint:         { marginTop: 8, fontSize: 11, color: '#9CA3AF', fontStyle: 'italic' },
 
-  // 전체화면 미리보기
-  previewBg:           { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
-  previewImg:          { width: SCREEN_W, height: SCREEN_W * 1.25 },
-  previewClose:        { position: 'absolute', top: 60, right: 20, color: '#fff', fontSize: 16, fontWeight: '700' },
+  // [수정 3] 전체화면 오버레이 미리보기
+  previewBg:           { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' },
+  previewImg:          { width: SCREEN_W, height: SCREEN_W * 1.4, borderRadius: 4 },
+  previewCloseArea:    { position: 'absolute', top: 56, right: 20 },
+  previewClose:        { color: '#fff', fontSize: 16, fontWeight: '700', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
 })
