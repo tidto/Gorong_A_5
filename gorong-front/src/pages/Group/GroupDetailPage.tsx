@@ -182,7 +182,7 @@ export default function GroupDetailPage() {
         }
         setPostReporting(true);
         try {
-            await axiosInstance.post('/api/v1/users/report', {
+            await axiosInstance.post('/v1/users/report', {
                 reportedUserId: post.author.id,
                 reason: postReportReason.trim(),
             });
