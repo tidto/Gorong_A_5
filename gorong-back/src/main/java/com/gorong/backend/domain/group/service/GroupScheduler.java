@@ -21,12 +21,25 @@ import org.springframework.stereotype.Component;
 public class GroupScheduler {
 
     private final GroupService groupService;
+    private final EventParticipationService eventParticipationService;
 
     @Scheduled(cron = "0 * * * * *")   // 매 분 0초마다 실행
     public void closeExpiredGroups() {
         int count = groupService.closeExpiredGroups();
         if (count > 0) {
             log.info("[GroupScheduler] 마감 처리된 그룹 수: {}개", count);
+        }
+    }
+
+    /**
+     * 혼자 참여(SOLO) 중 visitDate가 지난 레코드를 매일 자정에 CLOSED로 전환합니다.
+     * cron = "0 0 0 * * *" → 매일 00:00:00
+     */
+    @Scheduled(cron = "0 0 0 * * *")
+    public void closeExpiredSoloParticipations() {
+        int count = eventParticipationService.closeExpiredSoloParticipations();
+        if (count > 0) {
+            log.info("[GroupScheduler] 혼자 참여 CLOSED 처리 건수: {}개", count);
         }
     }
 }

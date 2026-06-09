@@ -10,6 +10,170 @@ const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_API_KEY || '';
 const TOUR_API_KEY  = import.meta.env.VITE_TOUR_API_KEY  || '';
 const API_BASE_URL  = import.meta.env.VITE_API_BASE_URL  || 'http://localhost:8080/api';
 
+// ─── 커스텀 날짜 피커 ─────────────────────────────────────────────
+const DAYS_OF_WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+
+interface DatePickerProps { value: string; onChange: (val: string) => void; hasError?: boolean; }
+
+const CustomDatePicker = ({ value, onChange, hasError }: DatePickerProps) => {
+    const today = new Date();
+    const [open, setOpen] = useState(false);
+    const [viewYear, setViewYear] = useState(() => value ? parseInt(value.slice(0,4)) : today.getFullYear());
+    const [viewMonth, setViewMonth] = useState(() => value ? parseInt(value.slice(5,7)) - 1 : today.getMonth());
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const selectedDay = value && value.slice(0,7) === `${viewYear}-${String(viewMonth+1).padStart(2,'0')}` ? parseInt(value.slice(8,10)) : null;
+
+    const selectDate = (day: number) => {
+        const mm = String(viewMonth + 1).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        onChange(`${viewYear}-${mm}-${dd}`);
+        setOpen(false);
+    };
+    const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1); } else setViewMonth(m => m-1); };
+    const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1); } else setViewMonth(m => m+1); };
+
+    const displayValue = value ? `${value.slice(0,4)}년 ${parseInt(value.slice(5,7))}월 ${parseInt(value.slice(8,10))}일` : '';
+    const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+    return (
+        <div ref={ref} style={{ position: 'relative' }}>
+            <button type="button" onClick={() => setOpen(o => !o)}
+                    className={`gcp-input gcp-picker-trigger${hasError ? ' error' : ''}`}>
+                <span className="gcp-picker-icon">📅</span>
+                <span style={{ flex: 1, color: displayValue ? '#1a1816' : '#c0bcb5' }}>{displayValue || '날짜를 선택해주세요'}</span>
+                <span className="gcp-picker-arrow">{open ? '▴' : '▾'}</span>
+            </button>
+            {open && (
+                <div className="gcp-calendar-popup">
+                    <div className="gcp-cal-header">
+                        <button type="button" className="gcp-cal-nav" onClick={prevMonth}>‹</button>
+                        <span className="gcp-cal-title">{viewYear}년 {MONTHS[viewMonth]}</span>
+                        <button type="button" className="gcp-cal-nav" onClick={nextMonth}>›</button>
+                    </div>
+                    <div className="gcp-cal-grid">
+                        {DAYS_OF_WEEK.map((d, i) => (
+                            <div key={d} className="gcp-cal-dow" style={{ color: i===0?'#ef4444':i===6?'#3b82f6':'#9e9b95' }}>{d}</div>
+                        ))}
+                        {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`e${i}`} />)}
+                        {Array.from({ length: daysInMonth }, (_, i) => i+1).map(day => {
+                            const mm = String(viewMonth+1).padStart(2,'0');
+                            const dd = String(day).padStart(2,'0');
+                            const dateStr = `${viewYear}-${mm}-${dd}`;
+                            const isToday = dateStr === todayStr;
+                            const isSelected = day === selectedDay;
+                            const dow = (firstDayOfWeek + day - 1) % 7;
+                            return (
+                                <button key={day} type="button" onClick={() => selectDate(day)}
+                                        className={`gcp-cal-day${isSelected?' selected':''}${isToday&&!isSelected?' today':''}`}
+                                        style={{ color: isSelected ? undefined : dow===0?'#ef4444':dow===6?'#3b82f6':undefined }}>
+                                    {day}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="gcp-cal-footer">
+                        <button type="button" className="gcp-cal-today-btn"
+                                onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); selectDate(today.getDate()); }}>
+                            오늘
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─── 커스텀 시간 피커 ─────────────────────────────────────────────
+interface TimePickerProps { value: string; onChange: (val: string) => void; hasError?: boolean; }
+
+const CustomTimePicker = ({ value, onChange, hasError }: TimePickerProps) => {
+    const [open, setOpen] = useState(false);
+    const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({ left: 0 });
+    const ref = useRef<HTMLDivElement>(null);
+    const popupRef = useRef<HTMLDivElement>(null);
+
+    const parseTime = (v: string) => {
+        if (!v) return { hour: 12, minute: 0, isPm: false };
+        const [h, m] = v.split(':').map(Number);
+        return { hour: h===0?12:h>12?h-12:h, minute: m, isPm: h>=12 };
+    };
+    const { hour, minute, isPm } = parseTime(value);
+
+    const buildValue = (h: number, m: number, pm: boolean) => {
+        const h24 = h % 12 + (pm ? 12 : 0);
+        return `${String(h24).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    };
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    useEffect(() => {
+        if (!open || !popupRef.current) return;
+        const popup = popupRef.current.getBoundingClientRect();
+        if (popup.right > window.innerWidth - 8) {
+            setPopupStyle({ right: 0, left: 'auto' });
+        } else {
+            setPopupStyle({ left: 0 });
+        }
+    }, [open]);
+
+    const HOURS = [12,1,2,3,4,5,6,7,8,9,10,11];
+    const MINUTES = [0,10,20,30,40,50];
+    const displayValue = value ? `${isPm?'오후':'오전'} ${hour}:${String(minute).padStart(2,'0')}` : '';
+
+    return (
+        <div ref={ref} style={{ position: 'relative' }}>
+            <button type="button" onClick={() => setOpen(o => !o)}
+                    className={`gcp-input gcp-picker-trigger${hasError ? ' error' : ''}`}>
+                <span className="gcp-picker-icon">🕐</span>
+                <span style={{ flex: 1, color: displayValue ? '#1a1816' : '#c0bcb5' }}>{displayValue || '시간을 선택해주세요'}</span>
+                <span className="gcp-picker-arrow">{open ? '▴' : '▾'}</span>
+            </button>
+            {open && (
+                <div ref={popupRef} className="gcp-timepicker-popup" style={popupStyle}>
+                    <div className="gcp-time-ampm-row">
+                        <button type="button" className={`gcp-ampm-btn${!isPm?' active':''}`} onClick={() => onChange(buildValue(hour, minute, false))}>오전</button>
+                        <button type="button" className={`gcp-ampm-btn${isPm?' active':''}`} onClick={() => onChange(buildValue(hour, minute, true))}>오후</button>
+                    </div>
+                    <div className="gcp-time-section-label">시</div>
+                    <div className="gcp-time-grid">
+                        {HOURS.map(h => (
+                            <button key={h} type="button"
+                                    className={`gcp-time-cell${value&&hour===h?' selected':''}`}
+                                    onClick={() => onChange(buildValue(h, minute, isPm))}>
+                                {h}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="gcp-time-section-label" style={{ marginTop: '10px' }}>분</div>
+                    <div className="gcp-time-grid" style={{ gridTemplateColumns: 'repeat(6,1fr)' }}>
+                        {MINUTES.map(m => (
+                            <button key={m} type="button"
+                                    className={`gcp-time-cell${value&&minute===m?' selected':''}`}
+                                    onClick={() => { onChange(buildValue(hour, m, isPm)); setOpen(false); }}>
+                                {String(m).padStart(2,'0')}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // ─── 타입 ──────────────────────────────────────────────────────
 interface TourEvent {
     contentid: string; title: string;
@@ -967,6 +1131,92 @@ const GroupEditPage = () => {
                     cursor: default;
                 }
 
+                /* ── 커스텀 피커 트리거 버튼 ── */
+                .gcp-picker-trigger {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    cursor: pointer;
+                    text-align: left;
+                    background: white;
+                }
+                .gcp-picker-trigger:hover { border-color: #c8c3bb; }
+                .gcp-picker-icon { font-size: 15px; flex-shrink: 0; }
+                .gcp-picker-arrow { color: #b0aca5; font-size: 11px; flex-shrink: 0; }
+
+                /* ── 달력 팝업 ── */
+                .gcp-calendar-popup {
+                    position: absolute;
+                    top: calc(100% + 6px);
+                    left: 0;
+                    z-index: 1000;
+                    background: white;
+                    border-radius: 12px;
+                    border: 1.5px solid #e8e4dd;
+                    box-shadow: 0 12px 40px rgba(0,0,0,0.13);
+                    width: 280px;
+                    overflow: hidden;
+                }
+                .gcp-cal-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 14px 16px 10px;
+                    border-bottom: 1px solid #f0ece6;
+                }
+                .gcp-cal-title { font-weight: 700; font-size: 14px; color: #1a1816; }
+                .gcp-cal-nav {
+                    width: 28px; height: 28px; border-radius: 6px;
+                    border: 1.5px solid #e8e4dd; background: white; color: #5a564f;
+                    font-size: 16px; cursor: pointer; display: flex; align-items: center;
+                    justify-content: center; transition: all 0.12s; line-height: 1;
+                }
+                .gcp-cal-nav:hover { border-color: #e06c2a; color: #e06c2a; background: #fff9f5; }
+                .gcp-cal-grid {
+                    display: grid; grid-template-columns: repeat(7, 1fr);
+                    padding: 10px 10px 6px; gap: 2px;
+                }
+                .gcp-cal-dow { text-align: center; font-size: 11px; font-weight: 700; padding: 4px 0 6px; }
+                .gcp-cal-day {
+                    aspect-ratio: 1; border-radius: 6px; border: none; background: none;
+                    font-size: 13px; color: #3a3730; cursor: pointer; transition: all 0.1s;
+                    font-family: 'Noto Sans KR', sans-serif; display: flex; align-items: center; justify-content: center;
+                }
+                .gcp-cal-day:hover:not(.selected) { background: #fff4ec; color: #e06c2a; }
+                .gcp-cal-day.today { background: #f0ece6; font-weight: 700; }
+                .gcp-cal-day.selected { background: #e06c2a; color: white !important; font-weight: 700; border-radius: 8px; }
+                .gcp-cal-footer { padding: 8px 10px 10px; border-top: 1px solid #f0ece6; text-align: center; }
+                .gcp-cal-today-btn {
+                    padding: 6px 18px; border-radius: 20px; border: 1.5px solid #e06c2a;
+                    background: none; color: #e06c2a; font-size: 12px; font-weight: 700;
+                    cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.12s;
+                }
+                .gcp-cal-today-btn:hover { background: #e06c2a; color: white; }
+
+                /* ── 시간 피커 팝업 ── */
+                .gcp-timepicker-popup {
+                    position: absolute; top: calc(100% + 6px); z-index: 1000;
+                    background: white; border-radius: 12px; border: 1.5px solid #e8e4dd;
+                    box-shadow: 0 12px 40px rgba(0,0,0,0.13); width: 260px; padding: 14px;
+                }
+                .gcp-time-ampm-row { display: flex; gap: 6px; margin-bottom: 14px; }
+                .gcp-ampm-btn {
+                    flex: 1; padding: 8px; border-radius: 8px; border: 1.5px solid #e8e4dd;
+                    background: white; color: #8a877f; font-size: 13px; font-weight: 600;
+                    cursor: pointer; transition: all 0.12s; font-family: 'Noto Sans KR', sans-serif;
+                }
+                .gcp-ampm-btn.active { background: #e06c2a; border-color: #e06c2a; color: white; }
+                .gcp-ampm-btn:not(.active):hover { border-color: #e06c2a; color: #e06c2a; }
+                .gcp-time-section-label { font-size: 11px; font-weight: 700; color: #9e9b95; letter-spacing: 0.5px; margin-bottom: 6px; text-transform: uppercase; }
+                .gcp-time-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+                .gcp-time-cell {
+                    padding: 7px 4px; border-radius: 7px; border: 1.5px solid transparent;
+                    background: #fafaf8; color: #3a3730; font-size: 13px; font-weight: 600;
+                    cursor: pointer; transition: all 0.1s; font-family: 'Noto Sans KR', sans-serif; text-align: center;
+                }
+                .gcp-time-cell:hover:not(.selected) { border-color: #e06c2a; color: #e06c2a; background: #fff9f5; }
+                .gcp-time-cell.selected { background: #e06c2a; color: white; border-color: #e06c2a; }
+
                 /* ── 반응형 ── */
                 @media (max-width: 900px) {
                     .gcp-layout { grid-template-columns: 1fr; }
@@ -1140,13 +1390,10 @@ const GroupEditPage = () => {
                                         <label className="gcp-label">
                                             모임 날짜 <span className="gcp-label-required">*</span>
                                         </label>
-                                        <input
-                                            type="date"
-                                            name="meetingDate"
+                                        <CustomDatePicker
                                             value={formData.meetingDate}
-                                            onChange={e => { handleChange(e); setDateError(false); }}
-                                            required
-                                            className={`gcp-input${dateError ? ' error' : ''}`}
+                                            onChange={val => { setFormData(prev => ({ ...prev, meetingDate: val })); setDateError(false); }}
+                                            hasError={dateError}
                                         />
                                         {dateError && <p className="gcp-error-msg">⚠ 날짜를 선택해주세요</p>}
                                     </div>
@@ -1156,13 +1403,10 @@ const GroupEditPage = () => {
                                         <label className="gcp-label">
                                             집합 시간 <span className="gcp-label-required">*</span>
                                         </label>
-                                        <input
-                                            type="time"
-                                            name="meetingTime"
+                                        <CustomTimePicker
                                             value={formData.meetingTime}
-                                            onChange={e => { handleChange(e); setTimeError(false); }}
-                                            required
-                                            className={`gcp-input${timeError ? ' error' : ''}`}
+                                            onChange={val => { setFormData(prev => ({ ...prev, meetingTime: val })); setTimeError(false); }}
+                                            hasError={timeError}
                                         />
                                         {timeError && <p className="gcp-error-msg">⚠ 시간을 선택해주세요</p>}
                                     </div>
