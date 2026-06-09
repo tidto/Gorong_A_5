@@ -53,6 +53,11 @@ public class MiniHomeExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body("요청 본문(JSON)이 올바르지 않습니다.", List.of()));
     }
 
+    @ExceptionHandler(MiniHomeForbiddenException.class)
+    public ResponseEntity<Map<String, Object>> handleMiniHomeForbidden(MiniHomeForbiddenException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body(e.getMessage(), List.of()));
+    }
+
     @ExceptionHandler(MiniHomeNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleMiniHomeNotFound(MiniHomeNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body(e.getMessage(), List.of()));

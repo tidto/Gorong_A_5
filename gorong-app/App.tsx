@@ -118,7 +118,7 @@ function AppContent() {
 
       {isAuthenticated && (
         <TouchableOpacity
-          style={[styles.logoutPill, { top: insets.top + 10 }]}
+          style={[styles.logoutPill, { top: insets.top + 18 }]}
           onPress={logout}
           activeOpacity={0.85}
         >

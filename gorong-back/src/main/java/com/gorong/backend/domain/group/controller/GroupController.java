@@ -73,7 +73,28 @@ public class GroupController {
         return posts;
     }
 
-    // ── 2. 상세 조회 ─────────────────────────────────────────────────
+    // ── 2. 참여 목록 조회 (/{id}보다 먼저 등록 — joined-recruiting 등 경로 충돌 방지) ──
+    @GetMapping("/joined-ids")
+    public ResponseEntity<List<Long>> getJoinedGroupIds(Authentication authentication) {
+        User currentUser = getCurrentUser(authentication);
+        if (currentUser == null) return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(groupService.getJoinedGroupIdsByUserId(currentUser.getId()));
+    }
+
+    @GetMapping("/joined-recruiting")
+    public ResponseEntity<List<GroupPost>> getJoinedRecruitingGroups(Authentication authentication) {
+        User currentUser = getCurrentUser(authentication);
+        if (currentUser == null) return ResponseEntity.ok(List.of());
+        List<GroupPost> posts = groupService.getJoinedRecruitingGroupsByUserId(currentUser.getId());
+        posts.forEach(post -> {
+            if (post.getAuthor() != null) {
+                post.setAuthorNickname(getNickname(post.getAuthor().getId()));
+            }
+        });
+        return ResponseEntity.ok(posts);
+    }
+
+    // ── 3. 상세 조회 ─────────────────────────────────────────────────
     @GetMapping("/{id}")
     public ResponseEntity<GroupPost> getGroup(@PathVariable Long id) {
         return groupRepository.findById(id)
@@ -203,11 +224,4 @@ public class GroupController {
         return ResponseEntity.ok().build();
     }
 
-    // ── 7. 참여 목록 조회 ─────────────────────────────────────────────
-    @GetMapping("/joined-ids")
-    public ResponseEntity<List<Long>> getJoinedGroupIds(Authentication authentication) {
-        User currentUser = getCurrentUser(authentication);
-        if (currentUser == null) return ResponseEntity.ok(List.of());
-        return ResponseEntity.ok(groupService.getJoinedGroupIdsByUserId(currentUser.getId()));
-    }
 }

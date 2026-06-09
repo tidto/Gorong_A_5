@@ -195,6 +195,21 @@ export function removeRoomDecorById(
   return items.filter((i) => i.id !== id);
 }
 
+export function clampDecorCoord(value: number): number {
+  return Math.round(Math.min(95, Math.max(5, value)) * 10) / 10;
+}
+
+export function moveRoomDecorItem(
+  items: RoomDecorItem[],
+  id: string,
+  x: number,
+  y: number
+): RoomDecorItem[] {
+  return items.map((item) =>
+    item.id === id ? { ...item, x: clampDecorCoord(x), y: clampDecorCoord(y) } : item
+  );
+}
+
 export function isRoomDecorType(v: unknown): v is RoomDecorType {
   return typeof v === "string" && v in ROOM_DECOR_BY_TYPE;
 }

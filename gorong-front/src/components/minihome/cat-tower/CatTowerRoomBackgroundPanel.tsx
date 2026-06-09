@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock } from "lucide-react";
 import {
@@ -9,8 +9,14 @@ import {
 } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import { useNotification } from "../../../contexts/NotificationContext";
+import { CATTOWER_ROOM_3D_ENABLED } from "../../../config/catTower3d";
+import type { EquipPreview } from "../../../utils/minihome/gocat/items";
+import type { RoomDecorItem } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 
 import CatTowerRoomDecorPanel from "./CatTowerRoomDecorPanel";
+import { CATTOWER_ROOM_3D_CANVAS_H } from "./catTowerLayout";
+
+const CatTowerRoom3DCanvas = lazy(() => import("./room-3d/CatTowerRoom3DCanvas"));
 import type { RoomDecorType, RoomDecorUnlockContext } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 
 type DecorateTab = "background" | "furniture" | "cat";
@@ -24,8 +30,13 @@ type CatTowerRoomBackgroundPanelProps = {
   growthStage?: GrowthStage;
   decorUnlockContext: RoomDecorUnlockContext;
   placedDecorTypes: Set<RoomDecorType>;
+  roomDecorItems?: RoomDecorItem[];
+  equipped?: EquipPreview | null;
+  activityCount?: number;
   onToggleDecor: (type: RoomDecorType) => void;
   onResetDecor?: () => void;
+  onMoveDecorItem?: (id: string, x: number, y: number) => void;
+  onRemoveDecorItem?: (id: string) => void;
   onSelect: (id: RoomBackgroundId) => void;
   onSave: () => void;
   onCatDecorate?: () => void;
@@ -40,8 +51,13 @@ export default function CatTowerRoomBackgroundPanel({
   growthStage = "BASIC",
   decorUnlockContext,
   placedDecorTypes,
+  roomDecorItems = [],
+  equipped,
+  activityCount = 0,
   onToggleDecor,
   onResetDecor,
+  onMoveDecorItem,
+  onRemoveDecorItem,
   onSelect,
   onSave,
   onCatDecorate,
@@ -59,7 +75,7 @@ export default function CatTowerRoomBackgroundPanel({
       <div className="border-b border-emerald-100/80 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 px-3 py-3 text-center">
         <p className="text-[11px] font-extrabold text-white">🏡 내 공간 꾸미기</p>
         <p className="mt-0.5 text-[9px] font-medium text-white/80">
-          성장·행사 참여에 따라 배경·가구가 열려요
+          배경·가구·Go냥이를 3D 방에서 한 번에 꾸며요
         </p>
       </div>
 
@@ -89,6 +105,40 @@ export default function CatTowerRoomBackgroundPanel({
           );
         })}
       </div>
+
+      {CATTOWER_ROOM_3D_ENABLED ? (
+        <div className="border-b border-emerald-50/80 bg-gradient-to-b from-slate-50/80 to-white px-3.5 py-3">
+          <Suspense
+            fallback={
+              <div
+                className={`${CATTOWER_ROOM_3D_CANVAS_H} flex w-full items-center justify-center rounded-2xl bg-slate-100/80`}
+              >
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+              </div>
+            }
+          >
+            <CatTowerRoom3DCanvas
+              className={`${CATTOWER_ROOM_3D_CANVAS_H} w-full`}
+              roomBackground={selected}
+              roomDecorItems={roomDecorItems}
+              growthStage={growthStage}
+              activityCount={activityCount}
+              equipped={equipped}
+              editable={tab === "furniture"}
+              active
+              hint={
+                tab === "background"
+                  ? "🖼️ 배경 선택 시 3D 방 분위기가 즉시 바뀝니다"
+                  : tab === "cat"
+                    ? "👕 장착 아이템이 3D Go냥이에 반영됩니다"
+                    : undefined
+              }
+              onMoveItem={onMoveDecorItem}
+              onRemoveItem={onRemoveDecorItem}
+            />
+          </Suspense>
+        </div>
+      ) : null}
 
       <div className="space-y-3 p-3.5">
         <AnimatePresence mode="wait">
@@ -222,12 +272,12 @@ export default function CatTowerRoomBackgroundPanel({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -8 }}
               transition={{ duration: 0.2 }}
-              className="flex flex-col items-center rounded-2xl border border-dashed border-orange-200/80 bg-gradient-to-b from-orange-50/50 to-white px-4 py-6 text-center"
+              className="flex flex-col items-center rounded-2xl border border-dashed border-orange-200/80 bg-gradient-to-b from-orange-50/50 to-white px-4 py-4 text-center"
             >
-              <span className="text-4xl">👕</span>
+              <span className="text-3xl">👕</span>
               <p className="mt-2 text-xs font-extrabold text-orange-900/85">Go냥이 꾸미기</p>
-              <p className="mt-1 max-w-[200px] text-[10px] leading-relaxed text-slate-500">
-                모자·의상·악세를 장착하고 Go냥이를 꾸며 보세요. 획득한 아이템만 장착할 수 있어요.
+              <p className="mt-1 max-w-[240px] text-[10px] leading-relaxed text-slate-500">
+                위 3D 미리보기에서 장착 결과를 확인하고, 아래에서 상세 꾸미기를 열 수 있어요.
               </p>
               {onCatDecorate ? (
                 <button

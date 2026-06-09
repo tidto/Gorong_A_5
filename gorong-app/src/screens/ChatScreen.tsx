@@ -83,13 +83,14 @@ export default function ChatScreen() {
     return Number.isNaN(parsed.getTime()) ? null : parsed
   }
 
+  // [수정 5] 당일 기준 다음날 23:59까지만 표시 (2일 이후는 만료 처리)
   const isGroupListingClosed = (group: AppGroup) => {
     const meetingDate = parseChatDate(group.meetingDate)
     if (!meetingDate) return false
-    const closedAt = new Date(meetingDate)
-    closedAt.setDate(closedAt.getDate() + 3)
-    closedAt.setHours(23, 59, 59, 999)
-    return Date.now() > closedAt.getTime()
+    const expireAt = new Date(meetingDate)
+    expireAt.setDate(expireAt.getDate() + 1)  // 다음날까지
+    expireAt.setHours(23, 59, 59, 999)
+    return Date.now() > expireAt.getTime()
   }
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -113,9 +114,18 @@ export default function ChatScreen() {
         const response = await fetchAppGroups()
         const groups = response.data.filter((group) => group.joined)
         setJoinedGroups(groups)
+        // [수정 5] 만료되지 않은 모임만 선택 가능
+        const activeGroups = groups.filter((g) => {
+          const meetingDate = parseChatDate(g.meetingDate)
+          if (!meetingDate) return true
+          const expireAt = new Date(meetingDate)
+          expireAt.setDate(expireAt.getDate() + 1)
+          expireAt.setHours(23, 59, 59, 999)
+          return Date.now() <= expireAt.getTime()
+        })
         setSelectedGroupId((current) => {
-          if (current && groups.some((g) => String(g.id) === current)) return current
-          return groups[0] ? String(groups[0].id) : null
+          if (current && activeGroups.some((g) => String(g.id) === current)) return current
+          return activeGroups[0] ? String(activeGroups[0].id) : null
         })
       } catch (error) {
         console.error('[ChatScreen] 모임 목록 조회 실패:', error)
@@ -349,13 +359,18 @@ export default function ChatScreen() {
             </Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupChipRow}>
-              {joinedGroups.map((group) => {
+              {/* [수정 5] 만료된 모임(당일+1일 이후)은 목록에서 숨김 */}
+              {joinedGroups.filter((g) => !isGroupListingClosed(g)).length === 0 ? (
+                <Text style={[styles.panelText, { marginVertical: 4 }]}>
+                  표시할 채팅방이 없습니다. (만남 다음날 이후 채팅방은 자동으로 숨겨집니다)
+                </Text>
+              ) : (
+                joinedGroups.filter((g) => !isGroupListingClosed(g)).map((group) => {
                 const active = String(group.id) === selectedGroupId
-                const closed = isGroupListingClosed(group)
                 return (
                   <TouchableOpacity
                     key={group.id}
-                    style={[styles.groupChip, active && styles.groupChipActive, closed && styles.groupChipClosed]}
+                    style={[styles.groupChip, active && styles.groupChipActive]}
                     onPress={() => setSelectedGroupId(String(group.id))}
                     activeOpacity={0.85}
                   >
@@ -366,11 +381,12 @@ export default function ChatScreen() {
                       {group.meetingDate || '미정'} {group.meetingTime || ''}
                     </Text>
                     <Text style={[styles.groupChipMeta, active && styles.groupChipMetaActive]}>
-                      {closed ? '종료' : `${group.currentMembers}/${group.maxMembers}명`}
+                      {`${group.currentMembers}/${group.maxMembers}명`}
                     </Text>
                   </TouchableOpacity>
                 )
-              })}
+              })
+              )}
             </ScrollView>
           )}
 

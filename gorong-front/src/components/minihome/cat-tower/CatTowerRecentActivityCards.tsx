@@ -14,8 +14,8 @@ function ActivityList({ activities }: { activities: ActivityItem[] }) {
     return (
       <div className="rounded-xl border border-dashed border-orange-200/70 bg-white/60 px-4 py-6 text-center">
         <p className="text-xl opacity-50">📋</p>
-        <p className="mt-1.5 text-[11px] font-bold text-orange-900/60">아직 활동 기록이 없어요</p>
-        <p className="mt-0.5 text-[10px] text-slate-500">행사에 참여하면 기록이 쌓여요</p>
+        <p className="mt-1.5 text-xs font-bold text-orange-900/70">아직 활동 기록이 없어요</p>
+        <p className="mt-0.5 text-xs text-slate-500">행사에 참여하면 기록이 쌓여요</p>
       </div>
     );
   }
@@ -36,9 +36,9 @@ function ActivityList({ activities }: { activities: ActivityItem[] }) {
               {display.emoji}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-bold text-slate-700">{display.label}</p>
+              <p className="truncate text-xs font-bold text-slate-700">{display.label}</p>
               {activity.description ? (
-                <p className="mt-0.5 truncate text-[9px] font-medium text-slate-500/90">
+                <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">
                   {activity.description}
                 </p>
               ) : null}

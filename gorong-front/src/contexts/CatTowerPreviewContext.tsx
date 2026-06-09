@@ -1,5 +1,7 @@
 import {
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useMemo,
@@ -9,8 +11,11 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchCachedMyUserId } from "../utils/minihome/core/miniHomeMeCache";
-import CatTowerPreviewOverlay from "../components/minihome/cat-tower/CatTowerPreviewOverlay";
 import { catTowerUserPath } from "../utils/minihome/cat-tower/catTowerNavigation";
+
+const CatTowerPreviewOverlay = lazy(
+  () => import("../components/minihome/cat-tower/CatTowerPreviewOverlay")
+);
 
 type CatTowerPreviewContextValue = {
   /** 다른 유저 캣타워 — 미리보기 오버레이 (본인이면 바로 이동) */
@@ -92,11 +97,13 @@ export function CatTowerPreviewProvider({ children }: { children: ReactNode }) {
     <CatTowerPreviewContext.Provider value={value}>
       {children}
       {previewUserId != null ? (
-        <CatTowerPreviewOverlay
-          userId={previewUserId}
-          onClose={closePreview}
-          onViewDetail={navigateToCatTower}
-        />
+        <Suspense fallback={null}>
+          <CatTowerPreviewOverlay
+            userId={previewUserId}
+            onClose={closePreview}
+            onViewDetail={navigateToCatTower}
+          />
+        </Suspense>
       ) : null}
     </CatTowerPreviewContext.Provider>
   );

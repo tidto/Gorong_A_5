@@ -8,6 +8,7 @@ import {
   removeRoomDecorByType,
   sanitizeRoomDecorItems,
   upsertRoomDecorItem,
+  moveRoomDecorItem,
 } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 
 export const GOCAT_ROOM_DECOR_STORAGE_KEY = "gocat_room_decor_items";
@@ -53,7 +54,8 @@ export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
   }, [unlockContext]);
 
   useEffect(() => {
-    saveRoomDecorToStorage(items);
+    const timer = window.setTimeout(() => saveRoomDecorToStorage(items), 400);
+    return () => window.clearTimeout(timer);
   }, [items]);
 
   const addItem = useCallback((type: RoomDecorType) => {
@@ -80,6 +82,10 @@ export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
     setItems([]);
   }, []);
 
+  const moveItem = useCallback((id: string, x: number, y: number) => {
+    setItems((prev) => moveRoomDecorItem(prev, id, x, y));
+  }, []);
+
   const hasType = useCallback(
     (type: RoomDecorType) => safeItems.some((i) => i.type === type),
     [safeItems]
@@ -92,6 +98,7 @@ export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
     removeItemById,
     toggleItem,
     clearAll,
+    moveItem,
     hasType,
   };
 }

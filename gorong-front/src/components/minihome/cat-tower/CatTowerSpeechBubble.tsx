@@ -25,16 +25,22 @@ function CatTowerSpeechBubble({ catName, isDark, animate = true }: CatTowerSpeec
     return () => window.clearInterval(timer);
   }, [animate]);
 
+  const bubbleClass = isDark
+    ? "border-indigo-300/30 bg-indigo-950/75 text-indigo-50/95"
+    : "border-white/90 bg-white/95 text-rose-900/90";
+  const tailClass = isDark ? "border-indigo-300/30 bg-indigo-950/75" : "border-white/90 bg-white/95";
+
   return (
-    <div
-      className={`rounded-2xl rounded-bl-sm border px-3 py-2 text-[9px] font-bold leading-snug shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-opacity duration-300 ${
-        isDark
-          ? "border-indigo-300/25 bg-indigo-950/70 text-indigo-100/90 backdrop-blur-md"
-          : "border-white/85 bg-white/90 text-rose-800/85 backdrop-blur-md"
-      }`}
-      style={{ transform: `rotate(${speechTilt}deg)` }}
-    >
-      {speech}
+    <div className="relative max-w-[148px]" style={{ transform: `rotate(${speechTilt}deg)` }}>
+      <div
+        className={`rounded-2xl rounded-bl-md border px-3 py-2 text-xs font-bold leading-snug shadow-[0_4px_14px_rgba(0,0,0,0.1)] backdrop-blur-md ${bubbleClass}`}
+      >
+        {speech}
+      </div>
+      <span
+        className={`absolute -bottom-1.5 left-3 h-2.5 w-2.5 rotate-45 border-b border-l shadow-sm ${tailClass}`}
+        aria-hidden
+      />
     </div>
   );
 }

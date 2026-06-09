@@ -4,6 +4,7 @@ import React, {
 } from 'react'
 import { auth } from '../firebase/firebaseConfig'
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth'
+import { invalidateMiniHomeMeCache } from '../utils/minihome/core/miniHomeMeCache'
 import { useNotification } from './NotificationContext'
 
 // ──────────────────────────────────────────────
@@ -144,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!currentUser) {
         // Firebase에 로그인이 안 되어있으면 우리 DB 정보도 초기화
+        invalidateMiniHomeMeCache()
         setUser(null)
         localStorage.removeItem('gorong-db-user')
         localStorage.removeItem('gorong-firebase-uid')
@@ -162,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // 다른 계정이거나 처음 로그인 → 캐시 무효화
           // loggedIn = Boolean(firebaseUser && user)이므로
           // user가 null이면 아직 완전한 로그인 상태가 아님
+          invalidateMiniHomeMeCache()
           localStorage.removeItem('gorong-db-user')
           localStorage.removeItem('gorong-firebase-uid')
           localStorage.removeItem('gorong-session-start')
@@ -248,6 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('로그아웃 실패:', error)
     } finally {
       // 💡 수동 로그아웃 버튼을 눌렀을 때도 인터넷이 끊겨있어도 무조건 로컬 정보 삭제!
+      invalidateMiniHomeMeCache()
       setUser(null)
       localStorage.removeItem('gorong-db-user')
       localStorage.removeItem('gorong-firebase-uid')

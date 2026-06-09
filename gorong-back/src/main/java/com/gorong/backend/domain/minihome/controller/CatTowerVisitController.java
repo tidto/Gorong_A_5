@@ -18,8 +18,12 @@ public class CatTowerVisitController {
     private final MiniHomeUserResolver miniHomeUserResolver;
 
     @GetMapping("/stats")
-    public CatTowerVisitorStatsDto stats(@PathVariable Long roomOwnerId) {
-        return catTowerVisitService.getStats(roomOwnerId);
+    public CatTowerVisitorStatsDto stats(
+            @PathVariable Long roomOwnerId,
+            Authentication authentication
+    ) {
+        Long viewerUserId = miniHomeUserResolver.resolveUserIdOptional(authentication);
+        return catTowerVisitService.getStats(roomOwnerId, viewerUserId);
     }
 
     @PostMapping

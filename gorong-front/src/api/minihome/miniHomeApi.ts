@@ -107,6 +107,65 @@ export type GoCatSetupPayload = {
   catName?: string;
 };
 
+export type MiniHomeSettingsPayload = {
+  description?: string;
+  themeCode?: string;
+};
+
+function shouldFallbackMiniHomeUpdate(status: number | undefined): boolean {
+  return status === 404 || status === 405 || status === 500;
+}
+
+async function patchOrPutMiniHome(
+  path: string,
+  payload: MiniHomeSettingsPayload
+): Promise<MiniHome> {
+  const methods: Array<"patch" | "put"> = ["patch", "put"];
+  let lastError: unknown;
+
+  for (const method of methods) {
+    try {
+      const res =
+        method === "patch"
+          ? await axiosInstance.patch(path, payload)
+          : await axiosInstance.put(path, payload);
+      return res.data as MiniHome;
+    } catch (e: unknown) {
+      lastError = e;
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status === 405) continue;
+      throw e;
+    }
+  }
+
+  throw lastError;
+}
+
+/** PATCH — 소개·테마 (/me 우선, 실패 시 /{userId} 폴백) */
+export async function updateMyMiniHome(
+  userId: number,
+  payload: MiniHomeSettingsPayload
+): Promise<MiniHome> {
+  const user = await requireAuthUser();
+  await user.getIdToken(true);
+
+  const paths = [`/minihomes/${userId}`, `/minihomes/me`];
+  let lastError: unknown;
+
+  for (const path of paths) {
+    try {
+      return await patchOrPutMiniHome(path, payload);
+    } catch (e: unknown) {
+      lastError = e;
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (shouldFallbackMiniHomeUpdate(status)) continue;
+      throw e;
+    }
+  }
+
+  throw lastError;
+}
+
 /** 미니홈·Go냥이 최초 생성 (고냥이 없을 때만) */
 export async function createMyMiniHome(payload?: GoCatSetupPayload): Promise<MiniHome> {
   await requireAuthUser();

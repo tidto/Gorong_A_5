@@ -23,8 +23,21 @@ export default defineConfig({
       }
     }
   },
-  // 📌 이 부분을 추가하세요!
   define: {
     global: 'window',
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/three') || id.includes('node_modules/@react-three')) {
+            return 'three-r3f';
+          }
+          if (id.includes('node_modules/@rive-app')) {
+            return 'rive';
+          }
+        },
+      },
+    },
   },
 })
