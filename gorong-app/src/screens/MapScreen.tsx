@@ -100,7 +100,7 @@ export default function MapScreen() {
 
   // [수정] dwellSeconds 추가 구조분해 — 배지 카운트다운에 사용
   const { insideVenueId, isVerified, dwellSeconds } = useGeofence(geofenceVenues)
-  const { isRecording, trail, startRecording, stopRecording } = useTrailStore()
+  const { isRecording, trail, startRecording, stopRecording, setRecordingVenueId } = useTrailStore()
 
   const selectedVenue = useMemo(
     () => venues.find((v) => v.id === selectedVenueId) ?? null,
@@ -112,6 +112,16 @@ export default function MapScreen() {
   useEffect(() => {
     setInsideVenueId(insideVenueId)
   }, [insideVenueId, setInsideVenueId])
+
+  useEffect(() => {
+    if (!isRecording) {
+      setRecordingVenueId(null)
+      return
+    }
+    if (insideVenueId) {
+      setRecordingVenueId(insideVenueId)
+    }
+  }, [isRecording, insideVenueId, setRecordingVenueId])
 
   const finalizeTrailArt = useCallback(async () => {
     if (!mapRef.current || trail.length < 2) return
@@ -163,9 +173,9 @@ export default function MapScreen() {
   const handleStopRecording = useCallback(async (
     reason: 'manual' | 'max_duration' | 'left_venue_timeout',
   ) => {
-    await stopRecording(reason, insideVenueId)
+    await stopRecording(reason)
     await finalizeTrailArt()
-  }, [stopRecording, insideVenueId, finalizeTrailArt])
+  }, [stopRecording, finalizeTrailArt])
 
   useEffect(() => {
     if (isRecording && !insideVenueId && !outsideTimer) {
@@ -390,7 +400,7 @@ export default function MapScreen() {
       <View style={[styles.buttonRow, { bottom: buttonRowBottom }]}>
         <TouchableOpacity
           style={[styles.btn, isRecording && styles.btnActive]}
-          onPress={isRecording ? () => handleStopRecording('manual') : startRecording}
+          onPress={isRecording ? () => handleStopRecording('manual') : () => startRecording(insideVenueId)}
         >
           <Text style={styles.btnText}>
             {isRecording ? '트레일 기록 종료' : '트레일 기록 시작'}
