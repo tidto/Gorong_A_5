@@ -70,6 +70,22 @@ public class EventParticipation {
     @Column(name = "applied_at", nullable = false, updatable = false)
     private LocalDateTime appliedAt;
 
+    // ── 참여 상태 (SOLO는 visitDate 경과 시 스케줄러가 CLOSED로 변경, GROUP은 GroupPost.status 연동) ──
+    public enum ParticipationStatus {
+        ACTIVE,  // 진행 중 / 예정
+        CLOSED   // 날짜 경과 or 그룹 마감
+    }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 10)
+    @Builder.Default
+    private ParticipationStatus status = ParticipationStatus.ACTIVE;
+
+    /** 스케줄러가 호출 — SOLO 참여를 CLOSED 상태로 전환 */
+    public void close() {
+        this.status = ParticipationStatus.CLOSED;
+    }
+
     // ── 참여 유형 Enum ─────────────────────────────────────────────────
     public enum ParticipationType {
         SOLO,   // 혼자 참여
