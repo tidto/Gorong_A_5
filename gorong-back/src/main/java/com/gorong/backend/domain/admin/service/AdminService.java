@@ -78,6 +78,31 @@ public class AdminService {
         ban.resolveAppeal(reviewNote == null ? "관리자에 의해 밴이 해제되었습니다." : reviewNote);
     }
 
+    /**
+     * 일반 유저가 신고를 접수합니다.
+     * Report entity: reporter(신고자), reportedUser(피신고자), reason, status=PENDING
+     */
+    @Transactional
+    public ReportSummaryDto submitReport(Long reporterUserId, Long reportedUserId, String reason) {
+        User reporter = userRepository.findById(reporterUserId)
+                .orElseThrow(() -> new IllegalArgumentException("신고자를 찾을 수 없습니다."));
+        User reportedUser = userRepository.findById(reportedUserId)
+                .orElseThrow(() -> new IllegalArgumentException("신고 대상 유저를 찾을 수 없습니다."));
+
+        if (reporterUserId.equals(reportedUserId)) {
+            throw new IllegalArgumentException("자기 자신을 신고할 수 없습니다.");
+        }
+
+        Report report = Report.builder()
+                .reporter(reporter)
+                .reportedUser(reportedUser)
+                .reason(reason)
+                .build();
+
+        Report saved = reportRepository.save(report);
+        return toReportSummary(saved);
+    }
+
     @Transactional
     public BanSummaryDto submitAppeal(Long userId, String appealText) {
         UserBan ban = userBanRepository.findTopByUserIdAndBanStatusOrderByBannedAtDesc(userId, UserBan.BanStatus.ACTIVE)

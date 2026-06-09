@@ -3,6 +3,7 @@ package com.gorong.backend.domain.user.controller;
 import com.google.firebase.auth.FirebaseToken;
 import com.gorong.backend.domain.admin.dto.AppealRequestDto;
 import com.gorong.backend.domain.admin.dto.BanSummaryDto;
+import com.gorong.backend.domain.admin.dto.ReportSummaryDto;
 import com.gorong.backend.domain.admin.entity.UserBan;
 import com.gorong.backend.domain.admin.service.AdminService;
 import com.gorong.backend.domain.user.dto.MyPageResponseDto;
@@ -123,4 +124,25 @@ public class UserController {
         return ResponseEntity.ok(adminService.submitAppeal(user.getId(), requestDto.getAppealText()));
     }
 
+    /**
+     * 일반 유저 신고 접수 엔드포인트
+     * POST /api/v1/users/report
+     * Body: { reportedUserId: Long, reason: String }
+     * → Report 테이블에 PENDING 상태로 저장되어 AdminPage 신고 이력에 표시됩니다.
+     */
+    @PostMapping("/report")
+    public ResponseEntity<ReportSummaryDto> submitReport(
+            @RequestBody java.util.Map<String, Object> body,
+            Authentication authentication
+    ) {
+        FirebaseToken decodedToken = (FirebaseToken) authentication.getPrincipal();
+        User reporter = userService.findByUid(decodedToken.getUid())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        Long reportedUserId = Long.valueOf(body.get("reportedUserId").toString());
+        String reason = body.get("reason").toString();
+
+        ReportSummaryDto result = adminService.submitReport(reporter.getId(), reportedUserId, reason);
+        return ResponseEntity.ok(result);
+    }
 }
