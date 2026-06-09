@@ -147,6 +147,19 @@ public class EventParticipationService {
                 userId, eventContentId, ParticipationType.SOLO);
     }
 
+    /**
+     * visitDate가 지난 SOLO 참여를 CLOSED로 일괄 전환
+     * GroupScheduler에서 매일 자정에 호출됩니다.
+     * @return 처리된 건수
+     */
+    @Transactional
+    public int closeExpiredSoloParticipations() {
+        List<EventParticipation> expired =
+                participationRepository.findExpiredSoloParticipations(LocalDate.now());
+        expired.forEach(EventParticipation::close);
+        return expired.size();
+    }
+
     // ── meetingDate 문자열 파싱 헬퍼 ─────────────────────────────────
     private LocalDate parseMeetingDate(String meetingDate) {
         if (meetingDate == null || meetingDate.isBlank()) return null;
