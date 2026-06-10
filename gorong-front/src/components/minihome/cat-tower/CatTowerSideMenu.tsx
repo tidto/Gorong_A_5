@@ -5,6 +5,7 @@ import {
   type CatTowerCenterPanelId,
 } from "./catTowerPanelTypes";
 import CatTowerVisitorWidget from "./CatTowerVisitorWidget";
+import { CATTOWER_CARD, cattowerCardHeader } from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 type CatTowerSideMenuProps = {
   busy?: boolean;
@@ -30,7 +31,7 @@ function panelButtonClass(active: boolean, disabled?: boolean): string {
     "mb-1 flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left text-xs font-bold transition";
   if (disabled) return `${base} cursor-not-allowed opacity-50`;
   if (active) {
-    return `${base} translate-x-0.5 bg-gradient-to-r from-orange-100 to-amber-50 text-orange-900 shadow-sm ring-1 ring-orange-200/80`;
+    return `${base} translate-x-0.5 bg-primary-50 text-primary-800 shadow-sm ring-1 ring-primary-200`;
   }
   return `${base} text-slate-700 hover:translate-x-0.5 hover:bg-orange-50/60 hover:shadow-sm`;
 }
@@ -52,18 +53,10 @@ export default function CatTowerSideMenu({
   visitorStatsLoading,
 }: CatTowerSideMenuProps) {
   return (
-    <nav className="sidebar-column">
-      <div className="sidebar-card w-full max-w-full border-orange-100/90 bg-white/90">
-        <div className="sidebar-card-header justify-center border-orange-100/80 bg-gradient-to-r from-orange-400 to-amber-400 lg:hidden">
-          ⚡ 빠른 실행
-        </div>
-        <div
-          className={`sidebar-card-header hidden justify-center sm:text-sm lg:flex ${
-            readOnly
-              ? "border-sky-100/80 bg-gradient-to-r from-sky-400 to-violet-400"
-              : "border-orange-100/80 bg-gradient-to-r from-orange-400 to-amber-400"
-          }`}
-        >
+    <nav className="sidebar-column sidebar-column-compact">
+      <div className={CATTOWER_CARD}>
+        <div className={`${cattowerCardHeader(readOnly)} lg:hidden`}>⚡ 빠른 실행</div>
+        <div className={`${cattowerCardHeader(readOnly)} hidden sm:text-sm lg:flex`}>
           {readOnly ? "👀 둘러보기" : "📌 바로가기"}
         </div>
         <ul className="sidebar-card-body hidden lg:block">
@@ -84,7 +77,7 @@ export default function CatTowerSideMenu({
         </ul>
 
         {canEdit && !readOnly ? (
-          <div className="sidebar-card-body border-t border-orange-100/70 lg:border-t">
+          <div className="sidebar-card-body border-t border-slate-100 lg:border-t">
             <p className="mb-1 hidden px-1 text-xs font-bold uppercase tracking-wide text-slate-400 lg:block">
               꾸미기
             </p>
@@ -94,7 +87,7 @@ export default function CatTowerSideMenu({
                 type="button"
                 disabled={busy}
                 onClick={onRoomDecorate}
-                className="mb-0 flex w-full items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:bg-emerald-50/70 hover:shadow-sm lg:mb-1 lg:justify-start lg:gap-2 lg:px-3"
+                className="mb-0 flex w-full items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:bg-slate-50 hover:shadow-sm lg:mb-1 lg:justify-start lg:gap-2 lg:px-3"
               >
                 <span className={ICON_BOX}>🖼️</span>
                 <span className="truncate">방 꾸미기</span>
@@ -138,7 +131,7 @@ export default function CatTowerSideMenu({
               type="button"
               disabled={busy}
               onClick={onEvents}
-              className="sidebar-action-btn border-emerald-200 text-emerald-900/80 hover:bg-emerald-50"
+              className="sidebar-action-btn border-primary-200 text-primary-800 hover:bg-primary-50"
             >
               <Search className="h-3.5 w-3.5" />
               행사 찾기

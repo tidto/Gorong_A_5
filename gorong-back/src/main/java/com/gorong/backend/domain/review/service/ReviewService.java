@@ -1,5 +1,6 @@
 package com.gorong.backend.domain.review.service;
 
+import com.gorong.backend.domain.app.repository.VenueArrivalRecordRepository;
 import com.gorong.backend.domain.event.entity.Event;
 import com.gorong.backend.domain.event.repository.EventRepository;
 import com.gorong.backend.domain.group.entity.EventParticipation;
@@ -33,6 +34,7 @@ public class ReviewService {
     private final ReviewImageRepository reviewImageRepository;
     private final EventParticipationRepository eventParticipationRepository;
     private final EventRepository eventRepository;
+    private final VenueArrivalRecordRepository venueArrivalRecordRepository;
 
     public Review upsertQuickReview(Long userId, Long eventId, Integer rating, String reviewText, String authorName, List<ImagePayload> images) {
         validateRating(rating);
@@ -46,12 +48,18 @@ public class ReviewService {
                         .eventId(eventId)
                         .authorName(authorName)
                         .title("임시 포스팅")
+                        .content("")
                         .reviewDate(OffsetDateTime.now())
                         .build());
 
         assertReviewMetaEditable(review, rating, reviewText);
 
         review.updateQuickReview(rating, reviewText);
+
+        // ⭐️ [수정 사항] DB의 content 컬럼 NOT NULL 제약조건 에러를 막기 위해
+        // 간편 리뷰 저장 시에도 본문(content) 자리에 한 줄 리뷰 텍스트를 채워줍니다.
+        review.updateContent(review.getTitle(), normalizeText(reviewText));
+
         syncImages(review, images);
         return reviewRepository.save(review);
     }
@@ -199,6 +207,12 @@ public class ReviewService {
 
         if (!participated) {
             throw new IllegalArgumentException("참여한 행사만 포스팅할 수 있습니다.");
+        }
+
+        boolean arrived = venueArrivalRecordRepository.existsByUserIdAndVenueId(userId, String.valueOf(eventId));
+
+        if (!arrived) {
+            throw new IllegalArgumentException("현장 방문 인증이 완료된 행사만 포스팅할 수 있습니다.");
         }
     }
 

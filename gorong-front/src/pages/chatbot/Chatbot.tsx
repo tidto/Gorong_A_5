@@ -10,8 +10,16 @@ import Button from "../../components/Button";
 import Input from "../../components/Input";
 import ChatbotEventCard from "../../components/chatbot/ChatbotEventCard";
 import ChatbotActionBar from "../../components/chatbot/ChatbotActionBar";
+import { GOCAT_PROFILE_IMAGE } from "../../components/minihome/cat-tower/CatTowerProfileAvatar";
 import { postChatbotMessage } from "../../api/chatbot/chatbotApi";
 import type { ChatbotAction, ChatbotRecommendedEvent } from "../../types/chatbot/chatbot";
+import {
+  GORONG_BADGE,
+  GORONG_BADGE_ACCENT,
+  GORONG_CARD,
+  GORONG_PAGE,
+  GORONG_PAGE_HEADER,
+} from "../../utils/ui/gorongTheme";
 
 type ChatMessage = {
   id: string;
@@ -224,31 +232,52 @@ export default function Chatbot() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
-      <div className="bg-white rounded-2xl shadow-lg overflow-hidden h-[70vh] min-h-[520px] flex flex-col">
-        <div className="bg-primary-500 text-white p-4 flex items-center gap-3">
-          <Bot className="w-6 h-6" />
+    <div className={`${GORONG_PAGE} space-y-3`}>
+      <header className={GORONG_PAGE_HEADER}>
+        <div className="flex items-center gap-3">
+          <img
+            src={GOCAT_PROFILE_IMAGE}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-full border-2 border-orange-200/80 bg-[#fff8e8] object-contain"
+          />
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-bold truncate">Go냥이 챗봇</h1>
-            <p className="text-xs sm:text-sm opacity-90 truncate">
-              고롱 서비스 도우미 · 행사 추천 · 이용 안내
+            <p className="text-xs font-bold uppercase tracking-wider text-primary-600">Gorong Assistant</p>
+            <h1 className="text-lg font-extrabold text-slate-900 sm:text-xl">Go냥이 챗봇</h1>
+            <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">
+              행사 추천 · 근처 행사 · 그룹 · CatTower 이용 안내
             </p>
           </div>
+          <span className={`ml-auto hidden sm:inline-flex ${GORONG_BADGE_ACCENT}`}>
+            <Bot className="mr-1 h-3.5 w-3.5" />
+            온라인
+          </span>
         </div>
+      </header>
 
+      <div className={`${GORONG_CARD} flex h-[calc(100vh-14rem)] min-h-[520px] max-h-[760px] flex-col overflow-hidden`}>
         {err ? (
-          <div className="bg-red-50 text-red-700 text-sm px-4 py-2 border-b border-red-100">{err}</div>
+          <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">{err}</div>
         ) : null}
 
-        <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-4 overscroll-contain">
+        <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#fafafa] p-4">
           {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div
+              key={m.id}
+              className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              {m.role === "assistant" ? (
+                <img
+                  src={GOCAT_PROFILE_IMAGE}
+                  alt=""
+                  className="mt-1 h-8 w-8 shrink-0 rounded-full border border-orange-200/80 bg-[#fff8e8] object-contain"
+                />
+              ) : null}
               <div className="max-w-[92%] sm:max-w-md lg:max-w-xl">
                 <div
-                  className={`rounded-2xl px-4 py-3 shadow-sm ${
+                  className={`rounded-2xl px-4 py-3 ${
                     m.role === "user"
-                      ? "bg-primary-500 text-white rounded-br-md"
-                      : "bg-gray-100 text-gray-900 rounded-bl-md"
+                      ? "rounded-br-md bg-primary-500 text-white shadow-sm"
+                      : "rounded-bl-md border border-slate-200 bg-white text-slate-900 shadow-sm"
                   }`}
                 >
                   {m.role === "assistant" ? (
@@ -276,7 +305,9 @@ export default function Chatbot() {
                   </div>
                 ) : null}
 
-                <p className={`text-[11px] text-gray-500 mt-1 ${m.role === "user" ? "text-right" : "text-left"}`}>
+                <p
+                  className={`mt-1 text-[11px] text-slate-400 ${m.role === "user" ? "text-right" : "text-left"}`}
+                >
                   {formatTime(m.createdAt)}
                 </p>
               </div>
@@ -284,17 +315,22 @@ export default function Chatbot() {
           ))}
 
           {isTyping ? (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-2xl px-4 py-3 rounded-bl-md shadow-sm">
-                <p className="text-xs text-gray-600 mb-2">Go냥이가 답변 작성 중...</p>
+            <div className="flex justify-start gap-2">
+              <img
+                src={GOCAT_PROFILE_IMAGE}
+                alt=""
+                className="mt-1 h-8 w-8 shrink-0 rounded-full border border-orange-200/80 bg-[#fff8e8] object-contain"
+              />
+              <div className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <p className="mb-2 text-xs font-medium text-slate-500">Go냥이가 답변 작성 중...</p>
                 <div className="flex space-x-1" aria-label="typing">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                  <div className="h-2 w-2 animate-bounce rounded-full bg-primary-400" />
                   <div
-                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    className="h-2 w-2 animate-bounce rounded-full bg-primary-400"
                     style={{ animationDelay: "0.1s" }}
                   />
                   <div
-                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    className="h-2 w-2 animate-bounce rounded-full bg-primary-400"
                     style={{ animationDelay: "0.2s" }}
                   />
                 </div>
@@ -304,9 +340,9 @@ export default function Chatbot() {
         </div>
 
         {messages.length <= 2 ? (
-          <div className="px-4 pb-3 space-y-3 border-t border-gray-100 pt-3">
+          <div className="space-y-3 border-t border-slate-100 bg-white px-4 pb-3 pt-3">
             <div>
-              <p className="text-sm text-gray-600 mb-2">행사·추천</p>
+              <p className="mb-2 text-xs font-bold text-slate-500">행사·추천</p>
               <div className="flex flex-wrap gap-2">
                 {quickReplies.map((reply) => (
                   <button
@@ -314,7 +350,7 @@ export default function Chatbot() {
                     type="button"
                     onClick={() => (isTyping ? null : sendMessage(reply, "quickReply"))}
                     disabled={isTyping}
-                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded-full text-sm text-gray-700 transition-colors"
+                    className={`${GORONG_BADGE} px-3 py-1.5 text-sm transition hover:border-primary-200 hover:bg-primary-50 disabled:opacity-50`}
                   >
                     {reply}
                   </button>
@@ -322,7 +358,7 @@ export default function Chatbot() {
               </div>
             </div>
             <div>
-              <p className="text-sm text-gray-600 mb-2">이용 방법</p>
+              <p className="mb-2 text-xs font-bold text-slate-500">이용 방법</p>
               <div className="flex flex-wrap gap-2">
                 {helpQuickReplies.map((reply) => (
                   <button
@@ -330,7 +366,7 @@ export default function Chatbot() {
                     type="button"
                     onClick={() => (isTyping ? null : sendMessage(reply, "quickReply"))}
                     disabled={isTyping}
-                    className="px-3 py-2 bg-primary-50 hover:bg-primary-100 disabled:opacity-50 rounded-full text-sm text-primary-800 transition-colors"
+                    className={`${GORONG_BADGE_ACCENT} px-3 py-1.5 text-sm transition hover:bg-primary-100 disabled:opacity-50`}
                   >
                     {reply}
                   </button>
@@ -340,7 +376,7 @@ export default function Chatbot() {
           </div>
         ) : null}
 
-        <div className="border-t border-gray-200 p-4">
+        <div className="border-t border-slate-200 bg-white p-4">
           <div className="flex gap-3">
             <Input
               placeholder="행사 추천, 근처 행사, 이용 방법을 물어보세요..."

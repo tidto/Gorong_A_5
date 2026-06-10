@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { updateMyCatAppearance } from "../../../api/minihome/miniHomeApi";
 import {
   type RoomDecorItem,
   type RoomDecorType,
   type RoomDecorUnlockContext,
+  parseRoomDecorFromAppearance,
   parseStoredRoomDecor,
   removeRoomDecorById,
   removeRoomDecorByType,
@@ -36,14 +38,46 @@ function saveRoomDecorToStorage(items: RoomDecorItem[]): boolean {
   }
 }
 
-/** 방 가구·장식 — localStorage 영속 + 해금 조건 반영 */
-export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
-  const [items, setItems] = useState<RoomDecorItem[]>(() => loadRoomDecorFromStorage());
+type UseRoomDecorOptions = {
+  unlockContext?: RoomDecorUnlockContext;
+  appearanceState?: Record<string, unknown> | null;
+  /** false — 방문자: 서버 appearance만 표시 */
+  canEdit?: boolean;
+};
+
+function resolveInitialItems(
+  appearanceState: Record<string, unknown> | null | undefined,
+  canEdit: boolean
+): RoomDecorItem[] {
+  const fromApi = parseRoomDecorFromAppearance(appearanceState);
+  if (fromApi.length > 0) return fromApi;
+  if (canEdit) return loadRoomDecorFromStorage();
+  return [];
+}
+
+/** 방 가구·장식 — 서버 appearance_state 영속 + 방문자 노출 */
+export function useRoomDecor({
+  unlockContext,
+  appearanceState,
+  canEdit = true,
+}: UseRoomDecorOptions = {}) {
+  const [items, setItems] = useState<RoomDecorItem[]>(() =>
+    resolveInitialItems(appearanceState, canEdit)
+  );
+  const skipNextSaveRef = useRef(true);
+  const savingRef = useRef(false);
 
   const safeItems = useMemo(
     () => (unlockContext ? sanitizeRoomDecorItems(items, unlockContext) : items),
     [items, unlockContext]
   );
+
+  useEffect(() => {
+    skipNextSaveRef.current = true;
+    const next = resolveInitialItems(appearanceState, canEdit);
+    setItems(unlockContext ? sanitizeRoomDecorItems(next, unlockContext) : next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- appearanceState 변경 시에만 서버 값으로 동기화
+  }, [appearanceState, canEdit]);
 
   useEffect(() => {
     if (!unlockContext) return;
@@ -54,9 +88,25 @@ export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
   }, [unlockContext]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => saveRoomDecorToStorage(items), 400);
+    if (!canEdit) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+    if (savingRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      savingRef.current = true;
+      saveRoomDecorToStorage(items);
+      void updateMyCatAppearance({ roomDecorItems: items })
+        .catch((e) => console.warn("[GoCat] roomDecor API save failed", e))
+        .finally(() => {
+          savingRef.current = false;
+        });
+    }, 500);
+
     return () => window.clearTimeout(timer);
-  }, [items]);
+  }, [items, canEdit]);
 
   const addItem = useCallback((type: RoomDecorType) => {
     setItems((prev) => upsertRoomDecorItem(prev, type));
@@ -86,6 +136,18 @@ export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
     setItems((prev) => moveRoomDecorItem(prev, id, x, y));
   }, []);
 
+  const saveNow = useCallback(async (): Promise<boolean> => {
+    if (!canEdit) return false;
+    saveRoomDecorToStorage(items);
+    try {
+      await updateMyCatAppearance({ roomDecorItems: items });
+      return true;
+    } catch (e) {
+      console.warn("[GoCat] roomDecor immediate save failed", e);
+      return false;
+    }
+  }, [canEdit, items]);
+
   const hasType = useCallback(
     (type: RoomDecorType) => safeItems.some((i) => i.type === type),
     [safeItems]
@@ -99,6 +161,7 @@ export function useRoomDecor(unlockContext?: RoomDecorUnlockContext) {
     toggleItem,
     clearAll,
     moveItem,
+    saveNow,
     hasType,
   };
 }

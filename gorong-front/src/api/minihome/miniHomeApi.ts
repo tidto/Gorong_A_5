@@ -44,6 +44,13 @@ export async function getMiniHomePage(userId: number): Promise<MiniHomePage> {
   return res.data;
 }
 
+export type RoomDecorItemPayload = {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+};
+
 export type CatAppearancePayload = {
   bodyType?: string;
   pattern?: string;
@@ -56,6 +63,7 @@ export type CatAppearancePayload = {
   badgeItemCode?: string;
   /** @deprecated face/neck/badge로 분리 */
   accessoryItemCode?: string;
+  roomDecorItems?: RoomDecorItemPayload[];
 };
 
 /**

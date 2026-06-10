@@ -1,4 +1,5 @@
 import type { ChatbotAction } from "../../types/chatbot/chatbot";
+import { GORONG_BADGE_ACCENT } from "../../utils/ui/gorongTheme";
 
 type ChatbotActionBarProps = {
   actions?: ChatbotAction[];
@@ -15,7 +16,7 @@ export default function ChatbotActionBar({ actions, onNavigate }: ChatbotActionB
           key={`${action.type ?? "link"}_${action.path}_${action.label}`}
           type="button"
           onClick={() => onNavigate(action.path)}
-          className="rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-[10px] font-bold text-primary-800 transition hover:bg-primary-100"
+          className={`${GORONG_BADGE_ACCENT} px-2.5 py-1 text-[10px] font-bold transition hover:bg-primary-100`}
         >
           {action.label}
         </button>

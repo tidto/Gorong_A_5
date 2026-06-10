@@ -69,12 +69,16 @@
     @apply box-border flex w-full min-w-0 max-w-full flex-col items-stretch gap-5;
   }
 
+  .sidebar-column-compact {
+    @apply gap-3;
+  }
+
   .sidebar-column > * {
     @apply box-border w-full min-w-0 max-w-full self-stretch;
   }
 
   .sidebar-card {
-    @apply box-border w-full max-w-full overflow-hidden rounded-3xl border shadow-sm;
+    @apply box-border w-full max-w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm;
   }
 
   .sidebar-card-header {

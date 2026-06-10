@@ -45,4 +45,17 @@ public interface EventParticipationRepository extends JpaRepository<EventPartici
                     "ORDER BY cnt DESC"
     )
     List<Object[]> findTopEventContentIds(org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * visitDate가 오늘 이전이고 아직 ACTIVE인 SOLO 참여 레코드 조회
+     * — GroupScheduler가 매일 자정에 호출하여 CLOSED로 일괄 전환
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT ep FROM EventParticipation ep " +
+                    "WHERE ep.participationType = 'SOLO' " +
+                    "  AND ep.status = 'ACTIVE' " +
+                    "  AND ep.visitDate < :today"
+    )
+    List<EventParticipation> findExpiredSoloParticipations(
+            @org.springframework.data.repository.query.Param("today") java.time.LocalDate today);
 }

@@ -293,13 +293,15 @@ export default function Home() {
     const [isAppealSubmitting, setIsAppealSubmitting] = useState(false)
     const [weatherState,  setWeatherState]  = useState<string>('Clear')
     const [timeState,     setTimeState]     = useState<'DAY' | 'NIGHT'>('DAY')
-    const [mapExpanded,   setMapExpanded]   = useState(false)
     const [searchFocused, setSearchFocused] = useState(false)
+    const [mapExpanded,   setMapExpanded]   = useState(false)
+    const [topMapExpanded, setTopMapExpanded] = useState(false)
     const [activeCategory, setActiveCategory] = useState('all')
     const [searchPopupOpen, setSearchPopupOpen] = useState(false)
     const [popupRect, setPopupRect] = useState<{ top: number; left: number; width: number } | null>(null)
     const searchWrapRef = useRef<HTMLDivElement>(null)
     const searchInputRef = useRef<HTMLInputElement>(null)
+    const bigMapRef = useRef<HTMLDivElement>(null)
 
     const handleSearch    = useCallback(() => {
         const q = searchInput.trim()
@@ -480,8 +482,20 @@ export default function Home() {
             .slice(0, 12)
     }, [displayEvents, auth.user, weatherState, timeState])
 
-    const topCarousel = useCarousel(topEvents, 5)
+    // 인기 TOP10 — activeCategory 적용
+    const filteredTopEvents = useMemo(() => {
+        if (activeCategory === 'all') return topEvents
+        return topEvents.filter(ev => {
+            const c = (ev.cat1 || ev.tourCategoryCode || ev.cat3 || '').toUpperCase()
+            return c.startsWith(activeCategory)
+        })
+    }, [topEvents, activeCategory])
+
+    const topCarousel = useCarousel(filteredTopEvents, 5)
     const recCarousel = useCarousel(recommendedEvents, 6)
+
+    // 카테고리 탭 라벨 (헤더 표시용)
+    const activeCategoryLabel = CATEGORY_TABS.find(t => t.id === activeCategory)?.label || '전체'
 
     const handleNav = useCallback((id: string) => {
         if (banInfo || !id) return
@@ -675,6 +689,37 @@ export default function Home() {
                 @media (max-width: 1024px) { .rec-grid { grid-template-columns: repeat(4, 1fr); } }
                 @media (max-width: 768px)  { .rec-grid { grid-template-columns: repeat(3, 1fr); } }
                 @media (max-width: 480px)  { .rec-grid { grid-template-columns: repeat(2, 1fr); } }
+
+                .rec-grid-half {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 12px;
+                }
+                @media (max-width: 1024px) { .rec-grid-half { grid-template-columns: repeat(2, 1fr); } }
+                @media (max-width: 600px)  { .rec-grid-half { grid-template-columns: repeat(2, 1fr); } }
+
+                .expanded-bottom-two-col { }
+                @media (max-width: 860px) {
+                    .expanded-bottom-two-col { grid-template-columns: 1fr !important; }
+                }
+
+                @media (max-width: 860px) {
+                    .bottom-two-col { grid-template-columns: 1fr !important; }
+                }
+
+                .rec-map-two-col { }
+                @media (max-width: 960px) {
+                    .rec-map-two-col { grid-template-columns: 1fr !important; }
+                }
+
+                .top10-grid { }
+                @media (max-width: 640px) {
+                    .top10-grid { grid-template-columns: 1fr !important; }
+                }
+
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
 
                 @keyframes fadeUp {
                     from { opacity: 0; transform: translateY(16px); }
@@ -886,138 +931,411 @@ export default function Home() {
                     </div>
                 </div>
 
-                {/* ── 본문 ─────────────────────────────────────────── */}
-                <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 24px 80px' }}>
+                {/* ══════════════════════════════════════════════════
+                    크게보기 모드 — 좌: 스크롤 콘텐츠 / 우: sticky 지도
+                ══════════════════════════════════════════════════ */}
+                {mapExpanded ? (
+                    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 560px', gap: 0, alignItems: 'start' }}>
 
-                    {/* ══════════════════════════════════════════════
-                        TOP10 (좌) + 지도 (우) — 2단 레이아웃
-                    ══════════════════════════════════════════════ */}
-                    <div className="fade-up-2" style={{
-                        display: 'grid',
-                        gridTemplateColumns: topEvents.length > 0 ? '1fr 420px' : '1fr',
-                        gap: 32,
-                        marginBottom: 56,
-                        alignItems: 'start',
-                    }}>
+                            {/* 좌: 스크롤 콘텐츠 */}
+                            <div style={{ padding: '40px 40px 80px 0', borderRight: '1px solid #eee' }}>
 
-                        {/* ── 인기 TOP 10 리스트 ────────────────── */}
-                        {topEvents.length > 0 && (
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
-                                    <SectionHeader
-                                        icon={TrendingUp}
-                                        title={<>지금 가장 인기 있는 행사 <span style={{ color: '#fb923c' }}>TOP 10</span></>}
-                                        subtitle="참여 신청이 가장 많은 행사를 모아봤어요"
-                                    />
-                                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, paddingTop: 4 }}>
-                                        <CarouselBtn dir="prev" disabled={!topCarousel.canPrev} onClick={topCarousel.prev} />
-                                        <CarouselBtn dir="next" disabled={!topCarousel.canNext} onClick={topCarousel.next} />
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    {topCarousel.visible.map((ev, i) => (
-                                        <TopEventCard
-                                            key={`top-${ev.id}`}
-                                            event={ev}
-                                            rank={topCarousel.page * 5 + i + 1}
-                                            onClick={() => handleNav(ev.id)}
+                                {/* 맞춤 추천 */}
+                                <section style={{ marginBottom: 48 }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                                        <SectionHeader
+                                            icon={Sparkles}
+                                            title={
+                                                activeCategory === 'all'
+                                                    ? <>{auth.user?.nickname || 'Go냥이'}님을 위한 맞춤 추천</>
+                                                    : <><span style={{ color: '#fb923c' }}>{activeCategoryLabel}</span> 맞춤 추천</>
+                                            }
+                                            subtitle={`${weatherIcon} ${weatherText} · ${timeState === 'NIGHT' ? '🌙 야간' : '🌤 주간'} 기반으로 선별했어요`}
                                         />
-                                    ))}
+                                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, paddingTop: 4 }}>
+                                            <CarouselBtn dir="prev" disabled={!recCarousel.canPrev} onClick={recCarousel.prev} />
+                                            <CarouselBtn dir="next" disabled={!recCarousel.canNext} onClick={recCarousel.next} />
+                                        </div>
+                                    </div>
+                                    {recCarousel.visible.length > 0 ? (
+                                        <>
+                                            <div className="rec-grid-half">
+                                                {recCarousel.visible.map(ev => (
+                                                    <RecommendCard key={`rec-${ev.id}`} event={ev} onClick={() => handleNav(ev.id)} />
+                                                ))}
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
+                                                {Array.from({ length: recCarousel.totalPages }).map((_, i) => (
+                                                    <div key={i} style={{ width: i === recCarousel.page ? 20 : 6, height: 6, borderRadius: 3, background: i === recCarousel.page ? '#fb923c' : '#e0e0e0', transition: 'all 0.3s' }} />
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa', fontSize: 14 }}>
+                                            <p style={{ fontSize: 28, margin: '0 0 8px' }}>🔍</p>
+                                            <p style={{ margin: 0 }}>{activeCategoryLabel} 카테고리의 추천 행사가 없어요</p>
+                                        </div>
+                                    )}
+                                </section>
+
+                                {/* 인기 TOP10 */}
+                                <section>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                                        <SectionHeader
+                                            icon={TrendingUp}
+                                            title={
+                                                activeCategory === 'all'
+                                                    ? <>지금 가장 인기 있는 행사 <span style={{ color: '#fb923c' }}>TOP 10</span></>
+                                                    : <><span style={{ color: '#fb923c' }}>{activeCategoryLabel}</span> 인기 행사</>
+                                            }
+                                            subtitle={activeCategory === 'all' ? '참여 신청이 가장 많은 행사를 모아봤어요' : `${activeCategoryLabel} 카테고리에서 인기 있는 행사예요`}
+                                        />
+                                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, paddingTop: 4 }}>
+                                            <CarouselBtn dir="prev" disabled={!topCarousel.canPrev} onClick={topCarousel.prev} />
+                                            <CarouselBtn dir="next" disabled={!topCarousel.canNext} onClick={topCarousel.next} />
+                                        </div>
+                                    </div>
+                                    {topCarousel.visible.length > 0 ? (
+                                        <>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                {topCarousel.visible.map((ev, i) => (
+                                                    <TopEventCard key={`top-${ev.id}`} event={ev} rank={topCarousel.page * 5 + i + 1} onClick={() => handleNav(ev.id)} />
+                                                ))}
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
+                                                {Array.from({ length: topCarousel.totalPages }).map((_, i) => (
+                                                    <div key={i} style={{ width: i === topCarousel.page ? 20 : 6, height: 6, borderRadius: 3, background: i === topCarousel.page ? '#fb923c' : '#e0e0e0', transition: 'all 0.3s' }} />
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa', fontSize: 14 }}>
+                                            <p style={{ fontSize: 28, margin: '0 0 8px' }}>📭</p>
+                                            <p style={{ margin: 0 }}>{activeCategoryLabel} 카테고리의 인기 행사가 없어요</p>
+                                        </div>
+                                    )}
+                                </section>
+                            </div>
+
+                            {/* 우: sticky 지도 */}
+                            <div style={{ position: 'sticky', top: 57, height: 'calc(100vh - 57px)', padding: '24px 0 24px 32px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                    <div>
+                                        <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 800, color: '#1a1a1a', margin: 0 }}>
+                                            <MapPin size={18} color="#fb923c" />
+                                            {searchQuery ? `"${searchQuery}" 위치` : '대구/경북 주변 행사'}
+                                        </h2>
+                                        <p style={{ fontSize: 12, color: '#aaa', marginTop: 4, marginBottom: 0 }}>현재 {displayEvents.length}개 표시 중</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setMapExpanded(false)}
+                                        style={{
+                                            fontSize: 12, fontWeight: 700, color: '#fb923c',
+                                            background: '#fff7ed', border: '1.5px solid #fb923c',
+                                            borderRadius: 20, padding: '6px 14px',
+                                            cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+                                            display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.18s',
+                                        }}
+                                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#ffedd5' }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
+                                    >
+                                        <Map size={13} /> 줄이기
+                                    </button>
+                                </div>
+                                <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', height: 'calc(100% - 68px)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', border: '1px solid #e8e8e8' }}>
+                                    <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
+                                    <button onClick={handleRecenter} title="내 위치로 이동"
+                                            style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 20, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.96)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', cursor: 'pointer' }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.96)' }}
+                                    >
+                                        <Target size={18} color="#fb923c" />
+                                    </button>
+                                    {isLoading && (
+                                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                                            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #f0f0f0', borderTopColor: '#fb923c', animation: 'spin 0.8s linear infinite' }} />
+                                            <span style={{ fontSize: 14, fontWeight: 700, color: '#fb923c' }}>지도 불러오는 중...</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* ── 기본 모드 ── */
+                    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 24px 80px' }}>
+
+                        {/* ═══════════════════════════════════════
+                                크게보기 ON: 전폭 지도 + 하단 2컬럼
+                            ═══════════════════════════════════════ */}
+                        {topMapExpanded && (
+                            <div ref={bigMapRef} style={{ animation: 'fadeUp 0.35s ease both', marginBottom: 56 }}>
+
+                                {/* 전폭 큰 지도 */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                                    <SectionHeader
+                                        icon={MapPin}
+                                        title={searchQuery ? `"${searchQuery}" 주변 행사` : '대구/경북 전체 행사 위치'}
+                                        subtitle={`마커를 클릭하면 상세 정보로 이동합니다 · 현재 ${displayEvents.length}개 표시 중`}
+                                    />
+                                    <button
+                                        onClick={() => setTopMapExpanded(false)}
+                                        style={{
+                                            fontSize: 12, fontWeight: 700, color: '#fb923c',
+                                            background: '#fff7ed', border: '1.5px solid #fb923c',
+                                            borderRadius: 20, padding: '6px 14px',
+                                            cursor: 'pointer', fontFamily: 'inherit',
+                                            display: 'flex', alignItems: 'center', gap: 5,
+                                            flexShrink: 0, marginTop: 4, transition: 'all 0.18s',
+                                        }}
+                                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#ffedd5' }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
+                                    >
+                                        <Map size={13} /> 줄이기
+                                    </button>
+                                </div>
+                                <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', height: 560, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', border: '1px solid #e8e8e8', marginBottom: 56 }}>
+                                    <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
+                                    <button onClick={handleRecenter} title="내 위치로 이동"
+                                            style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 20, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.96)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', cursor: 'pointer', transition: 'all 0.18s' }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.96)' }}
+                                    >
+                                        <Target size={18} color="#fb923c" />
+                                    </button>
+                                    {isLoading && (
+                                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                                            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #f0f0f0', borderTopColor: '#fb923c', animation: 'spin 0.8s linear infinite' }} />
+                                            <span style={{ fontSize: 14, fontWeight: 700, color: '#fb923c' }}>지도 불러오는 중...</span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* 도트 인디케이터 */}
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
-                                    {Array.from({ length: topCarousel.totalPages }).map((_, i) => (
-                                        <div key={i} style={{ width: i === topCarousel.page ? 20 : 6, height: 6,
-                                            borderRadius: 3, background: i === topCarousel.page ? '#fb923c' : '#e0e0e0',
-                                            transition: 'all 0.3s' }} />
-                                    ))}
+                                {/* 지도 크게보기 시 하단: 맞춤추천(좌) + 인기 TOP10(우) */}
+                                <div className="expanded-bottom-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, alignItems: 'start' }}>
+
+                                    {/* 좌: 맞춤 추천 */}
+                                    <section>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                                            <SectionHeader
+                                                icon={Sparkles}
+                                                title={
+                                                    activeCategory === 'all'
+                                                        ? <>{auth.user?.nickname || 'Go냥이'}님을 위한 맞춤 추천</>
+                                                        : <><span style={{ color: '#fb923c' }}>{activeCategoryLabel}</span> 맞춤 추천</>
+                                                }
+                                                subtitle={`${weatherIcon} ${weatherText} · ${timeState === 'NIGHT' ? '🌙 야간' : '🌤 주간'} 기반으로 선별했어요`}
+                                            />
+                                            <div style={{ display: 'flex', gap: 6, flexShrink: 0, paddingTop: 4 }}>
+                                                <CarouselBtn dir="prev" disabled={!recCarousel.canPrev} onClick={recCarousel.prev} />
+                                                <CarouselBtn dir="next" disabled={!recCarousel.canNext} onClick={recCarousel.next} />
+                                            </div>
+                                        </div>
+                                        {recCarousel.visible.length > 0 ? (
+                                            <>
+                                                <div className="rec-grid-half">
+                                                    {recCarousel.visible.map(ev => (
+                                                        <RecommendCard key={`rec-exp-${ev.id}`} event={ev} onClick={() => handleNav(ev.id)} />
+                                                    ))}
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
+                                                    {Array.from({ length: recCarousel.totalPages }).map((_, i) => (
+                                                        <div key={i} style={{ width: i === recCarousel.page ? 20 : 6, height: 6, borderRadius: 3, background: i === recCarousel.page ? '#fb923c' : '#e0e0e0', transition: 'all 0.3s' }} />
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa', fontSize: 14 }}>
+                                                <p style={{ fontSize: 28, margin: '0 0 8px' }}>🔍</p>
+                                                <p style={{ margin: 0 }}>{activeCategoryLabel} 카테고리의 추천 행사가 없어요</p>
+                                            </div>
+                                        )}
+                                    </section>
+
+                                    {/* 우: 인기 TOP10 */}
+                                    <section>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                                            <SectionHeader
+                                                icon={TrendingUp}
+                                                title={
+                                                    activeCategory === 'all'
+                                                        ? <>지금 가장 인기 있는 행사 <span style={{ color: '#fb923c' }}>TOP 10</span></>
+                                                        : <><span style={{ color: '#fb923c' }}>{activeCategoryLabel}</span> 인기 행사</>
+                                                }
+                                                subtitle={activeCategory === 'all' ? '참여 신청이 가장 많은 행사를 모아봤어요' : `${activeCategoryLabel} 카테고리에서 인기 있는 행사예요`}
+                                            />
+                                            <div style={{ display: 'flex', gap: 6, flexShrink: 0, paddingTop: 4 }}>
+                                                <CarouselBtn dir="prev" disabled={!topCarousel.canPrev} onClick={topCarousel.prev} />
+                                                <CarouselBtn dir="next" disabled={!topCarousel.canNext} onClick={topCarousel.next} />
+                                            </div>
+                                        </div>
+                                        {topCarousel.visible.length > 0 ? (
+                                            <>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                    {topCarousel.visible.map((ev, i) => (
+                                                        <TopEventCard key={`top-exp-${ev.id}`} event={ev} rank={topCarousel.page * 5 + i + 1} onClick={() => handleNav(ev.id)} />
+                                                    ))}
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
+                                                    {Array.from({ length: topCarousel.totalPages }).map((_, i) => (
+                                                        <div key={i} style={{ width: i === topCarousel.page ? 20 : 6, height: 6, borderRadius: 3, background: i === topCarousel.page ? '#fb923c' : '#e0e0e0', transition: 'all 0.3s' }} />
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa', fontSize: 14 }}>
+                                                <p style={{ fontSize: 28, margin: '0 0 8px' }}>📭</p>
+                                                <p style={{ margin: 0 }}>{activeCategoryLabel} 카테고리의 인기 행사가 없어요</p>
+                                            </div>
+                                        )}
+                                    </section>
                                 </div>
                             </div>
                         )}
 
-                        {/* ── 지도 ──────────────────────────────── */}
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
-                                <SectionHeader
-                                    icon={MapPin}
-                                    title={searchQuery ? `"${searchQuery}" 위치` : '대구/경북 주변 행사'}
-                                    subtitle="마커를 클릭하면 상세 정보로 이동합니다"
-                                />
-                                <button onClick={() => setMapExpanded(v => !v)} style={{
-                                    fontSize: 12, fontWeight: 700, color: '#666', background: '#fff',
-                                    border: '1.5px solid #e0e0e0', borderRadius: 20, padding: '6px 14px',
-                                    cursor: 'pointer', transition: 'all 0.18s', whiteSpace: 'nowrap', fontFamily: 'inherit',
-                                    flexShrink: 0, marginTop: 4,
-                                }}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#fb923c'; (e.currentTarget as HTMLButtonElement).style.color = '#fb923c' }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e0e0e0'; (e.currentTarget as HTMLButtonElement).style.color = '#666' }}
-                                >
-                                    {mapExpanded ? '줄이기' : '크게보기'}
-                                </button>
-                            </div>
+                        {/* ═══════════════════════════════════════
+                                기본 모드: 맞춤추천(좌) + 미니지도(우)
+                                         + 하단 인기 TOP10
+                            ═══════════════════════════════════════ */}
+                        {!topMapExpanded && (
+                            <>
+                                {/* 상단: 맞춤 추천(좌) + 미니 지도(우) */}
+                                <div className="fade-up-3 rec-map-two-col" style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 380px',
+                                    gap: 32,
+                                    alignItems: 'start',
+                                    marginBottom: 56,
+                                }}>
+                                    {/* 좌: 맞춤 추천 */}
+                                    <section>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                                            <SectionHeader
+                                                icon={Sparkles}
+                                                title={
+                                                    activeCategory === 'all'
+                                                        ? <>{auth.user?.nickname || 'Go냥이'}님을 위한 맞춤 추천</>
+                                                        : <><span style={{ color: '#fb923c' }}>{activeCategoryLabel}</span> 맞춤 추천</>
+                                                }
+                                                subtitle={`${weatherIcon} ${weatherText} · ${timeState === 'NIGHT' ? '🌙 야간' : '🌤 주간'} 기반으로 선별했어요`}
+                                            />
+                                            <div style={{ display: 'flex', gap: 6, flexShrink: 0, paddingTop: 4 }}>
+                                                <CarouselBtn dir="prev" disabled={!recCarousel.canPrev} onClick={recCarousel.prev} />
+                                                <CarouselBtn dir="next" disabled={!recCarousel.canNext} onClick={recCarousel.next} />
+                                            </div>
+                                        </div>
+                                        {recCarousel.visible.length > 0 ? (
+                                            <>
+                                                <div className="rec-grid-half">
+                                                    {recCarousel.visible.map(ev => (
+                                                        <RecommendCard key={`rec-${ev.id}`} event={ev} onClick={() => handleNav(ev.id)} />
+                                                    ))}
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
+                                                    {Array.from({ length: recCarousel.totalPages }).map((_, i) => (
+                                                        <div key={i} style={{ width: i === recCarousel.page ? 20 : 6, height: 6, borderRadius: 3, background: i === recCarousel.page ? '#fb923c' : '#e0e0e0', transition: 'all 0.3s' }} />
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa', fontSize: 14 }}>
+                                                <p style={{ fontSize: 28, margin: '0 0 8px' }}>🔍</p>
+                                                <p style={{ margin: 0 }}>{activeCategoryLabel} 카테고리의 추천 행사가 없어요</p>
+                                            </div>
+                                        )}
+                                    </section>
 
-                            <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden',
-                                height: mapExpanded ? 520 : (topEvents.length > 0 ? 460 : 400),
-                                transition: 'height 0.5s ease',
-                                boxShadow: '0 4px 20px rgba(0,0,0,0.1)', border: '1px solid #e8e8e8' }}>
-                                <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
-                                <button onClick={handleRecenter} title="내 위치로 이동"
-                                        style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 20, width: 40, height: 40,
-                                            borderRadius: '50%', background: 'rgba(255,255,255,0.96)', border: 'none',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            boxShadow: '0 2px 10px rgba(0,0,0,0.15)', cursor: 'pointer', transition: 'all 0.18s' }}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.96)' }}
-                                >
-                                    <Target size={18} color="#fb923c" />
-                                </button>
-                                {isLoading && (
-                                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: 14, fontWeight: 700, color: '#fb923c' }}>
-                                        데이터 로딩 중...
+                                    {/* 우: 미니 지도 */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignSelf: 'stretch' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                            <h2 style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 16, fontWeight: 800, color: '#1a1a1a', margin: 0 }}>
+                                                <MapPin size={16} color="#fb923c" />
+                                                {searchQuery ? `"${searchQuery}" 위치` : '주변 행사'}
+                                            </h2>
+                                            <button
+                                                onClick={() => {
+                                                    setTopMapExpanded(true)
+                                                    setTimeout(() => bigMapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+                                                }}
+                                                style={{
+                                                    fontSize: 12, fontWeight: 700, color: '#666',
+                                                    background: '#fff', border: '1.5px solid #e0e0e0',
+                                                    borderRadius: 20, padding: '5px 12px',
+                                                    cursor: 'pointer', fontFamily: 'inherit',
+                                                    display: 'flex', alignItems: 'center', gap: 5,
+                                                    transition: 'all 0.18s',
+                                                }}
+                                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#fb923c'; (e.currentTarget as HTMLButtonElement).style.color = '#fb923c' }}
+                                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e0e0e0'; (e.currentTarget as HTMLButtonElement).style.color = '#666' }}
+                                            >
+                                                <Map size={12} /> 크게보기
+                                            </button>
+                                        </div>
+                                        <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', flex: 1, minHeight: 400, boxShadow: '0 4px 20px rgba(0,0,0,0.09)', border: '1px solid #e8e8e8' }}>
+                                            <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
+                                            <button onClick={handleRecenter} title="내 위치로 이동"
+                                                    style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 20, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.96)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', cursor: 'pointer', transition: 'all 0.18s' }}
+                                                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
+                                                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.96)' }}
+                                            >
+                                                <Target size={16} color="#fb923c" />
+                                            </button>
+                                            {isLoading && (
+                                                <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                                                    <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid #f0f0f0', borderTopColor: '#fb923c', animation: 'spin 0.8s linear infinite' }} />
+                                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fb923c' }}>불러오는 중...</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p style={{ fontSize: 11, color: '#bbb', textAlign: 'right', margin: '8px 0 0' }}>
+                                            현재 {displayEvents.length}개 표시 중
+                                        </p>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ══════════════════════════════════════════════
-                        맞춤 추천 — 6열 정사각 그리드
-                    ══════════════════════════════════════════════ */}
-                    {recommendedEvents.length > 0 && (
-                        <section className="fade-up-3" style={{ marginBottom: 56 }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
-                                <SectionHeader
-                                    icon={Sparkles}
-                                    title={<>{auth.user?.nickname || 'Go냥이'}님을 위한 맞춤 추천</>}
-                                    subtitle={`${weatherIcon} ${weatherText} · ${timeState === 'NIGHT' ? '🌙 야간' : '🌤 주간'} 기반으로 선별했어요`}
-                                />
-                                <div style={{ display: 'flex', gap: 6, flexShrink: 0, paddingTop: 4 }}>
-                                    <CarouselBtn dir="prev" disabled={!recCarousel.canPrev} onClick={recCarousel.prev} />
-                                    <CarouselBtn dir="next" disabled={!recCarousel.canNext} onClick={recCarousel.next} />
                                 </div>
-                            </div>
 
-                            <div className="rec-grid">
-                                {recCarousel.visible.map(ev => (
-                                    <RecommendCard key={`rec-${ev.id}`} event={ev} onClick={() => handleNav(ev.id)} />
-                                ))}
-                            </div>
+                                {/* 하단: 인기 TOP10 */}
+                                <section className="fade-up-4">
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                                        <SectionHeader
+                                            icon={TrendingUp}
+                                            title={
+                                                activeCategory === 'all'
+                                                    ? <>지금 가장 인기 있는 행사 <span style={{ color: '#fb923c' }}>TOP 10</span></>
+                                                    : <><span style={{ color: '#fb923c' }}>{activeCategoryLabel}</span> 인기 행사</>
+                                            }
+                                            subtitle={activeCategory === 'all' ? '참여 신청이 가장 많은 행사를 모아봤어요' : `${activeCategoryLabel} 카테고리에서 인기 있는 행사예요`}
+                                        />
+                                        <div style={{ display: 'flex', gap: 8, flexShrink: 0, paddingTop: 4, alignItems: 'center' }}>
+                                            <CarouselBtn dir="prev" disabled={!topCarousel.canPrev} onClick={topCarousel.prev} />
+                                            <CarouselBtn dir="next" disabled={!topCarousel.canNext} onClick={topCarousel.next} />
+                                        </div>
+                                    </div>
+                                    {topCarousel.visible.length > 0 ? (
+                                        <>
+                                            <div className="top10-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                                {topCarousel.visible.map((ev, i) => (
+                                                    <TopEventCard key={`top-${ev.id}`} event={ev} rank={topCarousel.page * 5 + i + 1} onClick={() => handleNav(ev.id)} />
+                                                ))}
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
+                                                {Array.from({ length: topCarousel.totalPages }).map((_, i) => (
+                                                    <div key={i} style={{ width: i === topCarousel.page ? 20 : 6, height: 6, borderRadius: 3, background: i === topCarousel.page ? '#fb923c' : '#e0e0e0', transition: 'all 0.3s' }} />
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa', fontSize: 14 }}>
+                                            <p style={{ fontSize: 28, margin: '0 0 8px' }}>📭</p>
+                                            <p style={{ margin: 0 }}>{activeCategoryLabel} 카테고리의 인기 행사가 없어요</p>
+                                        </div>
+                                    )}
+                                </section>
+                            </>
+                        )}
 
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 20 }}>
-                                {Array.from({ length: recCarousel.totalPages }).map((_, i) => (
-                                    <div key={i} style={{ width: i === recCarousel.page ? 20 : 6, height: 6,
-                                        borderRadius: 3, background: i === recCarousel.page ? '#fb923c' : '#e0e0e0',
-                                        transition: 'all 0.3s' }} />
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                </div>
+                    </div>
+                )}
             </div>
         </>
     )
