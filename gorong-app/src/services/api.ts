@@ -130,6 +130,26 @@ export const uploadFileToS3 = async (
   autoSaveToGallery = true,
   referenceId?: string,
 ) => {
+  const startedAt = Date.now()
+  console.log('[uploadFileToS3] 시작:', {
+    fileName,
+    sourceType,
+    autoSaveToGallery,
+    referenceId,
+    uri,
+  })
+
+  // 업로드 직전 토큰을 강제 갱신하여 만료된 토큰으로 403이 나는 것을 방지
+  const currentUser = auth.currentUser
+  let freshToken: string | undefined
+  if (currentUser) {
+    try {
+      freshToken = await withTimeout(currentUser.getIdToken(true), 5000)
+    } catch (e) {
+      console.warn('[uploadFileToS3] 토큰 강제 갱신 실패, 기존 토큰으로 시도합니다:', e)
+    }
+  }
+
   const formData = new FormData()
   formData.append('file', {
     uri,
@@ -137,9 +157,32 @@ export const uploadFileToS3 = async (
     type: 'image/jpeg',
   } as any)
 
+  // Content-Type을 직접 지정하지 않아야 axios가 boundary를 자동으로 생성함
+  // 수동으로 'multipart/form-data'만 지정하면 boundary가 빠져서 서버가 파싱 실패함
   return api.post('/files/upload', formData, {
     params: { sourceType, autoSaveToGallery, referenceId },
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: freshToken
+      ? { Authorization: `Bearer ${freshToken}` }
+      : {},
+    timeout: 60000,  // 이미지 업로드는 여유 있게 60초로 확장
+  }).then((response) => {
+    console.log('[uploadFileToS3] 완료:', {
+      fileName,
+      sourceType,
+      elapsedMs: Date.now() - startedAt,
+      status: response.status,
+    })
+    return response
+  }).catch((error) => {
+    console.error('[uploadFileToS3] 실패:', {
+      fileName,
+      sourceType,
+      elapsedMs: Date.now() - startedAt,
+      statusCode: error?.response?.status,
+      message: error?.message,
+      responseData: error?.response?.data,
+    })
+    throw error
   })
 }
 

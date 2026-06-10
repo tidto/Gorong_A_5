@@ -172,13 +172,27 @@ export default function TrailScreen() {
             asset,
             `gallery-${Date.now()}-${index + 1}.jpg`,
           )
-          return uploadFileToS3(
+          console.log('[TrailScreen] 사진 업로드 시작:', {
+            current: index + 1,
+            total: normalizedAssets.length,
+            fileName: prepared.fileName,
+            uri: prepared.uri,
+            venueId: referenceId ?? 'AUTO_GALLERY',
+          })
+          const response = await uploadFileToS3(
             prepared.uri,
             prepared.fileName,
             'APP_PHOTO',
             true,
             referenceId,
           )
+          console.log('[TrailScreen] 사진 업로드 성공:', {
+            current: index + 1,
+            total: normalizedAssets.length,
+            fileName: prepared.fileName,
+            status: response.status,
+          })
+          return response
         })
       )
 
@@ -194,7 +208,24 @@ export default function TrailScreen() {
       } else if (successCount > 0) {
         Alert.alert('부분 완료', `${successCount}장 저장, ${failureCount}장 실패`)
       } else {
-        Alert.alert('안내', '사진 업로드에 실패했습니다.')
+        // 실패한 이유를 상세 출력해서 디버깅에 활용
+        const firstFailure = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
+        const reason = firstFailure?.reason
+        const statusCode = reason?.response?.status
+        const responseData = reason?.response?.data
+        const serverMessage = responseData?.message ?? responseData?.error ?? reason?.message ?? '알 수 없는 오류'
+        console.error('[TrailScreen] 사진 업로드 전체 실패:', {
+          statusCode,
+          serverMessage,
+          message: reason?.message,
+          code: reason?.code,
+          hasRequest: Boolean(reason?.request),
+          requestUrl: reason?.config?.url,
+          requestTimeout: reason?.config?.timeout,
+          requestParams: reason?.config?.params,
+          responseData,
+        })
+        Alert.alert('업로드 실패', `사진을 올리지 못했습니다.\n(${statusCode ? `${statusCode}: ` : ''}${serverMessage})`)
       }
     } catch (error) {
       console.error('사진 업로드 실패:', error)
@@ -461,6 +492,26 @@ export default function TrailScreen() {
                   </View>
                 )}
 
+                {/* ── 트레일 아트 이미지 (S3에 업로드된 경로 기록) ── */}
+                {item.trailArtUrl ? (
+                  <View style={styles.sessionPhotos}>
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.sessionPhotoLabel}>🗺 트레일 아트</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setPreviewUrl(item.trailArtUrl!)}
+                      activeOpacity={0.85}
+                      style={{ marginTop: 6 }}
+                    >
+                      <Image
+                        source={{ uri: item.trailArtUrl }}
+                        style={styles.trailArtThumb}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
                 {item.venueId && item.venueId !== 'UNKNOWN_VENUE' && sessionPhotos.length === 0 && (
                   <View style={styles.noPhotoRow}>
                     <Text style={styles.noPhotoHint}>이 행사 사진이 없어요</Text>
@@ -573,6 +624,7 @@ const styles = StyleSheet.create({
   sessionPhotoLabel:     { fontSize: 12, fontWeight: '700', color: '#6B7280' },
   sessionPhotoCount:     { fontSize: 11, color: '#C4C9D4' },
   sessionThumb:           { width: THUMB + 4, height: THUMB + 4, borderRadius: 8, backgroundColor: '#e5e7eb' },
+  trailArtThumb:          { width: '100%', height: 160, borderRadius: 10, backgroundColor: '#e5e7eb' },
   thumbDateOverlay:      { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.4)', paddingVertical: 2, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
   thumbDateText:         { color: '#fff', fontSize: 9, textAlign: 'center' },
   noPhotoRow:            { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
