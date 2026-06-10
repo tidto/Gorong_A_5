@@ -89,6 +89,11 @@ export async function getParticipatedEvents() {
   return Array.isArray(data) ? data : []
 }
 
+export async function getMyVerifiedVenueIds() {
+  const { data } = await axiosInstance.get<string[]>('/v1/app/arrivals/me')
+  return Array.isArray(data) ? data : []
+}
+
 export async function getPublishedPosts(page = 0, size = 10) {
   const { data } = await axiosInstance.get<PagedResponse<ReviewSummary>>('/v1/reviews/posts', {
     params: { page, size },

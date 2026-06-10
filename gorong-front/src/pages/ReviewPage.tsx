@@ -6,6 +6,7 @@ import PawRating from '../components/PawRating'
 import { useAuth } from '../contexts/AuthContext'
 import { uploadFileToS3 } from '../api/fileApi'
 import {
+  getMyVerifiedVenueIds,
   getParticipatedEvents,
   getPostingTemplate,
   getPublishedPosts,
@@ -50,6 +51,7 @@ export default function ReviewPage() {
   const navigate = useNavigate()
   const [posts, setPosts] = useState<ReviewSummary[]>([])
   const [events, setEvents] = useState<ParticipatedEvent[]>([])
+  const [verifiedVenueIds, setVerifiedVenueIds] = useState<string[]>([])
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -87,6 +89,7 @@ export default function ReviewPage() {
   useEffect(() => {
     loadPosts(0)
     loadParticipatedEvents()
+    getMyVerifiedVenueIds().then(setVerifiedVenueIds).catch(() => {})
   }, [])
 
   const openComposer = () => {
@@ -173,6 +176,10 @@ export default function ReviewPage() {
   const handleSubmit = async () => {
     if (!composer.eventId) {
       alert('행사를 선택해 주세요.')
+      return
+    }
+    if (!verifiedVenueIds.includes(String(composer.eventId))) {
+      alert('현장 방문 인증이 완료된 행사만 포스팅할 수 있습니다.')
       return
     }
     if (!composer.title.trim() || !composer.reviewText.trim() || composer.rating === 0) {
@@ -269,10 +276,15 @@ export default function ReviewPage() {
                   <option value="">참여한 행사를 선택해 주세요</option>
                   {events.map((event) => (
                     <option key={event.eventId} value={event.eventId}>
-                      {event.title}
+                      {verifiedVenueIds.includes(String(event.eventId)) ? '🏅 ' : ''}{event.title}
                     </option>
                   ))}
                 </select>
+                {composer.eventId && !verifiedVenueIds.includes(String(composer.eventId)) && (
+                  <p style={{ color: 'orange', fontSize: 12, marginTop: 6 }}>
+                    ⚠️ 현장 방문 인증이 완료된 행사만 포스팅할 수 있습니다. 앱에서 지오펜싱 인증을 먼저 해주세요.
+                  </p>
+                )}
               </div>
 
               {/* <div>

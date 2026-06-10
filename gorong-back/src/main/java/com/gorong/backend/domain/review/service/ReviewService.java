@@ -1,5 +1,6 @@
 package com.gorong.backend.domain.review.service;
 
+import com.gorong.backend.domain.app.repository.VenueArrivalRecordRepository;
 import com.gorong.backend.domain.event.entity.Event;
 import com.gorong.backend.domain.event.repository.EventRepository;
 import com.gorong.backend.domain.group.entity.EventParticipation;
@@ -33,6 +34,7 @@ public class ReviewService {
     private final ReviewImageRepository reviewImageRepository;
     private final EventParticipationRepository eventParticipationRepository;
     private final EventRepository eventRepository;
+    private final VenueArrivalRecordRepository venueArrivalRecordRepository;
 
     public Review upsertQuickReview(Long userId, Long eventId, Integer rating, String reviewText, String authorName, List<ImagePayload> images) {
         validateRating(rating);
@@ -205,6 +207,12 @@ public class ReviewService {
 
         if (!participated) {
             throw new IllegalArgumentException("참여한 행사만 포스팅할 수 있습니다.");
+        }
+
+        boolean arrived = venueArrivalRecordRepository.existsByUserIdAndVenueId(userId, String.valueOf(eventId));
+
+        if (!arrived) {
+            throw new IllegalArgumentException("현장 방문 인증이 완료된 행사만 포스팅할 수 있습니다.");
         }
     }
 
