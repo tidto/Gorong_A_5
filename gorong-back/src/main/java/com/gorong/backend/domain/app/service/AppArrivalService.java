@@ -11,6 +11,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -81,6 +83,15 @@ public class AppArrivalService {
             return false;
         }
         return venueArrivalRecordRepository.existsByUserIdAndVenueId(user.getId(), normalizedVenueId);
+    }
+
+    public List<String> getMyVerifiedVenueIds(Authentication authentication) {
+        User user = resolveCurrentUser(authentication);
+        if (user == null) return List.of();
+        return venueArrivalRecordRepository.findByUserId(user.getId())
+                .stream()
+                .map(VenueArrivalRecord::getVenueId)
+                .toList();
     }
 
     private User resolveCurrentUser(Authentication authentication) {

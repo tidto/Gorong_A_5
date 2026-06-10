@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -39,5 +40,10 @@ public class AppArrivalController {
         return ResponseEntity.ok(Map.of(
                 "verified", appArrivalService.hasVerifiedArrival(authentication, venueId)
         ));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<List<String>> getMyVerifiedVenueIds(Authentication authentication) {
+        return ResponseEntity.ok(appArrivalService.getMyVerifiedVenueIds(authentication));
     }
 }
