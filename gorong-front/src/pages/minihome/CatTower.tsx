@@ -171,14 +171,7 @@ export default function CatTower() {
   const isBootstrapping = loadingUserId || !isReady || loading;
 
   const pageShell = (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute -left-20 top-20 h-64 w-64 rounded-full bg-emerald-200/20 blur-3xl" />
-        <div className="absolute -right-16 top-40 h-56 w-56 rounded-full bg-orange-200/20 blur-3xl" />
-        <div className="absolute bottom-32 left-1/4 h-48 w-48 rounded-full bg-rose-100/25 blur-3xl" />
-      </div>
-
-      <div className="relative mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         {showMain ? (
           <CatTowerDashboard
             nickname={ownerLabel}
@@ -218,7 +211,6 @@ export default function CatTower() {
           onClose={handleCloseDecorate}
           onEquippedSaved={handleEquippedSaved}
         />
-      </div>
     </div>
   );
 
@@ -228,28 +220,26 @@ export default function CatTower() {
 
   if (isBootstrapping && !err) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
       </div>
     );
   }
 
   if (err && !page) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
-        <div className="relative mx-auto flex min-h-[50vh] max-w-6xl items-center justify-center px-4 py-6">
+      <div className="mx-auto flex min-h-[50vh] max-w-7xl items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
           <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm font-semibold text-red-700">
             {err}
           </div>
-        </div>
       </div>
     );
   }
 
   if (!showMain) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center bg-gradient-to-b from-[#f0faf2] via-[#fffaf5] to-[#fef6ee]">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
       </div>
     );
   }

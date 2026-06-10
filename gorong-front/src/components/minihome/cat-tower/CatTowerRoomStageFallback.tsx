@@ -1,4 +1,5 @@
 import { CATTOWER_STAGE_MIN_H } from "./catTowerLayout";
+import { CATTOWER_CARD } from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 type Props = {
   label?: string;
@@ -10,10 +11,10 @@ export default function CatTowerRoomStageFallback({
 }: Props) {
   return (
     <div
-      className={`sidebar-card flex ${CATTOWER_STAGE_MIN_H} w-full flex-col items-center justify-center border-orange-100/90 bg-gradient-to-b from-[#fffaf5] to-orange-50/50`}
+      className={`${CATTOWER_CARD} flex ${CATTOWER_STAGE_MIN_H} w-full flex-col items-center justify-center`}
     >
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-orange-300 border-t-transparent" />
-      <p className="mt-3 text-xs font-semibold text-orange-800/70">{label}</p>
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
+      <p className="mt-3 text-xs font-semibold text-slate-500">{label}</p>
     </div>
   );
 }

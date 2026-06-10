@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { pickDailyQuote } from "../../../utils/minihome/cat-tower/catTowerPresentation";
+import { CATTOWER_CARD, cattowerCardHeader } from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 type CatTowerDailyQuoteProps = {
   catName: string;
@@ -15,9 +16,9 @@ export default function CatTowerDailyQuote({ catName, guestView = false }: CatTo
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.25, duration: 0.4 }}
-      className="sidebar-card w-full max-w-full border-amber-100/90 bg-gradient-to-br from-amber-50/90 via-[#fffaf5] to-rose-50/60"
+      className={CATTOWER_CARD}
     >
-      <div className="sidebar-card-header justify-center border-amber-100/70 bg-gradient-to-r from-amber-400 to-orange-400">
+      <div className={cattowerCardHeader(guestView)}>
         <p>💬 {guestView ? `${catName}의 한마디` : "오늘의 한마디"}</p>
       </div>
       <div className="sidebar-card-body !space-y-0">
