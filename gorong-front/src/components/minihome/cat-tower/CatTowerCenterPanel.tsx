@@ -11,6 +11,7 @@ import CatTowerGalleryPreview from "./CatTowerGalleryPreview";
 import CatTowerGuestbookBlock from "./CatTowerGuestbookBlock";
 import CatTowerRoomStageFallback from "./CatTowerRoomStageFallback";
 import { CATTOWER_STAGE_MIN_H } from "./catTowerLayout";
+import { CATTOWER_CARD, cattowerCardHeader } from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 const CatTowerRoom3DStage = lazy(() => import("./CatTowerRoom3DStage"));
 const CatTowerRoomStage = lazy(() => import("./CatTowerRoomStage"));
@@ -50,8 +51,8 @@ function TabPanelShell({
   children: ReactNode;
 }) {
   return (
-    <div className={`sidebar-card flex ${CATTOWER_STAGE_MIN_H} flex-col border-orange-100/90 bg-gradient-to-b from-white via-[#fffaf5] to-orange-50/40`}>
-      <div className="sidebar-card-header shrink-0 justify-center border-orange-100/70 bg-gradient-to-r from-orange-400 to-amber-400 text-orange-50">
+    <div className={`${CATTOWER_CARD} flex ${CATTOWER_STAGE_MIN_H} flex-col`}>
+      <div className={`${cattowerCardHeader()} shrink-0`}>
         <p>
           {emoji} {title}
         </p>

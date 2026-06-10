@@ -90,8 +90,8 @@ function CompactCatRig({
           isRoom3d
             ? "origin-bottom"
             : `transition-transform duration-500 ${growthStageScaleClass(stage)} ${
-                centerInBox && isRoomLike ? "origin-center" : "origin-bottom"
-              }`
+                  centerInBox && isRoomLike ? "origin-center" : "origin-bottom"
+                }`
         }`}
       >
         <GoCatBodyStage

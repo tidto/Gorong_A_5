@@ -237,3 +237,10 @@ export function parseStoredRoomDecor(raw: unknown): RoomDecorItem[] {
   }
   return out;
 }
+
+export function parseRoomDecorFromAppearance(
+  appearanceState?: Record<string, unknown> | null
+): RoomDecorItem[] {
+  if (!appearanceState) return [];
+  return parseStoredRoomDecor(appearanceState.roomDecorItems);
+}

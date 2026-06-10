@@ -15,6 +15,11 @@ import CatTowerRoomDecorateModal from "./CatTowerRoomDecorateModal";
 import CatTowerMobileTabs from "./CatTowerMobileTabs";
 import ActivityHistory from "../mini-home/ActivityHistory";
 import GallerySection from "../mini-home/GallerySection";
+import {
+  CATTOWER_BADGE,
+  CATTOWER_BADGE_ACCENT,
+  CATTOWER_PAGE_HEADER,
+} from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 type CatTowerDashboardProps = {
   nickname: string;
@@ -89,7 +94,11 @@ function CatTowerDashboard({
     [growth.stage, growth.activityCount, activities]
   );
 
-  const roomDecor = useRoomDecor(canEdit ? decorUnlockContext : undefined);
+  const roomDecor = useRoomDecor({
+    unlockContext: decorUnlockContext,
+    appearanceState,
+    canEdit,
+  });
 
   const placedDecorTypes = useMemo(
     () => new Set(roomDecor.items.map((item) => item.type)),
@@ -97,12 +106,15 @@ function CatTowerDashboard({
   );
 
   const handleSaveRoomBackground = useCallback(async () => {
-    const ok = await roomBg.saveBackground();
-    if (ok) {
-      toast("방 배경이 저장되었습니다.", "success");
+    const bgOk = await roomBg.saveBackground();
+    const decorOk = canEdit ? await roomDecor.saveNow() : true;
+    if (bgOk && decorOk) {
+      toast("방 꾸미기가 저장되었습니다.", "success");
       setRoomDecorateOpen(false);
+    } else if (bgOk) {
+      toast("방 배경은 저장됐지만 가구 저장에 실패했습니다.", "info");
     }
-  }, [roomBg, toast]);
+  }, [roomBg, roomDecor, canEdit, toast]);
 
   const openActivityModal = useCallback(() => setActivityModalOpen(true), []);
   const openGalleryModal = useCallback(() => setGalleryModalOpen(true), []);
@@ -113,37 +125,23 @@ function CatTowerDashboard({
 
   return (
     <div className="relative space-y-3">
-      <header className="relative overflow-hidden rounded-2xl border border-orange-200/60 bg-gradient-to-r from-orange-400 via-rose-400 to-emerald-400 shadow-[0_4px_20px_rgba(255,140,80,0.18)]">
-        <div
-          className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-2xl"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-6 left-8 h-24 w-24 rounded-full bg-emerald-300/20 blur-2xl"
-          aria-hidden
-        />
-        <div className="relative flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+      <header className={CATTOWER_PAGE_HEADER}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/90">
-              {isReadOnly ? "✨ Guest MiniHome" : "✨ My MiniHome"}
+            <p className="text-xs font-bold uppercase tracking-wider text-primary-600">
+              {isReadOnly ? "Guest MiniHome" : "My MiniHome"}
             </p>
-            <h1 className="text-lg font-extrabold text-white drop-shadow-sm sm:text-xl">
+            <h1 className="text-lg font-extrabold text-slate-900 sm:text-xl">
               {loading ? "불러오는 중…" : `${catName}의 CatTower`}
             </h1>
             {!loading && isReadOnly && nickname ? (
-              <p className="mt-0.5 text-xs font-semibold text-white/85">{nickname}님의 미니홈</p>
+              <p className="mt-0.5 text-xs font-medium text-slate-500">{nickname}님의 미니홈</p>
             ) : null}
             {!loading ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="rounded-full border border-white/25 bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white/95 backdrop-blur-sm">
-                  🌱 {growth.stageLabel}
-                </span>
-                <span className="rounded-full border border-white/25 bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white/95 backdrop-blur-sm">
-                  📋 활동 {activityCount}회
-                </span>
-                <span className="rounded-full border border-white/25 bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white/95 backdrop-blur-sm">
-                  📸 갤러리 {galleryCount}개
-                </span>
+                <span className={CATTOWER_BADGE_ACCENT}>🌱 {growth.stageLabel}</span>
+                <span className={CATTOWER_BADGE}>📋 활동 {activityCount}회</span>
+                <span className={CATTOWER_BADGE}>📸 갤러리 {galleryCount}개</span>
               </div>
             ) : null}
           </div>
@@ -152,7 +150,7 @@ function CatTowerDashboard({
               <button
                 type="button"
                 onClick={onReport}
-                className="rounded-full border border-white/40 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/95 backdrop-blur-sm hover:bg-white/20"
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
               >
                 신고
               </button>
@@ -161,12 +159,12 @@ function CatTowerDashboard({
               <button
                 type="button"
                 onClick={onBack}
-                className="hidden rounded-full border border-white/50 bg-white/15 px-3 py-1 text-xs font-bold text-white backdrop-blur-sm hover:bg-white/25 sm:inline-flex"
+                className="hidden rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700 hover:bg-primary-100 sm:inline-flex"
               >
                 ← 내 CatTower
               </button>
             ) : null}
-            <div className="rounded-full border border-white/35 bg-white/20 px-3 py-1.5 text-xs font-bold text-white shadow-sm backdrop-blur-md">
+            <div className="rounded-full border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-bold text-primary-700">
               {resolvingOwner ? "확인 중…" : isReadOnly ? "👀 둘러보기" : "🏡 내 공간"}
             </div>
           </div>
@@ -200,7 +198,7 @@ function CatTowerDashboard({
           activityCount={activityCount}
           equipped={equipped}
           roomBackground={roomBg.background}
-          roomDecorItems={canEdit ? roomDecor.items : []}
+          roomDecorItems={roomDecor.items}
           catName={catName}
           isReadOnly={isReadOnly}
           roomActive={roomActive}
