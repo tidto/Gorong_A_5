@@ -113,24 +113,23 @@ export default function TrailScreen() {
   }, [])
 
   // ── 갤러리 로드: GET /api/minihomes/me/page ───────────────
-  // [수정 1] 404 등 에러 시 조용히 처리하되 상태 추적, URL 경로는 /api/v1/minihomes/me/page
   const loadGallery = useCallback(async () => {
     try {
       setGalleryLoadError(false)
-      // api 인스턴스의 baseURL은 /api/v1 이므로 /minihomes/me/page 로 호출
-      const res = await api.get<{ galleries: Gallery[] }>('/minihomes/me/page')
-      const galleries = res.data.galleries ?? []
+      const res = await api.get('/minihomes/me/page')
+      
+      // 💡 백엔드 응답이 { galleries: [] } 형태가 아니라 바로 배열 [] 형태로 올 경우를 대비한 방어 코드
+      const galleries = res.data?.galleries || (Array.isArray(res.data) ? res.data : [])
 
       const map: Record<string, GalleryImage[]> = {}
       const flat: (GalleryImage & { venueId: string })[] = []
 
       for (const g of galleries) {
-        if (!g.images.length) continue
+        if (!g.images || !Array.isArray(g.images) || g.images.length === 0) continue
         if (g.referenceId) {
           map[g.referenceId] = [...(map[g.referenceId] ?? []), ...g.images]
         }
         for (const img of g.images) {
-          // [수정 1] imageUrl이 실제로 있는 것만 포함
           if (img.imageUrl && img.imageUrl.trim() !== '') {
             flat.push({ ...img, venueId: g.referenceId ?? '' })
           }
@@ -142,14 +141,21 @@ export default function TrailScreen() {
         new Date(b.createAt ?? 0).getTime() - new Date(a.createAt ?? 0).getTime()
       ))
     } catch (err: any) {
-      // 404 = 미니홈 미생성 상태 → 정상으로 처리 (사진 없음)
       const status = err?.response?.status
-      if (status === 404) {
+      // 💡 404뿐만 아니라 400 에러 등도 정상(빈 갤러리)으로 간주하도록 처리
+      if (status === 404 || status === 400) {
         setGalleryMap({})
         setAllImages([])
         return
       }
-      console.warn('[TrailScreen] 갤러리 로드 실패:', err)
+      
+      // 🚨 백엔드 에러 원인을 파악하기 위한 강력한 로그 (터미널에서 확인 가능)
+      console.error('🚨 [TrailScreen] 갤러리 로드 실패 상세:', {
+        status: status,
+        data: err?.response?.data,
+        url: err?.config?.url
+      })
+      
       setGalleryLoadError(true)
     }
   }, [])
@@ -279,9 +285,9 @@ export default function TrailScreen() {
     } finally {
       setGalleryUploading(false)
     }
-  } , [loadGallery])
+  }, [loadGallery, uploadSelectedImages])
 
-  // ── [수정 2] 기록 삭제 ────────────────────────────────────
+  // ── 기록 삭제 ────────────────────────────────────
   const handleDeleteHistory = useCallback(async (itemId: string) => {
     Alert.alert('기록 삭제', '이 발자국 기록을 삭제할까요?', [
       { text: '취소', style: 'cancel' },
@@ -509,9 +515,10 @@ export default function TrailScreen() {
                   </View>
                 ) : null}
 
-                {item.venueId && item.venueId !== 'UNKNOWN_VENUE' && sessionPhotos.length === 0 && (
+                {/* 💡 UNKNOWN_VENUE 조건 삭제. 사진이 0장이면 무조건 업로드 버튼 표시! */}
+                {sessionPhotos.length === 0 && (
                   <View style={styles.noPhotoRow}>
-                    <Text style={styles.noPhotoHint}>이 행사 사진이 없어요</Text>
+                    <Text style={styles.noPhotoHint}>이 기록의 사진이 없어요</Text>
                     <TouchableOpacity
                       style={styles.miniUploadBtn}
                       onPress={() => handleGalleryUpload(item.venueId)}
@@ -527,7 +534,7 @@ export default function TrailScreen() {
         )}
       </ScrollView>
 
-      {/* ── [수정 3] 전체 화면 이미지 오버레이 모달 ──────────── */}
+      {/* ── 전체 화면 이미지 오버레이 모달 ──────────── */}
       <Modal
         visible={Boolean(previewUrl)}
         transparent
