@@ -166,8 +166,11 @@ export default function TrailScreen() {
 
     setGalleryUploading(true)
     try {
-      const results = await Promise.allSettled(
-        normalizedAssets.map(async (asset, index) => {
+      let successCount = 0
+      let failureCount = 0
+
+      for (const [index, asset] of normalizedAssets.entries()) {
+        try {
           const prepared = await prepareImageForUpload(
             asset,
             `gallery-${Date.now()}-${index + 1}.jpg`,
@@ -186,18 +189,21 @@ export default function TrailScreen() {
             true,
             referenceId,
           )
+          successCount += 1
           console.log('[TrailScreen] 사진 업로드 성공:', {
             current: index + 1,
             total: normalizedAssets.length,
             fileName: prepared.fileName,
             status: response.status,
           })
-          return response
-        })
-      )
-
-      const successCount = results.filter((item) => item.status === 'fulfilled').length
-      const failureCount = results.length - successCount
+          if (index < normalizedAssets.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 200))
+          }
+        } catch (err) {
+          failureCount += 1
+          console.error('[TrailScreen] 사진 업로드 실패:', err)
+        }
+      }
 
       if (successCount > 0) {
         await loadGallery()
@@ -208,24 +214,8 @@ export default function TrailScreen() {
       } else if (successCount > 0) {
         Alert.alert('부분 완료', `${successCount}장 저장, ${failureCount}장 실패`)
       } else {
-        // 실패한 이유를 상세 출력해서 디버깅에 활용
-        const firstFailure = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
-        const reason = firstFailure?.reason
-        const statusCode = reason?.response?.status
-        const responseData = reason?.response?.data
-        const serverMessage = responseData?.message ?? responseData?.error ?? reason?.message ?? '알 수 없는 오류'
-        console.error('[TrailScreen] 사진 업로드 전체 실패:', {
-          statusCode,
-          serverMessage,
-          message: reason?.message,
-          code: reason?.code,
-          hasRequest: Boolean(reason?.request),
-          requestUrl: reason?.config?.url,
-          requestTimeout: reason?.config?.timeout,
-          requestParams: reason?.config?.params,
-          responseData,
-        })
-        Alert.alert('업로드 실패', `사진을 올리지 못했습니다.\n(${statusCode ? `${statusCode}: ` : ''}${serverMessage})`)
+        console.error('[TrailScreen] 사진 업로드 전체 실패: 모든 요청이 실패했습니다.')
+        Alert.alert('업로드 실패', '사진을 올리지 못했습니다. 네트워크 상태와 서버 응답을 확인해 주세요.')
       }
     } catch (error) {
       console.error('사진 업로드 실패:', error)
