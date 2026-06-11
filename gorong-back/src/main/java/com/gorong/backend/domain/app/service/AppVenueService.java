@@ -119,7 +119,7 @@ public class AppVenueService {
             double lng = Double.parseDouble(String.valueOf(mapxObj));
             double lat = Double.parseDouble(String.valueOf(mapyObj));
             log.info("[VenueGeo] TourAPI 단건 조회 성공 - venueId={}, lat={}, lng={}", venueId, lat, lng);
-            return Optional.of(new VenueGeo(venueId, lat, lng, 300));
+            return Optional.of(new VenueGeo(venueId, lat, lng, 1100));
 
         } catch (Exception e) {
             log.warn("[VenueGeo] TourAPI 단건 조회 실패 - venueId={}, error={}", venueId, e.getMessage());
@@ -172,7 +172,7 @@ public class AppVenueService {
                     String id = String.valueOf(item.get("contentid"));
                     double venueLat = Double.parseDouble(String.valueOf(item.get("mapy")));
                     double venueLng = Double.parseDouble(String.valueOf(item.get("mapx")));
-                    int geofenceRadius = 300;
+                    int geofenceRadius = 1100;
                     String eventStartDate = normalizeDate(item.get("eventstartdate"));
                     String eventEndDate = normalizeDate(item.get("eventenddate"));
 
@@ -214,7 +214,7 @@ public class AppVenueService {
         try {
             double lng = Double.parseDouble(event.getMapX().trim());
             double lat = Double.parseDouble(event.getMapY().trim());
-            return Optional.of(new VenueGeo(String.valueOf(event.getId()), lat, lng, 300));
+            return Optional.of(new VenueGeo(String.valueOf(event.getId()), lat, lng, 1100)); // 범위
         } catch (Exception e) {
             log.warn("이벤트 좌표 파싱 실패: eventId={}, message={}",
                     event.getId(), e.getMessage());
