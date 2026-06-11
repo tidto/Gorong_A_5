@@ -121,23 +121,25 @@ export default function MapScreen() {
     }
   }, [isRecording, insideVenueId, setRecordingVenueId])
 
-  const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
-    if (!mapRef.current || trail.length < 2) return undefined
-    try {
-      const snapshotUri = await mapRef.current.takeSnapshot({
-        width: 1080, height: 1920, format: 'jpg', quality: 0.85, result: 'file',
-      })
-      const res = await uploadFileToS3(snapshotUri, `trail-art-${Date.now()}.jpg`, 'TRAIL_ART', true)
-      // 백엔드가 업로드된 파일의 URL을 반환하는 경우 꺼내서 사용
-      const artUrl: string | undefined =
-        res.data?.url ?? res.data?.fileUrl ?? res.data?.imageUrl ?? undefined
-      return artUrl
-    } catch (error) {
-      console.error('러닝아트 업로드 실패:', error)
-      return undefined
-    }
-  }, [trail.length])
+const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
+  if (!mapRef.current || trail.length < 2) return undefined
+  try {
+    const snapshotUri = await mapRef.current.takeSnapshot({
+      width: 1080, height: 1920, format: 'jpg', quality: 0.85, result: 'file',
+    })
 
+    // takeSnapshot이 네트워크 소켓을 잠시 블로킹하므로, 복구 대기
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const res = await uploadFileToS3(snapshotUri, `trail-art-${Date.now()}.jpg`, 'TRAIL_ART', true)
+    const artUrl: string | undefined =
+      res.data?.url ?? res.data?.fileUrl ?? res.data?.imageUrl ?? undefined
+    return artUrl
+  } catch (error) {
+    console.error('러닝아트 업로드 실패:', error)
+    return undefined
+  }
+}, [trail.length])
 
 
   const handleStopRecording = useCallback(async (
