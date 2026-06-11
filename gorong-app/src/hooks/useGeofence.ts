@@ -74,41 +74,42 @@ export function useGeofence(venues: Venue[]) {
       setDwellSeconds(capped)
 
       // 8초 체류 달성 + 미인증 → 인증 실행
-if (elapsed >= ENTER_DWELL_S && !verifiedVenues.current.has(venueId)) {
-  stopDwellTimer()
+      if (elapsed >= ENTER_DWELL_S && !verifiedVenues.current.has(venueId)) {
+        stopDwellTimer()
 
-  // 로컬 인증 먼저 처리 (UI 즉시 반영)
-  verifiedVenues.current.add(venueId)
-  setIsVerified(true)
-  setDwellSeconds(ENTER_DWELL_S)
-
-  // 백엔드 검증 — 네트워크 오류 시 최대 3회 재시도
-  if (lastCoordRef.current) {
-    const { latitude, longitude } = lastCoordRef.current
-    let success = false
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        await verifyArrival(venueId, latitude, longitude)
-        success = true
-        console.log(`[Geofence] 백엔드 인증 성공 - venueId=${venueId}, attempt=${attempt}`)
-        break
-      } catch (err: any) {
-        const status = err?.response?.status
-        console.warn(`[Geofence] 백엔드 인증 실패 attempt=${attempt} - venueId=${venueId}, status=${status}`)
-        if (status === 400 || status === 403) {
-          // 반경 밖 또는 권한 없음 → 재시도 불필요
-          break
-        }
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 2000))
+        // 백엔드 검증 — 네트워크 오류 시 최대 3회 재시도
+        if (lastCoordRef.current) {
+          const { latitude, longitude } = lastCoordRef.current
+          let success = false
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const response = await verifyArrival(venueId, latitude, longitude)
+              if (response.status >= 200 && response.status < 300) {
+                verifiedVenues.current.add(venueId)
+                setIsVerified(true)
+                setDwellSeconds(ENTER_DWELL_S)
+              }
+              success = true
+              console.log(`[Geofence] 백엔드 인증 성공 - venueId=${venueId}, attempt=${attempt}`)
+              break
+            } catch (err: any) {
+              const status = err?.response?.status
+              const responseData = err?.response?.data
+              console.warn(`[Geofence] 백엔드 인증 실패 attempt=${attempt} - venueId=${venueId}, status=${status}, response=${JSON.stringify(responseData)}`)
+              if (status === 400 || status === 403) {
+                // 반경 밖 또는 권한 없음 → 재시도 불필요
+                break
+              }
+              if (attempt < 3) {
+                await new Promise(resolve => setTimeout(resolve, 2000))
+              }
+            }
+          }
+          if (!success) {
+            console.error(`[Geofence] 백엔드 인증 최종 실패 - venueId=${venueId}`)
+          }
         }
       }
-    }
-    if (!success) {
-      console.error(`[Geofence] 백엔드 인증 최종 실패 - venueId=${venueId}`)
-    }
-  }
-}
     }, 1000)
   }
 

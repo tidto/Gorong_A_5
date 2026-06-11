@@ -18,6 +18,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AppArrivalService {
 
+    // 소비자 GPS 오차와 서버 계산 차이를 흡수하기 위한 허용치
+    private static final double GEOLOCATION_TOLERANCE_METERS = 100.0;
+
     private final JdbcTemplate jdbcTemplate;
     private final AppVenueService appVenueService;
     private final VenueArrivalRecordRepository venueArrivalRecordRepository;
@@ -55,11 +58,12 @@ public class AppArrivalService {
                 return false;
             }
 
-            boolean verified = distance <= venueGeo.radius();
+            double effectiveRadius = venueGeo.radius() + GEOLOCATION_TOLERANCE_METERS;
+            boolean verified = distance <= effectiveRadius;
             log.info("도착 인증 요청 - venueId: {}, lat: {}, lng: {}, user: {}",
                     normalizedVenueId, lat, lng, userEmail);
-            log.info("도착 인증 거리 계산 - venueId={}, user={}, distance={}m, radius={}m, verified={}",
-                    normalizedVenueId, userEmail, Math.round(distance), venueGeo.radius(), verified);
+            log.info("도착 인증 거리 계산 - venueId={}, user={}, distance={}m, radius={}m, tolerance={}m, effectiveRadius={}m, verified={}",
+                    normalizedVenueId, userEmail, Math.round(distance), venueGeo.radius(), GEOLOCATION_TOLERANCE_METERS, Math.round(effectiveRadius), verified);
             if (verified && user != null) {
                 boolean alreadyRecorded = venueArrivalRecordRepository
                         .existsByUserIdAndVenueId(user.getId(), normalizedVenueId);
@@ -73,7 +77,7 @@ public class AppArrivalService {
             }
             return verified;
         } catch (Exception e) {
-            log.error("도착 인증 실패: {}", e.getMessage());
+            log.error("도착 인증 실패 - venueId={}, user={}, message={}", normalizedVenueId, userEmail, e.getMessage(), e);
             return false;
         }
     }

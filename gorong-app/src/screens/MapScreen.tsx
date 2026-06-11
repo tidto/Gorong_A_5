@@ -233,7 +233,7 @@ const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
           if (!current) return
           venueById.set(venueId, {
             ...current,
-            radius: current.radius > 0 ? current.radius : 1100,
+            radius: current.radius > 0 ? current.radius : 300,
             geofenceEnabled: true,
           })
         })
