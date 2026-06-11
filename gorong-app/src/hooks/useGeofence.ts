@@ -96,8 +96,8 @@ export function useGeofence(venues: Venue[]) {
               const status = err?.response?.status
               const responseData = err?.response?.data
               console.warn(`[Geofence] 백엔드 인증 실패 attempt=${attempt} - venueId=${venueId}, status=${status}, response=${JSON.stringify(responseData)}`)
-              if (status === 400 || status === 403) {
-                // 반경 밖 또는 권한 없음 → 재시도 불필요
+              if (status === 400 || status === 403 || status === 500) {
+                // 💡 500 에러 추가: DB 에러(PostGIS 미설치 등)일 때 무의미한 재시도를 막습니다.
                 break
               }
               if (attempt < 3) {
@@ -106,7 +106,8 @@ export function useGeofence(venues: Venue[]) {
             }
           }
           if (!success) {
-            console.error(`[Geofence] 백엔드 인증 최종 실패 - venueId=${venueId}`)
+            // 💡 console.error 대신 console.warn을 사용하여 앱에 Red Screen이 뜨는 것을 막습니다.
+            console.warn(`[Geofence] 백엔드 인증 최종 실패 (서버 에러 예상) - venueId=${venueId}`)
           }
         }
       }
