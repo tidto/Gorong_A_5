@@ -157,33 +157,81 @@ export const uploadFileToS3 = async (
     type: 'image/jpeg',
   } as any)
 
-  // Content-Type을 직접 지정하지 않아야 axios가 boundary를 자동으로 생성함
-  // 수동으로 'multipart/form-data'만 지정하면 boundary가 빠져서 서버가 파싱 실패함
-  return api.post('/files/upload', formData, {
-    params: { sourceType, autoSaveToGallery, referenceId },
-    headers: freshToken
-      ? { Authorization: `Bearer ${freshToken}` }
-      : {},
-    timeout: 60000,  // 이미지 업로드는 여유 있게 60초로 확장
-  }).then((response) => {
-    console.log('[uploadFileToS3] 완료:', {
+  const params = new URLSearchParams()
+  params.set('sourceType', sourceType)
+  params.set('autoSaveToGallery', String(autoSaveToGallery))
+  if (referenceId) {
+    params.set('referenceId', referenceId)
+  }
+
+  const uploadUrl = `${baseUrl}/files/upload?${params.toString()}`
+  const headers: Record<string, string> = {}
+  if (freshToken) {
+    headers.Authorization = `Bearer ${freshToken}`
+  }
+
+  const logFailure = (error: any) => {
+    console.error('[uploadFileToS3] 실패:', {
+      fileName,
+      sourceType,
+      elapsedMs: Date.now() - startedAt,
+      message: error?.message,
+      statusCode: error?.response?.status,
+      responseData: error?.response?.data,
+    })
+  }
+
+  const uploadWithFetch = async () => {
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers,
+      body: formData as any,
+    })
+
+    const rawText = await response.text()
+    let data: any = rawText
+    try {
+      data = rawText ? JSON.parse(rawText) : undefined
+    } catch {}
+
+    if (!response.ok) {
+      const error: any = new Error(`HTTP ${response.status}`)
+      error.response = { status: response.status, data }
+      throw error
+    }
+
+    return { status: response.status, data }
+  }
+
+  try {
+    const response = await uploadWithFetch()
+    console.log('[uploadFileToS3] 완료(fetch):', {
       fileName,
       sourceType,
       elapsedMs: Date.now() - startedAt,
       status: response.status,
     })
     return response
-  }).catch((error) => {
-    console.error('[uploadFileToS3] 실패:', {
-      fileName,
-      sourceType,
-      elapsedMs: Date.now() - startedAt,
-      statusCode: error?.response?.status,
-      message: error?.message,
-      responseData: error?.response?.data,
-    })
-    throw error
-  })
+  } catch (fetchError) {
+    console.warn('[uploadFileToS3] fetch 업로드 실패, axios로 재시도합니다:', fetchError)
+    try {
+      const response = await api.post('/files/upload', formData, {
+        params: { sourceType, autoSaveToGallery, referenceId },
+        headers,
+        timeout: 60000,
+      })
+      console.log('[uploadFileToS3] 완료(axios):', {
+        fileName,
+        sourceType,
+        elapsedMs: Date.now() - startedAt,
+        status: response.status,
+      })
+      return response
+    } catch (axiosError) {
+      logFailure(axiosError)
+      throw axiosError
+    }
+  }
 }
 
 // GPS 동선 저장
