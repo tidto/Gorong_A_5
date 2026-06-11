@@ -85,6 +85,7 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [showPawPrint, setShowPawPrint] = useState(false)
   const [outsideTimer, setOutsideTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
+  const [isStoppingTrail, setIsStoppingTrail] = useState(false)
 
 
   const mapRef = useRef<MapView | null>(null)
@@ -145,8 +146,13 @@ const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
   const handleStopRecording = useCallback(async (
     reason: 'manual' | 'max_duration' | 'left_venue_timeout',
   ) => {
-    const trailArtUrl = await finalizeTrailArt()
-    await stopRecording(reason, null, trailArtUrl)
+    setIsStoppingTrail(true)
+    try {
+      const trailArtUrl = await finalizeTrailArt()
+      await stopRecording(reason, null, trailArtUrl)
+    } finally {
+      setIsStoppingTrail(false)
+    }
   }, [stopRecording, finalizeTrailArt])
 
   useEffect(() => {
@@ -379,11 +385,12 @@ const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
 
       <View style={[styles.buttonRow, { bottom: buttonRowBottom }]}>
         <TouchableOpacity
-          style={[styles.btn, isRecording && styles.btnActive]}
+          style={[styles.btn, isRecording && styles.btnActive, isStoppingTrail && styles.btnDisabled]}
           onPress={isRecording ? () => handleStopRecording('manual') : () => startRecording(insideVenueId)}
+          disabled={isStoppingTrail}
         >
           <Text style={styles.btnText}>
-            {isRecording ? '트레일 기록 종료' : '트레일 기록 시작'}
+            {isStoppingTrail ? '저장 중...' : isRecording ? '트레일 기록 종료' : '트레일 기록 시작'}
           </Text>
         </TouchableOpacity>
 
@@ -428,6 +435,7 @@ const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  btnDisabled: { backgroundColor: '#9ca3af' },
   logoutPill: {
     position: 'absolute',
     right: 14,
