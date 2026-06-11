@@ -61,13 +61,15 @@ public class AppArrivalService {
             log.info("도착 인증 거리 계산 - venueId={}, user={}, distance={}m, radius={}m, verified={}",
                     normalizedVenueId, userEmail, Math.round(distance), venueGeo.radius(), verified);
             if (verified && user != null) {
-                venueArrivalRecordRepository.findByUserIdAndVenueId(user.getId(), normalizedVenueId)
-                        .ifPresentOrElse(record -> {
-                            venueArrivalRecordRepository.save(record);
-                        }, () -> venueArrivalRecordRepository.save(VenueArrivalRecord.builder()
-                                .userId(user.getId())
-                                .venueId(normalizedVenueId)
-                                .build()));
+                boolean alreadyRecorded = venueArrivalRecordRepository
+                        .existsByUserIdAndVenueId(user.getId(), normalizedVenueId);
+                if (!alreadyRecorded) {
+                    venueArrivalRecordRepository.save(VenueArrivalRecord.builder()
+                            .userId(user.getId())
+                            .venueId(normalizedVenueId)
+                            .build());
+                    log.info("[ArrivalRecord] 도착 기록 저장 완료 - userId={}, venueId={}", user.getId(), normalizedVenueId);
+                }
             }
             return verified;
         } catch (Exception e) {

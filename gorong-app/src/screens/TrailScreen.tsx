@@ -278,11 +278,18 @@ export default function TrailScreen() {
       if (result.canceled || !result.assets.length) return
 
       await uploadSelectedImages(result.assets, venueId)
-    } catch (error) {
-      console.error('갤러리 업로드 실패:', error)
-      Alert.alert('안내', '갤러리 업로드에 실패했습니다.')
+    } catch (error: any) {
+      console.error('사진 업로드 실패:', error)
+      const status = error?.response?.status
+      if (status === 403) {
+        Alert.alert('인증 필요', '도착 인증이 서버에 기록되지 않았습니다. 행사장 반경 안에서 다시 인증 후 시도해 주세요.')
+      } else {
+        Alert.alert('안내', '사진 업로드에 실패했습니다.')
+      }
+    } finally {
+      setGalleryUploading(false)
     }
-  }, [uploadSelectedImages])
+  } , [loadGallery])
 
   // ── [수정 2] 기록 삭제 ────────────────────────────────────
   const handleDeleteHistory = useCallback(async (itemId: string) => {

@@ -40,20 +40,89 @@ public class AppVenueService {
         }
 
         String normalizedVenueId = venueId.trim();
+
+        // 1) 메모리 캐시 확인
         VenueGeo cached = venueGeoCache.get(normalizedVenueId);
         if (cached != null) {
             return Optional.of(cached);
         }
 
+        // 2) DB(events 테이블) 조회
         try {
             Long eventId = Long.parseLong(normalizedVenueId);
-            return eventRepository.findById(eventId)
-                    .flatMap(this::toVenueGeo)
-                    .map(geo -> {
-                        venueGeoCache.put(normalizedVenueId, geo);
-                        return geo;
-                    });
+            Optional<VenueGeo> fromDb = eventRepository.findById(eventId)
+                    .flatMap(this::toVenueGeo);
+            if (fromDb.isPresent()) {
+                venueGeoCache.put(normalizedVenueId, fromDb.get());
+                return fromDb;
+            }
         } catch (NumberFormatException e) {
+            // venueId가 숫자가 아닌 경우 DB 조회 스킵
+        }
+
+        // 3) DB에도 없으면 TourAPI 단건 조회 (서버 재시작 후 캐시 소실 대응)
+        Optional<VenueGeo> fromApi = fetchVenueGeoFromTourApi(normalizedVenueId);
+        fromApi.ifPresent(geo -> venueGeoCache.put(normalizedVenueId, geo));
+        return fromApi;
+    }
+
+    /**
+     * TourAPI detailCommon1으로 단건 좌표 조회.
+     * 캐시/DB에 없을 때 폴백으로 사용.
+     */
+    @SuppressWarnings("unchecked")
+    private Optional<VenueGeo> fetchVenueGeoFromTourApi(String venueId) {
+        try {
+            Long.parseLong(venueId);
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+
+        try {
+            String url = UriComponentsBuilder
+                    .fromUriString("https://apis.data.go.kr/B551011/KorService1/detailCommon1")
+                    .queryParam("serviceKey", tourApiKey)
+                    .queryParam("contentId", venueId)
+                    .queryParam("MobileOS", "ETC")
+                    .queryParam("MobileApp", "Gorong")
+                    .queryParam("_type", "json")
+                    .queryParam("defaultYN", "Y")
+                    .queryParam("firstImageYN", "N")
+                    .queryParam("areacodeYN", "N")
+                    .queryParam("addrinfoYN", "N")
+                    .queryParam("mapinfoYN", "Y")
+                    .queryParam("overviewYN", "N")
+                    .build()
+                    .toUriString();
+
+            RestTemplate restTemplate = new RestTemplate();
+            Map<String, Object> response = restTemplate.getForObject(new URI(url), Map.class);
+
+            Map<String, Object> body = (Map<String, Object>)
+                    ((Map<String, Object>) response.get("response")).get("body");
+            Map<String, Object> items = (Map<String, Object>) body.get("items");
+            if (items == null) return Optional.empty();
+
+            Object rawItem = items.get("item");
+            Map<String, Object> item = null;
+            if (rawItem instanceof List<?> list && !list.isEmpty()) {
+                item = (Map<String, Object>) list.get(0);
+            } else if (rawItem instanceof Map<?, ?> m) {
+                item = (Map<String, Object>) m;
+            }
+            if (item == null) return Optional.empty();
+
+            Object mapxObj = item.get("mapx");
+            Object mapyObj = item.get("mapy");
+            if (mapxObj == null || mapyObj == null) return Optional.empty();
+
+            double lng = Double.parseDouble(String.valueOf(mapxObj));
+            double lat = Double.parseDouble(String.valueOf(mapyObj));
+            log.info("[VenueGeo] TourAPI 단건 조회 성공 - venueId={}, lat={}, lng={}", venueId, lat, lng);
+            return Optional.of(new VenueGeo(venueId, lat, lng, 300));
+
+        } catch (Exception e) {
+            log.warn("[VenueGeo] TourAPI 단건 조회 실패 - venueId={}, error={}", venueId, e.getMessage());
             return Optional.empty();
         }
     }
