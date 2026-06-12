@@ -8,6 +8,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import com.gorong.backend.domain.app.service.AppVenueService;
+import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
@@ -15,6 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/app/arrivals")
 @RequiredArgsConstructor
+@Slf4j
 public class AppArrivalController {
 
     private final AppArrivalService appArrivalService;
@@ -23,13 +26,14 @@ public class AppArrivalController {
     // PostGIS ST_Distance로 서버에서 검증
     @PostMapping
     public ResponseEntity<String> verifyArrival(
-            @RequestBody ArrivalRequestDto requestDto,
+            @RequestBody Map<String, Object> body,
             Authentication authentication) {
+        String venueId = (String) body.get("venueId");
+        double lat = body.get("lat") != null ? ((Number) body.get("lat")).doubleValue() : 0.0;
+        double lng = body.get("lng") != null ? ((Number) body.get("lng")).doubleValue() : 0.0;
+        log.info("[RAW] venueId={}, lat={}, lng={}", venueId, lat, lng);
         boolean verified = appArrivalService.verifyArrival(
-                requestDto.getVenueId(),
-                requestDto.getLat(),
-                requestDto.getLng(),
-                authentication
+                venueId, lat, lng, authentication
         );
         if (verified) return ResponseEntity.ok("도착 인증 완료!");
         return ResponseEntity.badRequest().body("행사장 반경 밖입니다.");
