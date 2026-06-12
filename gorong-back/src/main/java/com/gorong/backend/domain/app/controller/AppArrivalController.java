@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import com.gorong.backend.domain.app.service.AppVenueService;
+
 import java.util.List;
 import java.util.Map;
 
@@ -16,6 +18,7 @@ import java.util.Map;
 public class AppArrivalController {
 
     private final AppArrivalService appArrivalService;
+    private final AppVenueService appVenueService;
 
     // PostGIS ST_Distance로 서버에서 검증
     @PostMapping
