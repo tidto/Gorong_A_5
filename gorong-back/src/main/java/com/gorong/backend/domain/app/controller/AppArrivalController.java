@@ -46,4 +46,12 @@ public class AppArrivalController {
     public ResponseEntity<List<String>> getMyVerifiedVenueIds(Authentication authentication) {
         return ResponseEntity.ok(appArrivalService.getMyVerifiedVenueIds(authentication));
     }
+
+    // 임시 테스트용 — 확인 후 반드시 삭제
+    @GetMapping("/test")
+    public ResponseEntity<String> testArrival() {
+        var geo = appVenueService.resolveVenueGeo("1118418");
+        if (geo.isEmpty()) return ResponseEntity.ok("VenueGeo 없음 — DB/캐시 조회 실패");
+        return ResponseEntity.ok("VenueGeo 찾음 — lat=" + geo.get().lat() + ", lng=" + geo.get().lng());
+    }
 }

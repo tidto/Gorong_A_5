@@ -81,6 +81,7 @@ useEffect(() => {
 
           if (lastCoordRef.current) {
             const { latitude, longitude } = lastCoordRef.current
+            console.log(`[Geofence] verifyArrival 호출 좌표 - lat=${latitude}, lng=${longitude}`)
             let success = false
             for (let attempt = 1; attempt <= 3; attempt++) {
               try {
@@ -98,10 +99,13 @@ useEffect(() => {
             if (!success) {
               console.error(`[Geofence] 백엔드 도착 인증 최종 실패 - venueId=${venueId}`)
             }
+                    } else {
+            console.warn(`[Geofence] lastCoordRef.current 없음 - verifyArrival 호출 불가`)
           }
         }
       }, 1000)
     }
+
 
     ;(async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()

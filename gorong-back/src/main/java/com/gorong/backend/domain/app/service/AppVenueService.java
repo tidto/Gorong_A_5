@@ -44,8 +44,10 @@ public class AppVenueService {
         // 1) 메모리 캐시 확인
         VenueGeo cached = venueGeoCache.get(normalizedVenueId);
         if (cached != null) {
+            log.info("[VenueGeo] 캐시 히트 - venueId={}", normalizedVenueId);
             return Optional.of(cached);
         }
+        log.info("[VenueGeo] 캐시 없음 - venueId={}", normalizedVenueId);
 
         // 2) DB(events 테이블) 조회
         try {
@@ -53,19 +55,21 @@ public class AppVenueService {
             Optional<VenueGeo> fromDb = eventRepository.findById(eventId)
                     .flatMap(this::toVenueGeo);
             if (fromDb.isPresent()) {
+                log.info("[VenueGeo] DB 조회 성공 - venueId={}, lat={}, lng={}", normalizedVenueId, fromDb.get().lat(), fromDb.get().lng());
                 venueGeoCache.put(normalizedVenueId, fromDb.get());
                 return fromDb;
             }
+            log.warn("[VenueGeo] DB 조회 실패 - venueId={} DB에 없음", normalizedVenueId);
         } catch (NumberFormatException e) {
-            // venueId가 숫자가 아닌 경우 DB 조회 스킵
+            log.warn("[VenueGeo] venueId 숫자 아님 - venueId={}", normalizedVenueId);
         }
 
-        // 3) DB에도 없으면 TourAPI 단건 조회 (서버 재시작 후 캐시 소실 대응)
+        // 3) TourAPI 단건 조회
+        log.info("[VenueGeo] TourAPI 단건 조회 시도 - venueId={}", normalizedVenueId);
         Optional<VenueGeo> fromApi = fetchVenueGeoFromTourApi(normalizedVenueId);
         fromApi.ifPresent(geo -> venueGeoCache.put(normalizedVenueId, geo));
         return fromApi;
     }
-
     /**
      * TourAPI detailCommon1으로 단건 좌표 조회.
      * 캐시/DB에 없을 때 폴백으로 사용.

@@ -53,7 +53,7 @@ public class AppArrivalService {
                     venueGeo.lat(), lat,
                     lng, venueGeo.lng()
             );
-            
+
             if (distance == null) {
                 return false;
             }
