@@ -212,6 +212,50 @@ export async function getUserActivities(userId: number): Promise<ActivityItem[]>
   return page.activities ?? [];
 }
 
+export type PostHistoryCategory = "ALL" | "REVIEW" | "RECRUITMENT";
+
+export type UserPostHistoryItem = {
+  category: "REVIEW" | "RECRUITMENT";
+  categoryLabel: string;
+  postId: number;
+  title: string;
+  summary: string | null;
+  createdAt: string | null;
+  linkPath: string;
+};
+
+export type UserPostHistoryPage = {
+  content: UserPostHistoryItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+  reviewCount: number;
+  recruitmentCount: number;
+};
+
+/** CatTower 히스토리 — 리뷰·모집(작성/참여) */
+export async function getUserPostHistory(
+  userId: number,
+  options?: {
+    category?: PostHistoryCategory;
+    page?: number;
+    size?: number;
+  }
+): Promise<UserPostHistoryPage> {
+  await requireAuthUser();
+  const params = new URLSearchParams();
+  if (options?.category) params.set("category", options.category);
+  if (options?.page != null) params.set("page", String(options.page));
+  if (options?.size != null) params.set("size", String(options.size));
+  const query = params.toString();
+  const res = await axiosInstance.get(
+    `/minihomes/${userId}/post-history${query ? `?${query}` : ""}`
+  );
+  return res.data;
+}
+
 export async function createGallery(
   userId: number,
   payload: { title: string; description?: string }

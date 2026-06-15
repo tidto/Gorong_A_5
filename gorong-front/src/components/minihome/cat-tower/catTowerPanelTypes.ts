@@ -8,7 +8,7 @@ export const CATTOWER_VIEW_PANELS: {
 }[] = [
   { id: "room", label: "내 방", emoji: "🏡" },
   { id: "gallery", label: "갤러리", emoji: "📸" },
-  { id: "activity", label: "히스토리", emoji: "📋" },
+  { id: "activity", label: "히스토리", emoji: "📝" },
   { id: "guestbook", label: "방명록", emoji: "✉️" },
 ];
 
