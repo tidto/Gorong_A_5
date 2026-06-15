@@ -100,12 +100,11 @@ export const fetchPublicEventDetail = (id: string | number) =>
 
 // 🚨 [수정됨] 도착 인증: 백엔드 DTO(PostGIS)가 요구할 확률이 높은 필드명으로 매핑합니다.
 // 만약 백엔드의 @RequestBody 필드명이 여전히 lat, lng라면 기존처럼 { venueId, lat, lng }로 사용하셔도 됩니다.
-export const verifyArrival = (venueId: string, lat: number, lng: number) =>
-  api.post<string>('/app/arrivals', { 
-    venueId, 
-    latitude: lat,   
-    longitude: lng 
-  })
+export const verifyArrival = (venueId: string, lat: number, lng: number) => {
+  const body = { venueId, lat, lng }
+  console.log('[verifyArrival] 전송 body:', JSON.stringify(body))
+  return api.post<string>('/app/arrivals', body)
+}
 
 // 앱 그룹 목록 조회 (웹에서 생성된 그룹 포함)
 export const fetchAppGroups = () =>
