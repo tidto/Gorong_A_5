@@ -630,6 +630,41 @@ public class MiniHomeService {
                 state.put("accessoryItemCode", req.getAccessoryItemCode().trim().toLowerCase());
             }
         }
+        if (req.getRoomDecorItems() != null) {
+            state.put("roomDecorItems", serializeRoomDecorItems(req.getRoomDecorItems()));
+        }
+    }
+
+    private static List<Map<String, Object>> serializeRoomDecorItems(
+            List<com.gorong.backend.domain.minihome.dto.RoomDecorItemDto> items
+    ) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        java.util.Set<String> seenTypes = new java.util.HashSet<>();
+        java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (com.gorong.backend.domain.minihome.dto.RoomDecorItemDto item : items) {
+            if (item == null || item.getType() == null || item.getType().isBlank()) continue;
+            String type = item.getType().trim().toLowerCase();
+            if (!type.matches("plant|frame|lamp|sofa|rug|toy") || seenTypes.contains(type)) continue;
+            seenTypes.add(type);
+            String id = item.getId() != null && !item.getId().isBlank()
+                    ? item.getId().trim()
+                    : type + "-" + System.currentTimeMillis();
+            double x = item.getX() != null ? clampDecorCoord(item.getX()) : 50.0;
+            double y = item.getY() != null ? clampDecorCoord(item.getY()) : 50.0;
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", id);
+            row.put("type", type);
+            row.put("x", x);
+            row.put("y", y);
+            out.add(row);
+        }
+        return out;
+    }
+
+    private static double clampDecorCoord(double value) {
+        return Math.round(Math.min(95.0, Math.max(5.0, value)) * 10.0) / 10.0;
     }
 
     private static Map<String, Object> defaultAppearance() {

@@ -54,49 +54,58 @@ export function useGeofence(venues: Venue[]) {
     }
   }
 
-  const startDwellTimer = (venueId: string) => {
-    stopDwellTimer()
-    setDwellSeconds(0)
-    enteredAt.current = Date.now()
+useEffect(() => {
+    let subscription: Location.LocationSubscription | undefined
 
-    // ── [핵심 수정] setInterval 안에서 8초 도달 시 직접 인증 트리거 ──
-    // watchPositionAsync 콜백 의존 제거 → 정지 상태에서도 정상 동작
-    dwellIntervalRef.current = setInterval(async () => {
-      if (!enteredAt.current || !currentInsideRef.current) return
-      if (currentInsideRef.current !== venueId) {
-        // 다른 venue로 바뀌었으면 타이머 정지
-        stopDwellTimer()
-        return
-      }
+    // startDwellTimer를 useEffect 안으로 이동 — venues 클로저 stale 방지
+    const startDwellTimer = (venueId: string) => {
+      stopDwellTimer()
+      setDwellSeconds(0)
+      enteredAt.current = Date.now()
 
-      const elapsed = Math.floor((Date.now() - enteredAt.current) / 1000)
-      const capped = Math.min(elapsed, ENTER_DWELL_S)
-      setDwellSeconds(capped)
+      dwellIntervalRef.current = setInterval(async () => {
+        if (!enteredAt.current || !currentInsideRef.current) return
+        if (currentInsideRef.current !== venueId) {
+          stopDwellTimer()
+          return
+        }
 
-      // 8초 체류 달성 + 미인증 → 인증 실행
-      if (elapsed >= ENTER_DWELL_S && !verifiedVenues.current.has(venueId)) {
-        // 중복 실행 방지를 위해 타이머 먼저 중지
-        stopDwellTimer()
+        const elapsed = Math.floor((Date.now() - enteredAt.current) / 1000)
+        setDwellSeconds(Math.min(elapsed, ENTER_DWELL_S))
 
-        // 로컬 인증 먼저 처리 (UI 즉시 반영)
-        verifiedVenues.current.add(venueId)
-        setIsVerified(true)
-        setDwellSeconds(ENTER_DWELL_S)
+        if (elapsed >= ENTER_DWELL_S && !verifiedVenues.current.has(venueId)) {
+          stopDwellTimer()
+          verifiedVenues.current.add(venueId)
+          setIsVerified(true)
+          setDwellSeconds(ENTER_DWELL_S)
 
-        // 백엔드 PostGIS 검증 (실패해도 로컬 인증은 유지)
-        if (lastCoordRef.current) {
-          try {
-            await verifyArrival(venueId, lastCoordRef.current.latitude, lastCoordRef.current.longitude)
-          } catch (err) {
-            console.warn('[Geofence] 백엔드 도착 인증 실패 (로컬 인증 유지):', err)
+          if (lastCoordRef.current) {
+            const { latitude, longitude } = lastCoordRef.current
+            console.log(`[Geofence] verifyArrival 호출 좌표 - lat=${latitude}, lng=${longitude}`)
+            let success = false
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                await verifyArrival(venueId, latitude, longitude)
+                success = true
+                console.log(`[Geofence] 백엔드 도착 인증 성공 - venueId=${venueId}, attempt=${attempt}`)
+                break
+              } catch (err: any) {
+                const status = err?.response?.status
+                console.warn(`[Geofence] 백엔드 도착 인증 실패 attempt=${attempt} - venueId=${venueId}, status=${status}`)
+                if (status === 400 || status === 403) break
+                if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 2000))
+              }
+            }
+            if (!success) {
+              console.error(`[Geofence] 백엔드 도착 인증 최종 실패 - venueId=${venueId}`)
+            }
+                    } else {
+            console.warn(`[Geofence] lastCoordRef.current 없음 - verifyArrival 호출 불가`)
           }
         }
-      }
-    }, 1000)
-  }
+      }, 1000)
+    }
 
-  useEffect(() => {
-    let subscription: Location.LocationSubscription | undefined
 
     ;(async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
@@ -105,17 +114,13 @@ export function useGeofence(venues: Venue[]) {
       subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          // distanceInterval 제거 → 시간 기반 업데이트 (정지 시에도 주기적 GPS 갱신)
           timeInterval: 3000,
           distanceInterval: 0,
         },
         (location) => {
           const { latitude, longitude } = location.coords
-
-          // 최신 GPS 좌표 캐시
           lastCoordRef.current = { latitude, longitude }
 
-          // 현재 진입한 지오펜스 찾기
           let enteredId: string | null = null
           for (const venue of venues) {
             if (venue.geofenceEnabled === false || venue.radius <= 0) continue
@@ -128,23 +133,19 @@ export function useGeofence(venues: Venue[]) {
 
           const prevInside = currentInsideRef.current
 
-          // 진입/이탈 상태 변화 처리
           if (enteredId !== prevInside) {
             currentInsideRef.current = enteredId
             setInsideVenueId(enteredId)
 
             if (enteredId) {
-              // 새 지오펜스 진입 → 타이머 시작
               const alreadyVerified = verifiedVenues.current.has(enteredId)
               setIsVerified(alreadyVerified)
               if (!alreadyVerified) {
                 startDwellTimer(enteredId)
               } else {
-                // 이미 인증된 장소 재진입 → 타이머 불필요
                 setDwellSeconds(ENTER_DWELL_S)
               }
             } else {
-              // 지오펜스 이탈
               stopDwellTimer()
               setDwellSeconds(0)
               setIsVerified(false)

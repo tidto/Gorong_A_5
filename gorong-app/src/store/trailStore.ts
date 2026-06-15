@@ -15,6 +15,7 @@ export type TrailHistoryEntry = {
   pointCount: number
   serverSaved: boolean
   localSaved: boolean
+  trailArtUrl?: string   // S3에 업로드된 트레일 아트 이미지 URL
 }
 
 interface TrailStore {
@@ -23,7 +24,7 @@ interface TrailStore {
   startedAt: number | null
   recordingVenueId: string | null
   startRecording: (venueId?: string | null) => Promise<void>
-  stopRecording: (reason?: StopReason, venueId?: string | null) => Promise<void>
+  stopRecording: (reason?: StopReason, venueId?: string | null, trailArtUrl?: string) => Promise<void>
   setRecordingVenueId: (venueId: string | null) => void
 }
 
@@ -93,7 +94,7 @@ export const useTrailStore = create<TrailStore>((set) => ({
     }, MAX_RECORDING_MS)
   },
 
-  stopRecording: async (reason = 'manual', venueId) => {
+  stopRecording: async (reason = 'manual', venueId, trailArtUrl) => {
     subscription?.remove()
     subscription = null
     if (maxDurationTimer) {
@@ -131,6 +132,7 @@ export const useTrailStore = create<TrailStore>((set) => ({
         pointCount: snapshot.length,
         serverSaved,
         localSaved: true,
+        trailArtUrl,
       }, snapshot)
     } catch (error) {
       console.error('트레일 히스토리 저장 실패:', error)

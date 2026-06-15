@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
 import MapView, { Circle, Marker, Polyline } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -10,7 +9,6 @@ import { fetchMyParticipations, fetchNearbyVenues, fetchPublicEventDetail, fetch
 import { useAuthStore } from '../store/authStore'
 import { useTrailStore } from '../store/trailStore'
 import { PublicEvent, Venue } from '../types'
-import { prepareImageForUpload } from '../utils/imageUpload'
 
 function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000
@@ -87,11 +85,12 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [showPawPrint, setShowPawPrint] = useState(false)
   const [outsideTimer, setOutsideTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
-  const [galleryUploading, setGalleryUploading] = useState(false)
+  const [isStoppingTrail, setIsStoppingTrail] = useState(false)
+
 
   const mapRef = useRef<MapView | null>(null)
   const insets = useSafeAreaInsets()
-  const { setInsideVenueId } = useAuthStore()
+  const { setInsideVenueId, logout } = useAuthStore()
 
   const geofenceVenues = useMemo(
     () => venues.filter((v) => v.geofenceEnabled !== false && v.radius > 0 && isVenueActiveToday(v)),
@@ -123,58 +122,37 @@ export default function MapScreen() {
     }
   }, [isRecording, insideVenueId, setRecordingVenueId])
 
-  const finalizeTrailArt = useCallback(async () => {
-    if (!mapRef.current || trail.length < 2) return
-    try {
-      const snapshotUri = await mapRef.current.takeSnapshot({
-        width: 1080, height: 1920, format: 'jpg', quality: 0.85, result: 'file',
-      })
-      await uploadFileToS3(snapshotUri, `trail-art-${Date.now()}.jpg`, 'TRAIL_ART', true)
-    } catch (error) {
-      console.error('러닝아트 업로드 실패:', error)
-    }
-  }, [trail.length])
+const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
+  if (!mapRef.current || trail.length < 2) return undefined
+  try {
+    const snapshotUri = await mapRef.current.takeSnapshot({
+      width: 1080, height: 1920, format: 'jpg', quality: 0.85, result: 'file',
+    })
 
-  const handleGalleryUpload = useCallback(async () => {
-    const venueId = insideVenueId ?? selectedVenue?.id ?? null
-    if (!venueId) {
-      Alert.alert('안내', '지오펜싱 인증 후에만 갤러리 업로드를 사용할 수 있습니다.')
-      return
-    }
+    // takeSnapshot이 네트워크 소켓을 잠시 블로킹하므로, 복구 대기
+    await new Promise(resolve => setTimeout(resolve, 500))
 
-    try {
-      setGalleryUploading(true)
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
-      if (!permission.granted) {
-        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.')
-        return
-      }
+    const res = await uploadFileToS3(snapshotUri, `trail-art-${Date.now()}.jpg`, 'TRAIL_ART', true)
+    const artUrl: string | undefined =
+      res.data?.url ?? res.data?.fileUrl ?? res.data?.imageUrl ?? undefined
+    return artUrl
+  } catch (error) {
+    console.error('러닝아트 업로드 실패:', error)
+    return undefined
+  }
+}, [trail.length])
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.85,
-        allowsEditing: false,
-      })
-
-      if (result.canceled || !result.assets.length) return
-
-      const asset = result.assets[0]
-      const prepared = await prepareImageForUpload(asset, `gallery-${venueId}-${Date.now()}.jpg`)
-      const response = await uploadFileToS3(prepared.uri, prepared.fileName, 'APP_PHOTO', true, venueId)
-      Alert.alert('완료', response.data?.gallerySaved ? '사진이 갤러리에 저장되었습니다.' : '사진 업로드가 완료되었습니다.')
-    } catch (error) {
-      console.error('갤러리 업로드 실패:', error)
-      Alert.alert('안내', '갤러리 업로드에 실패했습니다.')
-    } finally {
-      setGalleryUploading(false)
-    }
-  }, [insideVenueId, selectedVenue?.id])
 
   const handleStopRecording = useCallback(async (
     reason: 'manual' | 'max_duration' | 'left_venue_timeout',
   ) => {
-    await stopRecording(reason)
-    await finalizeTrailArt()
+    setIsStoppingTrail(true)
+    try {
+      const trailArtUrl = await finalizeTrailArt()
+      await stopRecording(reason, null, trailArtUrl)
+    } finally {
+      setIsStoppingTrail(false)
+    }
   }, [stopRecording, finalizeTrailArt])
 
   useEffect(() => {
@@ -300,6 +278,14 @@ export default function MapScreen() {
 
   return (
     <View style={{ flex: 1 }}>
+      <TouchableOpacity
+        style={[styles.logoutPill, { top: insets.top + 14 }]}
+        onPress={logout}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.logoutText}>로그아웃</Text>
+      </TouchableOpacity>
+
       <MapView
         ref={mapRef}
         style={{ flex: 1 }}
@@ -399,11 +385,12 @@ export default function MapScreen() {
 
       <View style={[styles.buttonRow, { bottom: buttonRowBottom }]}>
         <TouchableOpacity
-          style={[styles.btn, isRecording && styles.btnActive]}
+          style={[styles.btn, isRecording && styles.btnActive, isStoppingTrail && styles.btnDisabled]}
           onPress={isRecording ? () => handleStopRecording('manual') : () => startRecording(insideVenueId)}
+          disabled={isStoppingTrail}
         >
           <Text style={styles.btnText}>
-            {isRecording ? '트레일 기록 종료' : '트레일 기록 시작'}
+            {isStoppingTrail ? '저장 중...' : isRecording ? '트레일 기록 종료' : '트레일 기록 시작'}
           </Text>
         </TouchableOpacity>
 
@@ -424,11 +411,7 @@ export default function MapScreen() {
                 ? '✅ 도착 인증 완료'
                 : `📍 행사장 진입 중 · ${ENTER_DWELL_S - dwellSeconds}초 후 자동 인증`}
             </Text>
-            {isVerified && (
-              <Text style={[styles.badgeSubText, styles.badgeTextVerified]}>
-                이제 사진을 갤러리에 바로 올릴 수 있습니다.
-              </Text>
-            )}
+
           </View>
 
           {/* 인증 전에만 진행바 표시 */}
@@ -443,17 +426,7 @@ export default function MapScreen() {
             </View>
           )}
 
-          {isVerified && (
-            <TouchableOpacity
-              style={[styles.galleryBtn, galleryUploading && styles.galleryBtnDisabled]}
-              onPress={handleGalleryUpload}
-              disabled={galleryUploading}
-            >
-              <Text style={styles.galleryBtnText}>
-                {galleryUploading ? '업로드 중...' : '갤러리에 사진 올리기'}
-              </Text>
-            </TouchableOpacity>
-          )}
+
         </View>
       )}
     </View>
@@ -462,6 +435,25 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  btnDisabled: { backgroundColor: '#9ca3af' },
+  logoutPill: {
+    position: 'absolute',
+    right: 14,
+    zIndex: 50,
+    backgroundColor: 'rgba(17,24,39,0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   buttonRow: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', gap: 8 },
   btn: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   btnActive: { backgroundColor: '#FF6B35' },
@@ -520,23 +512,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF6B35',
     borderRadius: 2,
   },
-  galleryBtn: {
-    marginTop: 6,
-    backgroundColor: '#111827',
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  galleryBtnDisabled: {
-    backgroundColor: '#6b7280',
-  },
-  galleryBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  // ──────────────────────────────────────────────────────────
-
   previewCard: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: 18, padding: 12, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 14, elevation: 8 },
   previewImage: { width: 64, height: 64, borderRadius: 14, backgroundColor: '#f3f4f6' },
   previewText: { flex: 1 },

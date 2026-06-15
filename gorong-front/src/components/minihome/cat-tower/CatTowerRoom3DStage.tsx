@@ -11,6 +11,7 @@ import type { RoomDecorItem } from "../../../utils/minihome/cat-tower/catTowerRo
 import CatTowerSpeechBubble from "./CatTowerSpeechBubble";
 import CatTowerRoom3DCanvas from "./room-3d/CatTowerRoom3DCanvas";
 import { getCatTowerRoomDisplayPrefs } from "../../../utils/minihome/cat-tower/cattowerDisplayPrefs";
+import { CATTOWER_CARD } from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 type Props = {
   growthStage: GrowthStage;
@@ -56,7 +57,7 @@ function CatTowerRoom3DStage({
   );
 
   return (
-    <div className="sidebar-card relative flex flex-col border-orange-100/90 bg-gradient-to-b from-[#fffaf5] to-orange-50/50">
+    <div className={`${CATTOWER_CARD} relative flex flex-col`}>
       <div className={`sidebar-card-header relative z-20 justify-center ${bg.headerBgClass}`}>
         <p className="text-xs font-extrabold tracking-wide text-slate-800 sm:text-sm">
           {catName}의 3D 방 · {bg.label}
@@ -71,8 +72,8 @@ function CatTowerRoom3DStage({
         />
       </div>
 
-      <div className="relative bg-gradient-to-b from-orange-50/30 to-transparent p-1 sm:p-1.5">
-        <div className="overflow-visible rounded-xl ring-1 ring-orange-100/90 shadow-inner">
+      <div className="relative bg-slate-50/50 p-1 sm:p-1.5">
+        <div className="overflow-visible rounded-xl ring-1 ring-slate-200 shadow-inner">
         <CatTowerRoom3DCanvas
           className="w-full rounded-xl"
           style={canvasHeightStyle}
