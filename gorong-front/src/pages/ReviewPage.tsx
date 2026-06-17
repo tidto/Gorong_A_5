@@ -102,7 +102,12 @@ export default function ReviewPage() {
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold text-slate-900">{post.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{post.contents || post.reviewText}</p>
+                    <div
+                      className="mt-2 text-sm leading-6 prose-content max-h-[7.5rem] overflow-hidden"
+                      dangerouslySetInnerHTML={{
+                        __html: post.contents || post.reviewText || '',
+                      }}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
@@ -129,6 +134,57 @@ export default function ReviewPage() {
           <Button variant="secondary" onClick={() => void loadPosts(page + 1)} disabled={page + 1 >= totalPages}>다음</Button>
         </div>
       </section>
+
+      <style>{`
+        .prose-content h1 {
+          font-size: 1.35rem;
+          font-weight: 700;
+          margin: 0.5rem 0 0.25rem;
+          color: #1a1714;
+          line-height: 1.3;
+        }
+        .prose-content h2 {
+          font-size: 1.15rem;
+          font-weight: 600;
+          margin: 0.4rem 0 0.2rem;
+          color: #1a1714;
+          line-height: 1.35;
+        }
+        .prose-content ul {
+          list-style: disc;
+          padding-left: 1.25rem;
+          margin: 0.25rem 0;
+        }
+        .prose-content ol {
+          list-style: decimal;
+          padding-left: 1.25rem;
+          margin: 0.25rem 0;
+        }
+        .prose-content li {
+          margin: 0.15rem 0;
+          line-height: 1.6;
+        }
+        .prose-content blockquote {
+          border-left: 3px solid #FF8A3D;
+          padding-left: 0.75rem;
+          color: #5a5650;
+          font-style: italic;
+          margin: 0.4rem 0;
+        }
+        .prose-content hr {
+          border: none;
+          border-top: 1px solid #e0dbd3;
+          margin: 0.75rem 0;
+        }
+        .prose-content a {
+          color: #FF8A3D;
+          text-decoration: underline;
+        }
+        .prose-content p {
+          margin: 0.25rem 0;
+          line-height: 1.7;
+        }
+      `}</style>
     </div>
   )
 }
