@@ -65,16 +65,16 @@
   * 위치 서비스: Kakao Map Local API
 
 ## 📦 인프라 및 배포 전략 (Infrastructure & DevOps)
-#### 고롱(Gorong)은 서비스의 안정성과 확장성을 위해 전체 아키텍처를 Docker 컨테이너화하여 관리하며, Jenkins를 통해 자동화된 CI/CD 파이프라인 구축
+#### 고롱(Gorong)은 서비스의 안정성과 확장성을 위해 전체 아키텍처를 Docker 컨테이너화하여 관리하며, Github Action 통해 자동화된 CI/CD 파이프라인 구축
 
 #### 1. 컨테이너 아키텍처 (Docker)
   * Spring Boot Container: Java 25 기반의 백엔드 애플리케이션을 격리된 환경에서 실행.
   * Nginx Container: 리버스 프록시 및 정적 자원(React 빌드 파일) 서빙을 담당하며, SSL 인증서 관리를 수행.
   * Docker Compose: 다중 컨테이너 환경을 오케스트레이션하여 백엔드와 웹 서버 간의 네트워크 통신을 최적화.
 
-#### 2. CI/CD 파이프라인 (Jenkins)
+#### 2. CI/CD 파이프라인 
   1. Code Push: 개발자가 GitHub 레파지토리에 코드를 푸시.
-  2. Build: Jenkins가 Webhook을 감지하여 Gradle 빌드 수행 및 .jar 생성.
+  2. Build: github action Webhook을 감지 후 CI 수행. PR요청 수령 후 CD 수행.
   3. Dockerize: 빌드된 아티팩트를 기반으로 Docker 이미지를 빌드 및 Docker Hub(또는 Private Registry)에 푸시.
   4. Deploy: EC2 서버에서 최신 이미지를 Pull 하여 docker-compose를 통해 무중단 배포 혹은 컨테이너 교체 수행.
 
@@ -95,7 +95,7 @@
 ##### Mapbox API: Mapbox는 iOS와 Android 모두에서 사용할 수 있는 지오펜싱 API를 제공하며, 이는 개별적인 네이티브 구현 없이도 경계 진입(Enter), 이탈(Exit), 체류(Dwell) 이벤트를 쉽게 관리할 수 있음...
 --- 
 
-
+-미실행-
 ## 🔍 코드 리뷰 (뱅크샐러드) 채택
 #### 출처 - [https://blog.banksalad.com/tech/banksalad-code-review-culture/]<https://blog.banksalad.com/tech/banksalad-code-review-culture/>
 

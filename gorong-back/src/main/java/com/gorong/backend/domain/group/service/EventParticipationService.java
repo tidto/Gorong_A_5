@@ -9,6 +9,7 @@ import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,7 @@ public class EventParticipationService {
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
 
-    // ── 혼자 참여 신청 (사용자가 선택한 visitDate 저장) ──────────────
+    // ── 혼자 참여 신청 ────────────────────────────────────────────────
     @Transactional
     public EventParticipationResponseDto applySolo(Long userId, String eventContentId,
                                                    String eventTitle, LocalDate visitDate) {
@@ -52,8 +53,11 @@ public class EventParticipationService {
         return new EventParticipationResponseDto(participationRepository.save(participation));
     }
 
-    // ── 그룹 참여 신청 (GroupPost.meetingDate 를 visitDate 로 저장) ──
-    @Transactional
+    // ── 그룹 참여 신청 ────────────────────────────────────────────────
+    // ✅ @Transactional 제거: 중복 INSERT 시 DataIntegrityViolationException을
+    //    이 메서드 안에서 catch해서 200으로 처리한다.
+    //    @Transactional이 걸려있으면 예외가 트랜잭션 롤백을 유발하고
+    //    catch 이후에도 커밋이 안 되기 때문에 의도적으로 분리했다.
     public EventParticipationResponseDto applyGroup(Long userId, String eventContentId,
                                                     String eventTitle, Long groupPostId) {
 
@@ -63,24 +67,29 @@ public class EventParticipationService {
         GroupPost groupPost = groupRepository.findById(groupPostId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "그룹을 찾을 수 없습니다."));
 
-        if (participationRepository.existsByUserIdAndEventContentIdAndGroupPostId(
-                userId, eventContentId, groupPostId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 해당 그룹으로 참여 신청한 행사입니다.");
-        }
+        // 이미 존재하면 INSERT 없이 바로 반환
+        return participationRepository
+                .findByUserIdAndGroupPostId(userId, groupPostId)
+                .map(EventParticipationResponseDto::new)
+                .orElseGet(() -> insertGroup(user, groupPost, eventContentId, eventTitle));
+    }
 
+    // ── 실제 INSERT (새 트랜잭션으로 분리) ───────────────────────────
+    // 동시 요청 등 race condition으로 중복 INSERT가 발생해도
+    // DataIntegrityViolationException을 여기서 잡아 200으로 처리한다.
+    @Transactional
+    protected EventParticipationResponseDto insertGroup(User user, GroupPost groupPost,
+                                                        String eventContentId, String eventTitle) {
         String resolvedTitle = (eventTitle != null && !eventTitle.isBlank())
-                ? eventTitle
-                : groupPost.getEvent();
+                ? eventTitle : groupPost.getEvent();
 
-        // eventContentId: 전달된 값이 TourAPI contentId면 그대로, 아니면 GroupPost에서 가져옴
         String resolvedContentId = (eventContentId != null && !eventContentId.isBlank()
                 && eventContentId.matches("\\d+"))
                 ? eventContentId
                 : (groupPost.getEventContentId() != null && !groupPost.getEventContentId().isBlank()
-                   ? groupPost.getEventContentId()
-                   : eventContentId);
+                ? groupPost.getEventContentId()
+                : eventContentId);
 
-        // GroupPost.meetingDate (String "yyyy-MM-dd") → LocalDate 변환
         LocalDate visitDate = parseMeetingDate(groupPost.getMeetingDate());
 
         EventParticipation participation = EventParticipation.builder()
@@ -92,7 +101,16 @@ public class EventParticipationService {
                 .visitDate(visitDate)
                 .build();
 
-        return new EventParticipationResponseDto(participationRepository.save(participation));
+        try {
+            return new EventParticipationResponseDto(participationRepository.save(participation));
+        } catch (DataIntegrityViolationException e) {
+            // race condition으로 동시에 INSERT된 경우 → 기존 레코드 반환
+            return participationRepository
+                    .findByUserIdAndGroupPostId(user.getId(), groupPost.getId())
+                    .map(EventParticipationResponseDto::new)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.INTERNAL_SERVER_ERROR, "참여 이력 저장에 실패했습니다."));
+        }
     }
 
     // ── 내 참여 이력 조회 ─────────────────────────────────────────────
@@ -115,7 +133,7 @@ public class EventParticipationService {
                 userId, eventContentId, ParticipationType.SOLO);
     }
 
-    // ── 그룹 참여 이력 취소 (그룹 탈퇴 시 함께 호출) ──────────────────
+    // ── 그룹 참여 이력 취소 ───────────────────────────────────────────
     @Transactional
     public void cancelGroup(Long userId, String eventContentId, Long groupPostId) {
         participationRepository.deleteByUserIdAndEventContentIdAndGroupPostId(
@@ -129,13 +147,26 @@ public class EventParticipationService {
                 userId, eventContentId, ParticipationType.SOLO);
     }
 
+    /**
+     * visitDate가 지난 SOLO 참여를 CLOSED로 일괄 전환
+     * GroupScheduler에서 매일 자정에 호출됩니다.
+     * @return 처리된 건수
+     */
+    @Transactional
+    public int closeExpiredSoloParticipations() {
+        List<EventParticipation> expired =
+                participationRepository.findExpiredSoloParticipations(LocalDate.now());
+        expired.forEach(EventParticipation::close);
+        return expired.size();
+    }
+
     // ── meetingDate 문자열 파싱 헬퍼 ─────────────────────────────────
     private LocalDate parseMeetingDate(String meetingDate) {
         if (meetingDate == null || meetingDate.isBlank()) return null;
         try {
-            return LocalDate.parse(meetingDate.trim());  // yyyy-MM-dd 형식 기대
+            return LocalDate.parse(meetingDate.trim());
         } catch (DateTimeParseException e) {
-            return null;  // 파싱 실패 시 null 저장 (참여 자체는 막지 않음)
+            return null;
         }
     }
 }

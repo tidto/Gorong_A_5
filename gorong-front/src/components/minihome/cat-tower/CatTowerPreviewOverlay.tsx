@@ -141,8 +141,9 @@ export default function CatTowerPreviewOverlay({
               </div>
             ) : err ? (
               <div className="flex-1 overflow-y-auto px-4 py-3">
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm font-semibold text-red-700">
-                  {err}
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-8 text-center">
+                  <p className="text-3xl">⚠️</p>
+                  <p className="mt-3 text-sm font-semibold leading-relaxed text-red-700">{err}</p>
                 </div>
               </div>
             ) : (

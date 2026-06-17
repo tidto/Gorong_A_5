@@ -200,7 +200,6 @@ export default function MiniHome() {
       setEquippedDraft(draft);
       setPage((prev) => (prev ? applyEquipDraftToPage(prev, draft) : prev));
       setDecorateOpen(false);
-      await loadPage();
     }
   }
 

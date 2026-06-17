@@ -12,6 +12,8 @@ import com.gorong.backend.domain.minihome.dto.MiniHomeItemDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomePageResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeUpdateRequestDto;
+import com.gorong.backend.domain.minihome.dto.UserPostHistoryItemDto;
+import com.gorong.backend.domain.minihome.dto.UserPostHistoryPageDto;
 import com.gorong.backend.domain.minihome.entity.ActivityLog;
 import com.gorong.backend.domain.minihome.entity.CatEquip;
 import com.gorong.backend.domain.minihome.entity.GalleryImage;
@@ -30,17 +32,28 @@ import com.gorong.backend.domain.minihome.repository.ItemRepository;
 import com.gorong.backend.domain.minihome.repository.MiniHomeGalleryRepository;
 import com.gorong.backend.domain.minihome.repository.MiniHomeRepository;
 import com.gorong.backend.domain.minihome.repository.UserItemRepository;
+import com.gorong.backend.domain.group.entity.GroupParticipant;
 import com.gorong.backend.domain.group.entity.GroupPost;
+import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
+import com.gorong.backend.domain.review.entity.Review;
+import com.gorong.backend.domain.review.repository.ReviewRepository;
+import com.gorong.backend.domain.review.service.ReviewService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
 import com.gorong.backend.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,13 +81,242 @@ public class MiniHomeService {
     private final EventCategoryItemRewardService eventCategoryItemRewardService;
     private final GoCatItemUnlockService goCatItemUnlockService;
     private final GroupRepository groupRepository;
+    private final GroupParticipantRepository groupParticipantRepository;
+    private final ReviewRepository reviewRepository;
+    private final ReviewService reviewService;
+
+    public UserPostHistoryPageDto getUserPostHistory(
+            Long userId,
+            Long viewerUserId,
+            String category,
+            int page,
+            int size
+    ) {
+        requireViewableMiniHome(userId, viewerUserId);
+        String normalizedCategory = normalizePostHistoryCategory(category);
+        int safeSize = Math.min(Math.max(size, 1), 20);
+        int safePage = Math.max(page, 0);
+
+        long reviewCount = reviewRepository.countByUserId(userId);
+        long recruitmentCount = groupRepository.countRecruitmentHistoryByUserId(userId);
+
+        if ("REVIEW".equals(normalizedCategory)) {
+            Page<Review> reviewPage = reviewRepository.findByUserIdOrderByCreatedAtDesc(
+                    userId,
+                    PageRequest.of(safePage, safeSize)
+            );
+            List<UserPostHistoryItemDto> content = reviewPage.getContent().stream()
+                    .map(this::toReviewHistoryItem)
+                    .toList();
+            return UserPostHistoryPageDto.builder()
+                    .content(content)
+                    .page(reviewPage.getNumber())
+                    .size(reviewPage.getSize())
+                    .totalElements(reviewPage.getTotalElements())
+                    .totalPages(reviewPage.getTotalPages())
+                    .last(reviewPage.isLast())
+                    .reviewCount(reviewCount)
+                    .recruitmentCount(recruitmentCount)
+                    .build();
+        }
+
+        if ("RECRUITMENT".equals(normalizedCategory)) {
+            Page<GroupPost> groupPage = groupRepository.findRecruitmentHistoryByUserId(
+                    userId,
+                    PageRequest.of(safePage, safeSize)
+            );
+            List<UserPostHistoryItemDto> content = groupPage.getContent().stream()
+                    .map(post -> toRecruitmentHistoryItem(post, userId))
+                    .toList();
+            return UserPostHistoryPageDto.builder()
+                    .content(content)
+                    .page(groupPage.getNumber())
+                    .size(groupPage.getSize())
+                    .totalElements(groupPage.getTotalElements())
+                    .totalPages(groupPage.getTotalPages())
+                    .last(groupPage.isLast())
+                    .reviewCount(reviewCount)
+                    .recruitmentCount(recruitmentCount)
+                    .build();
+        }
+
+        long totalElements = reviewCount + recruitmentCount;
+        int totalPages = safeSize == 0 ? 0 : (int) Math.ceil((double) totalElements / safeSize);
+        List<UserPostHistoryItemDto> slice = mergePostHistory(userId, safePage, safeSize);
+
+        return UserPostHistoryPageDto.builder()
+                .content(slice)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(safePage >= totalPages - 1 || totalElements == 0)
+                .reviewCount(reviewCount)
+                .recruitmentCount(recruitmentCount)
+                .build();
+    }
+
+    /**
+     * 전체(ALL) 탭 — 리뷰·모집을 작성일 기준으로 합친 뒤 메모리에서 페이징.
+     * 각 소스에서 (page+1)*size 만큼 가져와 병합하면 해당 페이지 슬라이스가 보장된다.
+     */
+    private List<UserPostHistoryItemDto> mergePostHistory(Long userId, int page, int size) {
+        int fetchPerSource = (page + 1) * size;
+        List<UserPostHistoryItemDto> items = new ArrayList<>();
+        reviewRepository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, fetchPerSource))
+                .forEach(review -> items.add(toReviewHistoryItem(review)));
+        groupRepository.findRecruitmentHistoryByUserId(userId, PageRequest.of(0, fetchPerSource))
+                .forEach(group -> items.add(toRecruitmentHistoryItem(group, userId)));
+        items.sort(Comparator.comparing(
+                UserPostHistoryItemDto::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())
+        ));
+
+        int from = page * size;
+        if (from >= items.size()) {
+            return List.of();
+        }
+        int to = Math.min(from + size, items.size());
+        return new ArrayList<>(items.subList(from, to));
+    }
+
+    private UserPostHistoryItemDto toReviewHistoryItem(Review review) {
+        String title = resolveReviewHistoryTitle(review);
+        String eventTitle = reviewService.resolveEventTitle(review.getEventId());
+        String summary = firstNonBlank(review.getReviewText(), review.getContent());
+        if (summary != null && summary.equals(title)) {
+            summary = eventTitle;
+        } else if (summary == null || summary.isBlank()) {
+            summary = eventTitle;
+        }
+        String linkPath = review.getStatus() == Review.PostStatus.PUBLISHED
+                ? "/posting/" + review.getId()
+                : "/events/" + review.getEventId();
+
+        return UserPostHistoryItemDto.builder()
+                .category("REVIEW")
+                .categoryLabel("리뷰")
+                .postId(review.getId())
+                .title(title)
+                .summary(truncate(summary, 120))
+                .createdAt(review.getCreatedAt())
+                .linkPath(linkPath)
+                .build();
+    }
+
+    /** 간편 리뷰 생성 시 DB title이 "임시 포스팅"으로 들어가므로 히스토리 표시용 제목을 따로 정한다 */
+    private String resolveReviewHistoryTitle(Review review) {
+        if (!isPlaceholderReviewTitle(review.getTitle())) {
+            return review.getTitle().trim();
+        }
+        String fromText = firstNonBlank(review.getReviewText(), review.getContent());
+        if (fromText != null) {
+            return truncate(fromText, 48);
+        }
+        String eventTitle = reviewService.resolveEventTitle(review.getEventId());
+        if (eventTitle != null && !eventTitle.isBlank() && !"행사 정보 없음".equals(eventTitle)) {
+            return eventTitle;
+        }
+        return "리뷰";
+    }
+
+    private static boolean isPlaceholderReviewTitle(String title) {
+        if (title == null || title.isBlank()) {
+            return true;
+        }
+        String normalized = title.trim();
+        return "임시 포스팅".equals(normalized) || "임시포스팅".equals(normalized);
+    }
+
+    private UserPostHistoryItemDto toRecruitmentHistoryItem(GroupPost post, Long userId) {
+        String title = post.getTitle() != null && !post.getTitle().isBlank()
+                ? post.getTitle().trim()
+                : "동행 모집";
+        String summary = firstNonBlank(post.getContent(), post.getEvent(), post.getLocation());
+        boolean isAuthor = post.getAuthor() != null
+                && post.getAuthor().getId() != null
+                && post.getAuthor().getId().equals(userId);
+
+        return UserPostHistoryItemDto.builder()
+                .category("RECRUITMENT")
+                .categoryLabel(isAuthor ? "모집" : "참여")
+                .postId(post.getId())
+                .title(title)
+                .summary(truncate(summary, 120))
+                .createdAt(resolveRecruitmentHistoryTime(userId, post))
+                .linkPath("/groups/" + post.getId())
+                .build();
+    }
+
+    private OffsetDateTime resolveRecruitmentHistoryTime(Long userId, GroupPost post) {
+        return groupParticipantRepository.findByUser_IdAndGroupPost_Id(userId, post.getId())
+                .map(GroupParticipant::getJoinedAt)
+                .map(MiniHomeService::toOffsetDateTime)
+                .orElseGet(() -> resolveGroupHistoryTime(post));
+    }
+
+    private static OffsetDateTime toOffsetDateTime(LocalDateTime localDateTime) {
+        if (localDateTime == null) {
+            return null;
+        }
+        return localDateTime.atOffset(ZoneOffset.ofHours(9));
+    }
+
+    private static OffsetDateTime resolveGroupHistoryTime(GroupPost post) {
+        if (post.getMeetingDate() != null && !post.getMeetingDate().isBlank()) {
+            String time = post.getMeetingTime() != null && !post.getMeetingTime().isBlank()
+                    ? post.getMeetingTime().trim()
+                    : "00:00";
+            try {
+                return OffsetDateTime.parse(post.getMeetingDate().trim() + "T" + time + ":00+09:00");
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        long id = post.getId() != null ? post.getId() : 0L;
+        return OffsetDateTime.parse("2024-01-01T00:00:00+09:00").plusSeconds(id);
+    }
+
+    private static String normalizePostHistoryCategory(String category) {
+        if (category == null || category.isBlank()) return "ALL";
+        String upper = category.trim().toUpperCase();
+        return switch (upper) {
+            case "REVIEW", "REVIEWS", "리뷰" -> "REVIEW";
+            case "RECRUITMENT", "GROUP", "모집", "모집글" -> "RECRUITMENT";
+            default -> "ALL";
+        };
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) return null;
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value.trim();
+        }
+        return null;
+    }
+
+    private static String truncate(String text, int max) {
+        if (text == null) return null;
+        String trimmed = text.trim();
+        if (trimmed.length() <= max) return trimmed;
+        return trimmed.substring(0, max - 1) + "…";
+    }
 
     public MiniHomeResponseDto getMiniHome(Long userId) {
-        requireUserId(userId);
-        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
-                .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
+        return getMiniHome(userId, null);
+    }
+
+    public MiniHomeResponseDto getMiniHome(Long userId, Long viewerUserId) {
+        MiniHome miniHome = requireViewableMiniHome(userId, viewerUserId);
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
         return MiniHomeResponseDto.from(miniHome, cat);
+    }
+
+    /** 미니홈 존재 확인 — CatTower·방명록·방문자 등 공통 */
+    public MiniHome requireViewableMiniHome(Long ownerUserId, Long viewerUserId) {
+        requireUserId(ownerUserId);
+        return miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(ownerUserId)
+                .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + ownerUserId));
     }
 
     @Transactional
@@ -139,7 +381,7 @@ public class MiniHomeService {
         } else {
             seedStarterItems(userId);
         }
-        return getMiniHomePage(userId);
+        return getMiniHomePage(userId, userId);
     }
 
     @Transactional
@@ -152,7 +394,6 @@ public class MiniHomeService {
 
         if (req.getDescription() != null) miniHome.setDescription(req.getDescription());
         if (req.getThemeCode() != null) miniHome.setThemeCode(req.getThemeCode());
-        if (req.getIsPublic() != null) miniHome.setIsPublic(req.getIsPublic());
 
         miniHomeRepository.save(miniHome);
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
@@ -160,10 +401,11 @@ public class MiniHomeService {
     }
 
     public MiniHomePageResponseDto getMiniHomePage(Long userId) {
-        requireUserId(userId);
+        return getMiniHomePage(userId, null);
+    }
 
-        MiniHome miniHome = miniHomeRepository.findFirstByUserIdOrderByMiniHomeIdAsc(userId)
-                .orElseThrow(() -> new MiniHomeNotFoundException("미니홈피가 없습니다. userId=" + userId));
+    public MiniHomePageResponseDto getMiniHomePage(Long userId, Long viewerUserId) {
+        MiniHome miniHome = requireViewableMiniHome(userId, viewerUserId);
         GoCat cat = goCatRepository.findByMiniHomeId(miniHome.getMiniHomeId()).orElse(null);
 
         List<ActivityLog> activities = activityLogRepository.findByUserIdOrderByCreateAtDesc(
@@ -621,6 +863,41 @@ public class MiniHomeService {
                 state.put("accessoryItemCode", req.getAccessoryItemCode().trim().toLowerCase());
             }
         }
+        if (req.getRoomDecorItems() != null) {
+            state.put("roomDecorItems", serializeRoomDecorItems(req.getRoomDecorItems()));
+        }
+    }
+
+    private static List<Map<String, Object>> serializeRoomDecorItems(
+            List<com.gorong.backend.domain.minihome.dto.RoomDecorItemDto> items
+    ) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        java.util.Set<String> seenTypes = new java.util.HashSet<>();
+        java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (com.gorong.backend.domain.minihome.dto.RoomDecorItemDto item : items) {
+            if (item == null || item.getType() == null || item.getType().isBlank()) continue;
+            String type = item.getType().trim().toLowerCase();
+            if (!type.matches("plant|frame|lamp|sofa|rug|toy") || seenTypes.contains(type)) continue;
+            seenTypes.add(type);
+            String id = item.getId() != null && !item.getId().isBlank()
+                    ? item.getId().trim()
+                    : type + "-" + System.currentTimeMillis();
+            double x = item.getX() != null ? clampDecorCoord(item.getX()) : 50.0;
+            double y = item.getY() != null ? clampDecorCoord(item.getY()) : 50.0;
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", id);
+            row.put("type", type);
+            row.put("x", x);
+            row.put("y", y);
+            out.add(row);
+        }
+        return out;
+    }
+
+    private static double clampDecorCoord(double value) {
+        return Math.round(Math.min(95.0, Math.max(5.0, value)) * 10.0) / 10.0;
     }
 
     private static Map<String, Object> defaultAppearance() {

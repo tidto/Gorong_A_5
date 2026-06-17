@@ -111,9 +111,8 @@ export function storedToDecorDraft(stored: StoredEquippedItems): Record<SlotType
 
 export function decorDraftToStored(draft: Record<SlotType, DecorItem | null>): StoredEquippedItems {
   const stored = emptyStoredEquipped();
-  const safe = sanitizeEquipDraft(draft);
   for (const slot of GOCAT_SLOTS) {
-    const item = safe[slot];
+    const item = draft[slot];
     if (!item) continue;
     const catalog = findCatalogItem(item.itemId, item.itemCode);
     const imageUrl = item.imageUrl?.trim() || catalog?.imageUrl;
@@ -150,6 +149,42 @@ function draftHasAny(draft: Record<SlotType, DecorItem | null>): boolean {
   return GOCAT_SLOTS.some((s) => draft[s]);
 }
 
+/** DB activeEquips + appearanceState(itemCode) — 3D·방 표시용 최신 장착 */
+const APPEARANCE_SLOT_KEYS: Record<SlotType, string[]> = {
+  HEAD: ["headItemCode", "headItem"],
+  FACE: ["faceItemCode"],
+  NECK: ["neckItemCode"],
+};
+
+function appearanceSlotOverride(
+  appearanceState: Record<string, unknown> | null | undefined,
+  slot: SlotType,
+  fromAppearance: Record<SlotType, DecorItem | null>
+): DecorItem | null | undefined {
+  if (!appearanceState) return undefined;
+  if (!APPEARANCE_SLOT_KEYS[slot].some((key) => key in appearanceState)) return undefined;
+  return fromAppearance[slot] ?? null;
+}
+
+export function mergeEquipDraftFromSources(
+  pageEquips?: EquipItem[] | null,
+  appearanceState?: Record<string, unknown> | null
+): Record<SlotType, DecorItem | null> {
+  const draft = draftFromEquips(pageEquips);
+  const fromAppearance = equipDraftFromAppearanceState(appearanceState);
+  for (const slot of GOCAT_SLOTS) {
+    const override = appearanceSlotOverride(appearanceState, slot, fromAppearance);
+    if (override !== undefined) {
+      draft[slot] = override;
+      continue;
+    }
+    if (fromAppearance[slot]) {
+      draft[slot] = fromAppearance[slot];
+    }
+  }
+  return draft;
+}
+
 export function loadEquippedDecorDraft(
   pageEquips?: EquipItem[] | null,
   appearanceState?: Record<string, unknown> | null,
@@ -160,20 +195,20 @@ export function loadEquippedDecorDraft(
   const ownedItems = options?.ownedItems ?? [];
 
   const finalize = (draft: Record<SlotType, DecorItem | null>) =>
-    useLocalStorage
-      ? sanitizeEquipDraft(draft, ownedItems, growthStage)
-      : sanitizeEquipDraftForDisplay(draft, growthStage);
+    sanitizeEquipDraft(draft, ownedItems, growthStage);
+
+  const merged = mergeEquipDraftFromSources(pageEquips, appearanceState);
+  if (draftHasAny(merged)) {
+    const finalized = finalize(merged);
+    if (useLocalStorage) saveStoredEquipped(finalized);
+    return finalized;
+  }
 
   if (useLocalStorage && hasStoredEquippedState()) {
     return finalize(storedToDecorDraft(loadStoredEquipped()));
   }
 
-  const fromAppearance = equipDraftFromAppearanceState(appearanceState);
-  if (draftHasAny(fromAppearance)) {
-    return finalize(fromAppearance);
-  }
-
-  return finalize(draftFromEquips(pageEquips));
+  return finalize(merged);
 }
 
 export function activeEquipsFromStoredOrDraft(
@@ -185,11 +220,13 @@ export function activeEquipsFromStoredOrDraft(
 export function ownerEquipPreviewFromPage(
   pageEquips?: EquipItem[] | null,
   appearanceState?: Record<string, unknown> | null,
-  growthStage: GrowthStage = "BASIC"
+  growthStage: GrowthStage = "BASIC",
+  ownedItems: UserItem[] = []
 ): EquipPreview {
   const draft = loadEquippedDecorDraft(pageEquips, appearanceState, {
     useLocalStorage: false,
     growthStage,
+    ownedItems,
   });
-  return normalizeEquipPreview(equipPreviewFromDraft(draft));
+  return normalizeEquipPreview(equipPreviewFromDraft(draft, ownedItems, growthStage));
 }

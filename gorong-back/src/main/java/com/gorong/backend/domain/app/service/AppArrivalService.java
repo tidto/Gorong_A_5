@@ -18,6 +18,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AppArrivalService {
 
+    // 소비자 GPS 오차와 서버 계산 차이를 흡수하기 위한 허용치
+    private static final double GEOLOCATION_TOLERANCE_METERS = 100.0;
+
     private final JdbcTemplate jdbcTemplate;
     private final AppVenueService appVenueService;
     private final VenueArrivalRecordRepository venueArrivalRecordRepository;
@@ -29,10 +32,11 @@ public class AppArrivalService {
         User user = resolveCurrentUser(authentication);
         String userEmail = user != null ? user.getEmail() : "unknown";
         String sql = """
-            SELECT ST_Distance(
-                ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
-                ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography
-            ) as distance
+            SELECT 6371000 * 2 * ASIN(SQRT(
+                POWER(SIN(RADIANS(? - ?) / 2), 2) +
+                COS(RADIANS(?)) * COS(RADIANS(?)) *
+                POWER(SIN(RADIANS(? - ?) / 2), 2)
+            )) AS distance
             """;
 
         try {
@@ -45,33 +49,35 @@ public class AppArrivalService {
             Double distance = jdbcTemplate.queryForObject(
                     sql,
                     Double.class,
-                    lng,
-                    lat,
-                    venueGeo.lng(),
-                    venueGeo.lat()
+                    lat, venueGeo.lat(),
+                    venueGeo.lat(), lat,
+                    lng, venueGeo.lng()
             );
 
             if (distance == null) {
                 return false;
             }
 
-            boolean verified = distance <= venueGeo.radius();
+            double effectiveRadius = venueGeo.radius() + GEOLOCATION_TOLERANCE_METERS;
+            boolean verified = distance <= effectiveRadius;
             log.info("도착 인증 요청 - venueId: {}, lat: {}, lng: {}, user: {}",
                     normalizedVenueId, lat, lng, userEmail);
-            log.info("도착 인증 거리 계산 - venueId={}, user={}, distance={}m, radius={}m, verified={}",
-                    normalizedVenueId, userEmail, Math.round(distance), venueGeo.radius(), verified);
+            log.info("도착 인증 거리 계산 - venueId={}, user={}, distance={}m, radius={}m, tolerance={}m, effectiveRadius={}m, verified={}",
+                    normalizedVenueId, userEmail, Math.round(distance), venueGeo.radius(), GEOLOCATION_TOLERANCE_METERS, Math.round(effectiveRadius), verified);
             if (verified && user != null) {
-                venueArrivalRecordRepository.findByUserIdAndVenueId(user.getId(), normalizedVenueId)
-                        .ifPresentOrElse(record -> {
-                            venueArrivalRecordRepository.save(record);
-                        }, () -> venueArrivalRecordRepository.save(VenueArrivalRecord.builder()
-                                .userId(user.getId())
-                                .venueId(normalizedVenueId)
-                                .build()));
+                boolean alreadyRecorded = venueArrivalRecordRepository
+                        .existsByUserIdAndVenueId(user.getId(), normalizedVenueId);
+                if (!alreadyRecorded) {
+                    venueArrivalRecordRepository.save(VenueArrivalRecord.builder()
+                            .userId(user.getId())
+                            .venueId(normalizedVenueId)
+                            .build());
+                    log.info("[ArrivalRecord] 도착 기록 저장 완료 - userId={}, venueId={}", user.getId(), normalizedVenueId);
+                }
             }
             return verified;
         } catch (Exception e) {
-            log.error("도착 인증 실패: {}", e.getMessage());
+            log.error("도착 인증 실패 - venueId={}, user={}, message={}", normalizedVenueId, userEmail, e.getMessage(), e);
             return false;
         }
     }

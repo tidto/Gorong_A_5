@@ -15,14 +15,17 @@ export type TrailHistoryEntry = {
   pointCount: number
   serverSaved: boolean
   localSaved: boolean
+  trailArtUrl?: string   // S3에 업로드된 트레일 아트 이미지 URL
 }
 
 interface TrailStore {
   trail: Coordinate[]
   isRecording: boolean
   startedAt: number | null
-  startRecording: () => Promise<void>
-  stopRecording: (reason?: StopReason, venueId?: string | null) => Promise<void>
+  recordingVenueId: string | null
+  startRecording: (venueId?: string | null) => Promise<void>
+  stopRecording: (reason?: StopReason, venueId?: string | null, trailArtUrl?: string) => Promise<void>
+  setRecordingVenueId: (venueId: string | null) => void
 }
 
 let subscription: Location.LocationSubscription | null = null
@@ -46,12 +49,31 @@ export const useTrailStore = create<TrailStore>((set) => ({
   trail: [],
   isRecording: false,
   startedAt: null,
+  recordingVenueId: null,
 
-  startRecording: async () => {
+  startRecording: async (venueId = null) => {
     const { status } = await Location.requestForegroundPermissionsAsync()  // 권한 체크도 추가 (버그 6 해결)
     if (status !== 'granted') return
 
-    set({ trail: [], isRecording: true, startedAt: Date.now() })
+    set({
+      trail: [],
+      isRecording: true,
+      startedAt: Date.now(),
+      recordingVenueId: venueId ?? null,
+    })
+
+    try {
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      set({
+        trail: [{
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        }],
+      })
+    } catch (error) {
+      console.warn('현재 위치 초기화 실패:', error)
+    }
+
     subscription = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.High, distanceInterval: 5 },
       ({ coords }) => {
@@ -72,7 +94,7 @@ export const useTrailStore = create<TrailStore>((set) => ({
     }, MAX_RECORDING_MS)
   },
 
-  stopRecording: async (reason = 'manual', venueId) => {
+  stopRecording: async (reason = 'manual', venueId, trailArtUrl) => {
     subscription?.remove()
     subscription = null
     if (maxDurationTimer) {
@@ -83,11 +105,8 @@ export const useTrailStore = create<TrailStore>((set) => ({
     const snapshot = useTrailStore.getState().trail
     const startedAt = useTrailStore.getState().startedAt ?? Date.now()
     const endedAt = Date.now()
-    set({ isRecording: false, startedAt: null })
-
-    if (snapshot.length < 2) return
-
-    const resolvedVenueId = venueId ?? 'UNKNOWN_VENUE'
+    const resolvedVenueId = venueId ?? useTrailStore.getState().recordingVenueId ?? 'UNKNOWN_VENUE'
+    set({ isRecording: false, startedAt: null, recordingVenueId: null })
     let serverSaved = false
 
     try {
@@ -113,9 +132,14 @@ export const useTrailStore = create<TrailStore>((set) => ({
         pointCount: snapshot.length,
         serverSaved,
         localSaved: true,
+        trailArtUrl,
       }, snapshot)
     } catch (error) {
       console.error('트레일 히스토리 저장 실패:', error)
     }
   },
+
+  setRecordingVenueId: (venueId) => set((state) => (
+    state.isRecording ? { recordingVenueId: venueId } : state
+  )),
 }))

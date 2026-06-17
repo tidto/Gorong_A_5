@@ -36,7 +36,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   지도: undefined
   채팅: undefined
-  트레일: undefined
+  발자국: undefined
   모임: undefined
   신고: undefined
 }
@@ -104,9 +104,9 @@ export function MainNavigator() {
         }}
       />
 
-      {/* 트레일 — 동선 기록 보관함 */}
+      {/* 발자국 — 동선 기록 보관함 */}
       <MainTab.Screen
-        name="트레일"
+        name="발자국"
         component={TrailScreen}
         options={{
           tabBarIcon: ({ color }) => (

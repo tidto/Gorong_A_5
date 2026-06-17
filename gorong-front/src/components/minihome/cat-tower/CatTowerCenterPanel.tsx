@@ -1,17 +1,23 @@
-import { memo, type ReactNode } from "react";
-import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
+import { lazy, memo, Suspense, type ReactNode } from "react";
+import type { UserPostHistoryItem } from "../../../api/minihome/miniHomeApi";
+import type { GalleryItem } from "../../../types/minihome/minihome";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import type { GrowthStage } from "../../../utils/minihome/growth/growth";
 import type { RoomBackgroundId } from "../../../utils/minihome/cat-tower/catTowerRoomBackground";
 import type { RoomDecorItem } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
+import { CATTOWER_ROOM_3D_ENABLED } from "../../../config/catTower3d";
 import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
-import CatTowerRoomStage from "./CatTowerRoomStage";
-import CatTowerRecentActivityCards from "./CatTowerRecentActivityCards";
+import { CatTowerPostHistoryPreview } from "./CatTowerPostHistoryList";
 import CatTowerGalleryPreview from "./CatTowerGalleryPreview";
 import CatTowerGuestbookBlock from "./CatTowerGuestbookBlock";
+import CatTowerRoomStageFallback from "./CatTowerRoomStageFallback";
+import { CATTOWER_STAGE_MIN_H } from "./catTowerLayout";
+import { CATTOWER_CARD, cattowerCardHeader } from "../../../utils/minihome/cat-tower/catTowerTheme";
+
+const CatTowerRoom3DStage = lazy(() => import("./CatTowerRoom3DStage"));
+const CatTowerRoomStage = lazy(() => import("./CatTowerRoomStage"));
 
 const TAB_PREVIEW_LIMIT = 6;
-const PANEL_MIN_H = "min-h-[300px] sm:min-h-[360px]";
 
 type CatTowerCenterPanelProps = {
   panel: CatTowerCenterPanelId;
@@ -22,7 +28,12 @@ type CatTowerCenterPanelProps = {
   roomDecorItems?: RoomDecorItem[];
   catName: string;
   isReadOnly?: boolean;
-  activities: ActivityItem[];
+  /** false — 방 꾸미기/Go냥이 꾸미기 모달 등으로 메인 WebGL 일시 중지 */
+  roomActive?: boolean;
+  postHistoryItems: UserPostHistoryItem[];
+  postHistoryTotalCount: number;
+  postHistoryLoading?: boolean;
+  postHistoryError?: string | null;
   galleries: GalleryItem[];
   galleryCount: number;
   roomOwnerId: number | null | undefined;
@@ -30,7 +41,7 @@ type CatTowerCenterPanelProps = {
   isOwner: boolean;
   pageReady: boolean;
   refreshToken?: number;
-  onViewAllActivity?: () => void;
+  onViewAllPostHistory?: () => void;
   onViewAllGallery?: () => void;
 };
 
@@ -44,15 +55,13 @@ function TabPanelShell({
   children: ReactNode;
 }) {
   return (
-    <div
-      className={`flex ${PANEL_MIN_H} flex-col overflow-hidden rounded-[1.75rem] border border-orange-100/80 bg-gradient-to-b from-white/95 via-[#fffaf5] to-orange-50/30 shadow-[0_12px_36px_rgba(255,140,80,0.1)]`}
-    >
-      <div className="shrink-0 border-b border-orange-100/70 bg-gradient-to-r from-orange-50/90 to-amber-50/50 px-4 py-2.5 text-center">
-        <p className="text-[11px] font-extrabold tracking-wide text-orange-900/75">
+    <div className={`${CATTOWER_CARD} flex ${CATTOWER_STAGE_MIN_H} flex-col`}>
+      <div className={`${cattowerCardHeader()} shrink-0`}>
+        <p>
           {emoji} {title}
         </p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">{children}</div>
+      <div className="sidebar-card-body min-h-0 flex-1 overflow-y-auto !space-y-0">{children}</div>
     </div>
   );
 }
@@ -66,7 +75,11 @@ function CatTowerCenterPanel({
   roomDecorItems = [],
   catName,
   isReadOnly = false,
-  activities,
+  roomActive = true,
+  postHistoryItems,
+  postHistoryTotalCount,
+  postHistoryLoading,
+  postHistoryError,
   galleries,
   galleryCount,
   roomOwnerId,
@@ -74,27 +87,49 @@ function CatTowerCenterPanel({
   isOwner,
   pageReady,
   refreshToken = 0,
-  onViewAllActivity,
+  onViewAllPostHistory,
   onViewAllGallery,
 }: CatTowerCenterPanelProps) {
   if (panel === "room") {
+    if (!roomActive) {
+      return <CatTowerRoomStageFallback label="꾸미기 중…" />;
+    }
+
+    if (CATTOWER_ROOM_3D_ENABLED) {
+      return (
+        <Suspense fallback={<CatTowerRoomStageFallback />}>
+          <CatTowerRoom3DStage
+            growthStage={growthStage}
+            activityCount={activityCount}
+            equipped={equipped}
+            roomBackground={roomBackground}
+            roomDecorItems={roomDecorItems}
+            catName={catName}
+            readOnly={isReadOnly}
+          />
+        </Suspense>
+      );
+    }
+
     return (
-      <CatTowerRoomStage
-        growthStage={growthStage}
-        activityCount={activityCount}
-        equipped={equipped}
-        roomBackground={roomBackground}
-        roomDecorItems={roomDecorItems}
-        catName={catName}
-        interactive
-        readOnly={isReadOnly}
-      />
+      <Suspense fallback={<CatTowerRoomStageFallback />}>
+        <CatTowerRoomStage
+          growthStage={growthStage}
+          activityCount={activityCount}
+          equipped={equipped}
+          roomBackground={roomBackground}
+          roomDecorItems={roomDecorItems}
+          catName={catName}
+          interactive
+          readOnly={isReadOnly}
+        />
+      </Suspense>
     );
   }
 
   if (panel === "gallery") {
     return (
-      <TabPanelShell title="갤러리" emoji="📸">
+      <TabPanelShell title={isReadOnly ? `${catName}의 갤러리` : "갤러리"} emoji="📸">
         <CatTowerGalleryPreview
           galleries={galleries}
           totalCount={galleryCount}
@@ -108,11 +143,13 @@ function CatTowerCenterPanel({
 
   if (panel === "activity") {
     return (
-      <TabPanelShell title="히스토리" emoji="📋">
-        <CatTowerRecentActivityCards
-          activities={activities.slice(0, TAB_PREVIEW_LIMIT)}
-          totalCount={activities.length}
-          onViewAll={onViewAllActivity}
+      <TabPanelShell title={isReadOnly ? `${catName}의 히스토리` : "히스토리"} emoji="📝">
+        <CatTowerPostHistoryPreview
+          items={postHistoryItems}
+          totalCount={postHistoryTotalCount}
+          loading={postHistoryLoading}
+          error={postHistoryError}
+          onViewAll={onViewAllPostHistory}
           embedded
         />
       </TabPanelShell>
@@ -120,7 +157,7 @@ function CatTowerCenterPanel({
   }
 
   return (
-    <TabPanelShell title="방명록" emoji="✉️">
+    <TabPanelShell title={isReadOnly ? `${catName}의 방명록` : "방명록"} emoji="✉️">
       <CatTowerGuestbookBlock
         catName={catName}
         roomOwnerId={roomOwnerId}

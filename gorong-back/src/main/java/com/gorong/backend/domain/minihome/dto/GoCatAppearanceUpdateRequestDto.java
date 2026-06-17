@@ -1,8 +1,11 @@
 package com.gorong.backend.domain.minihome.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.List;
 
 /**
  * GO_CAT.appearance_state JSON 일부 필드만 갱신합니다.
@@ -32,6 +35,9 @@ public class GoCatAppearanceUpdateRequestDto {
 
     /** @deprecated face/neck/badge로 분리 */
     private String accessoryItemCode;
+
+    @Valid
+    private List<RoomDecorItemDto> roomDecorItems;
 
     public void setRoomBackground(String roomBackground) {
         this.roomBackground = roomBackground == null ? null : roomBackground.trim().toUpperCase();

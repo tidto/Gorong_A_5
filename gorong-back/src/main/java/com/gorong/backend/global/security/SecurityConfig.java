@@ -40,7 +40,7 @@ public class SecurityConfig {
 
                         // 💡 카카오/네이버 전용 주소 삭제.
                         // 프론트엔드와 맞춰서 v1 로그인/회원가입 API 주소로 수정했습니다.
-                        .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup").permitAll()
+                        .requestMatchers("/api/public/**", "/api/v1/users/login", "/api/v1/users/signup", "/api/v1/app/arrivals/test").permitAll()
                         // 주소popup
                         .requestMatchers("/api/v1/juso/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
@@ -66,6 +66,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/public-chat/**").permitAll()
                         //행사 참여 이력 API
                         .requestMatchers("/api/event-participation/**").authenticated()
+                                       
                                        
                         // anyRequest는 항상 마지막
                         .anyRequest().authenticated() // 나머지는 전부 토큰(Firebase) 있어야 함

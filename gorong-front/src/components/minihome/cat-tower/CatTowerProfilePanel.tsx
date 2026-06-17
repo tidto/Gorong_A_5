@@ -1,113 +1,122 @@
+import { lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import GrowthStageBadge from "../growth/GrowthStageBadge";
-import CatTowerDailyQuote from "./CatTowerDailyQuote";
-import CatTowerParticipatingEvents from "./CatTowerParticipatingEvents";
+import CatTowerProfileAvatar from "./CatTowerProfileAvatar";
+import { pickDailyQuote } from "../../../utils/minihome/cat-tower/catTowerPresentation";
+import { CATTOWER_CARD, cattowerCardHeader } from "../../../utils/minihome/cat-tower/catTowerTheme";
+const CatTowerParticipatingEvents = lazy(() => import("./CatTowerParticipatingEvents"));
 
 type CatTowerProfilePanelProps = {
   nickname: string;
   catName: string;
   growth: GrowthState;
-  isPublic: boolean;
   galleryCount?: number;
   loading?: boolean;
   showParticipatingEvents?: boolean;
+  guestView?: boolean;
   refreshToken?: number;
 };
 
-/** 왼쪽 — 싸이월드/동물농장 스타일 프로필 카드 */
+/** 왼쪽 — Go냥이 프로필 카드 + 오늘의 한마디 */
 export default function CatTowerProfilePanel({
   nickname,
   catName,
   growth,
-  isPublic,
   galleryCount = 0,
   loading,
   showParticipatingEvents = false,
+  guestView = false,
   refreshToken = 0,
 }: CatTowerProfilePanelProps) {
+  const dailyQuote = pickDailyQuote(catName);
+
   return (
-    <aside className="flex flex-col gap-3">
-      <motion.div
-        whileHover={{ y: -2 }}
-        transition={{ type: "spring", stiffness: 300, damping: 24 }}
-        className="overflow-hidden rounded-3xl border border-emerald-100/90 bg-gradient-to-b from-emerald-50/95 via-white to-rose-50/30 shadow-[0_4px_20px_rgba(16,185,129,0.1)] transition-shadow duration-300 hover:shadow-[0_8px_28px_rgba(16,185,129,0.14)]"
-      >
-        <div className="border-b border-emerald-100/70 bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-2.5 text-center text-[11px] font-extrabold tracking-wide text-white">
-          🌿 MY Go냥이 프로필
+    <aside className="sidebar-column sidebar-column-compact">
+      <motion.div transition={{ type: "spring", stiffness: 300, damping: 24 }} className={CATTOWER_CARD}>
+        <div className={cattowerCardHeader(guestView)}>
+          {guestView ? `👀 ${catName} 프로필` : "MY Go냥이 프로필"}
         </div>
 
-        <div className="space-y-4 p-4">
-          <div className="text-center">
-            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full border-2 border-orange-200/80 bg-gradient-to-br from-orange-50 to-amber-100 text-3xl shadow-[0_4px_14px_rgba(255,140,80,0.18)]">
-              🐱
-              <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-white bg-emerald-400 text-[8px] shadow-sm">
-                ★
-              </span>
+        <div className="sidebar-card-body !space-y-2.5 !p-2.5">
+          <div className="flex items-center gap-2.5">
+            <CatTowerProfileAvatar loading={loading} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[10px] font-bold text-slate-500">{nickname || "주인"}</p>
+              <h2 className="truncate text-base font-extrabold text-slate-900">
+                {loading ? "…" : catName}
+              </h2>
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                <GrowthStageBadge
+                  stage={growth.stage}
+                  activityCount={growth.activityCount}
+                  compact
+                  glow
+                />
+                {guestView ? (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-bold text-slate-600">
+                    방문 중
+                  </span>
+                ) : null}
+              </div>
             </div>
-            <p className="mt-2 text-[10px] font-bold text-emerald-800/60">{nickname || "주인"}</p>
-            <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">
-              {loading ? "…" : catName}
-            </h2>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-1.5">
-            <GrowthStageBadge
-              stage={growth.stage}
-              activityCount={growth.activityCount}
-              compact
-              glow
-            />
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                isPublic ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
-              }`}
-            >
-              {isPublic ? "🌍 공개" : "🔒 비공개"}
-            </span>
+          <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/80 py-2">
+            <div className="text-center">
+              <p className="text-base font-extrabold tabular-nums text-primary-600">
+                {growth.stageLabel}
+              </p>
+              <p className="text-[10px] font-semibold text-slate-500">성장</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-extrabold tabular-nums text-slate-900">
+                {growth.activityCount}
+              </p>
+              <p className="text-[10px] font-semibold text-slate-500">활동</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-extrabold tabular-nums text-slate-900">{galleryCount}</p>
+              <p className="text-[10px] font-semibold text-slate-500">갤러리</p>
+            </div>
           </div>
-
-          <dl className="space-y-2 rounded-xl border border-dashed border-emerald-100 bg-emerald-50/40 px-3 py-2.5 text-xs">
-            <div className="flex justify-between">
-              <dt className="font-semibold text-emerald-900/70">성장 단계</dt>
-              <dd className="font-extrabold text-slate-800">{growth.stageLabel}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="font-semibold text-emerald-900/70">활동 횟수</dt>
-              <dd className="font-extrabold text-orange-700">{growth.activityCount}회</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="font-semibold text-emerald-900/70">갤러리</dt>
-              <dd className="font-extrabold text-slate-800">{galleryCount}개</dd>
-            </div>
-          </dl>
 
           {!growth.isMax ? (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-emerald-800/50">다음 성장까지</p>
-                <p className="text-[9px] font-bold text-orange-700/70">{growth.progressPercent}%</p>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-bold">
+                <span className="text-slate-500">다음 성장까지</span>
+                <span className="text-primary-600">{Math.round(growth.progressPercent)}%</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-orange-100/80">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-orange-100">
                 <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-orange-400 via-amber-400 to-orange-300"
+                  className="h-full rounded-full bg-primary-500"
                   initial={{ width: 0 }}
-                  animate={{ width: `${growth.progressPercent}%` }}
+                  animate={{ width: `${Math.round(growth.progressPercent)}%` }}
                   transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
                 />
               </div>
-              <p className="text-[9px] font-medium text-slate-500/80">
-                {growth.xpToNext}회 더 참여하면 성장!
-              </p>
             </div>
-          ) : null}
+          ) : (
+            <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-center text-[10px] font-bold text-amber-800">
+              🏆 최고 성장 단계
+            </p>
+          )}
+
+          <div className="border-t border-slate-100 pt-2">
+            <p className="text-[10px] font-bold text-slate-400">
+              💬 {guestView ? `${catName}의 한마디` : "오늘의 한마디"}
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-[11px] font-medium leading-snug text-slate-600">
+              {dailyQuote}
+            </p>
+          </div>
         </div>
       </motion.div>
 
-      <CatTowerDailyQuote catName={catName} />
-
       {showParticipatingEvents ? (
-        <CatTowerParticipatingEvents enabled refreshToken={refreshToken} />
+        <Suspense fallback={null}>
+          <CatTowerParticipatingEvents enabled refreshToken={refreshToken} />
+        </Suspense>
       ) : null}
     </aside>
   );

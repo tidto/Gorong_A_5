@@ -21,6 +21,7 @@ interface GroupPost {
     currentCapacity?: number
     status?: string
     event?: string
+    eventContentId?: string
     meetingDate?: string
     meetingTime?: string
     condition?: string
@@ -124,10 +125,10 @@ export default function GroupDetailPage() {
                 ? { ...prev, currentCapacity: Math.max(0, (prev.currentCapacity ?? 1) - 1) }
                 : prev
             );
-            if (post?.event) {
+            if (post?.eventContentId) {
                 try {
                     await axiosInstance.delete(`/event-participation/group/${id}`, {
-                        params: { eventContentId: post.event },
+                        params: { eventContentId: post.eventContentId },
                     });
                 } catch { /* 이력 취소 실패는 무시 */ }
             }
@@ -153,10 +154,10 @@ export default function GroupDetailPage() {
                 await addGroupSubscription(post.id, post.title);
             }
 
-            if (post?.event) {
+            if (post?.eventContentId) {
                 try {
                     await axiosInstance.post(`/event-participation/group/${id}`, {
-                        eventContentId: post.event,
+                        eventContentId: post.eventContentId,
                         eventTitle: post.title,
                     });
                 } catch { /* silent fail */ }
@@ -181,7 +182,7 @@ export default function GroupDetailPage() {
         }
         setPostReporting(true);
         try {
-            await axiosInstance.post('/api/v1/users/report', {
+            await axiosInstance.post('/v1/users/report', {
                 reportedUserId: post.author.id,
                 reason: postReportReason.trim(),
             });

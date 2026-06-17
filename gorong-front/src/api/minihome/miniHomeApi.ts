@@ -44,6 +44,13 @@ export async function getMiniHomePage(userId: number): Promise<MiniHomePage> {
   return res.data;
 }
 
+export type RoomDecorItemPayload = {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+};
+
 export type CatAppearancePayload = {
   bodyType?: string;
   pattern?: string;
@@ -56,6 +63,7 @@ export type CatAppearancePayload = {
   badgeItemCode?: string;
   /** @deprecated face/neck/badge로 분리 */
   accessoryItemCode?: string;
+  roomDecorItems?: RoomDecorItemPayload[];
 };
 
 /**
@@ -107,6 +115,65 @@ export type GoCatSetupPayload = {
   catName?: string;
 };
 
+export type MiniHomeSettingsPayload = {
+  description?: string;
+  themeCode?: string;
+};
+
+function shouldFallbackMiniHomeUpdate(status: number | undefined): boolean {
+  return status === 404 || status === 405 || status === 500;
+}
+
+async function patchOrPutMiniHome(
+  path: string,
+  payload: MiniHomeSettingsPayload
+): Promise<MiniHome> {
+  const methods: Array<"patch" | "put"> = ["patch", "put"];
+  let lastError: unknown;
+
+  for (const method of methods) {
+    try {
+      const res =
+        method === "patch"
+          ? await axiosInstance.patch(path, payload)
+          : await axiosInstance.put(path, payload);
+      return res.data as MiniHome;
+    } catch (e: unknown) {
+      lastError = e;
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status === 405) continue;
+      throw e;
+    }
+  }
+
+  throw lastError;
+}
+
+/** PATCH — 소개·테마 (/me 우선, 실패 시 /{userId} 폴백) */
+export async function updateMyMiniHome(
+  userId: number,
+  payload: MiniHomeSettingsPayload
+): Promise<MiniHome> {
+  const user = await requireAuthUser();
+  await user.getIdToken(true);
+
+  const paths = [`/minihomes/${userId}`, `/minihomes/me`];
+  let lastError: unknown;
+
+  for (const path of paths) {
+    try {
+      return await patchOrPutMiniHome(path, payload);
+    } catch (e: unknown) {
+      lastError = e;
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (shouldFallbackMiniHomeUpdate(status)) continue;
+      throw e;
+    }
+  }
+
+  throw lastError;
+}
+
 /** 미니홈·Go냥이 최초 생성 (고냥이 없을 때만) */
 export async function createMyMiniHome(payload?: GoCatSetupPayload): Promise<MiniHome> {
   await requireAuthUser();
@@ -143,6 +210,50 @@ export async function createActivity(
 export async function getUserActivities(userId: number): Promise<ActivityItem[]> {
   const page = await getMiniHomePage(userId);
   return page.activities ?? [];
+}
+
+export type PostHistoryCategory = "ALL" | "REVIEW" | "RECRUITMENT";
+
+export type UserPostHistoryItem = {
+  category: "REVIEW" | "RECRUITMENT";
+  categoryLabel: string;
+  postId: number;
+  title: string;
+  summary: string | null;
+  createdAt: string | null;
+  linkPath: string;
+};
+
+export type UserPostHistoryPage = {
+  content: UserPostHistoryItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+  reviewCount: number;
+  recruitmentCount: number;
+};
+
+/** CatTower 히스토리 — 리뷰·모집(작성/참여) */
+export async function getUserPostHistory(
+  userId: number,
+  options?: {
+    category?: PostHistoryCategory;
+    page?: number;
+    size?: number;
+  }
+): Promise<UserPostHistoryPage> {
+  await requireAuthUser();
+  const params = new URLSearchParams();
+  if (options?.category) params.set("category", options.category);
+  if (options?.page != null) params.set("page", String(options.page));
+  if (options?.size != null) params.set("size", String(options.size));
+  const query = params.toString();
+  const res = await axiosInstance.get(
+    `/minihomes/${userId}/post-history${query ? `?${query}` : ""}`
+  );
+  return res.data;
 }
 
 export async function createGallery(

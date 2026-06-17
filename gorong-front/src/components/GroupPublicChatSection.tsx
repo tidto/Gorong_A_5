@@ -214,7 +214,7 @@ function MessageRow({ msg, isMe }: { msg: PublicChatMsg; isMe: boolean }) {
         }
         setReporting(true)
         try {
-            await axiosInstance.post('/api/v1/users/report', {
+            await axiosInstance.post('/v1/users/report', {
                 reportedUserId: msg.senderId,
                 reason: reportReason.trim(),
             })

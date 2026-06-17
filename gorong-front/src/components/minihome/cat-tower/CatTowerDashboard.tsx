@@ -1,9 +1,11 @@
 import { memo, useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import { useRoomBackground } from "../../../pages/minihome/hooks/useRoomBackground";
 import { useRoomDecor } from "../../../pages/minihome/hooks/useRoomDecor";
+import { useCatTowerPostHistory } from "../../../pages/minihome/hooks/useCatTowerPostHistory";
 import { buildRoomDecorUnlockContext } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 import { useNotification } from "../../../contexts/NotificationContext";
 import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
@@ -12,14 +14,19 @@ import CatTowerCenterPanel from "./CatTowerCenterPanel";
 import CatTowerVisitorBlock from "./CatTowerVisitorBlock";
 import CatTowerViewAllModal from "./CatTowerViewAllModal";
 import CatTowerRoomDecorateModal from "./CatTowerRoomDecorateModal";
-import ActivityHistory from "../mini-home/ActivityHistory";
+import CatTowerMobileTabs from "./CatTowerMobileTabs";
 import GallerySection from "../mini-home/GallerySection";
+import { CatTowerPostHistoryModalBody } from "./CatTowerPostHistoryList";
+import {
+  CATTOWER_BADGE,
+  CATTOWER_BADGE_ACCENT,
+  CATTOWER_PAGE_HEADER,
+} from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 type CatTowerDashboardProps = {
   nickname: string;
   catName: string;
   growth: GrowthState;
-  isPublic: boolean;
   equipped: EquipPreview;
   appearanceState?: Record<string, unknown> | null;
   activities: ActivityItem[];
@@ -36,6 +43,8 @@ type CatTowerDashboardProps = {
   isOwner: boolean;
   pageReady: boolean;
   refreshToken?: number;
+  /** Go냥이 꾸미기 모달 열림 — 메인 방 WebGL 일시 중지 */
+  catDecorateOpen?: boolean;
   onDecorate: () => void;
   onBack: () => void;
   onEvents: () => void;
@@ -47,7 +56,6 @@ function CatTowerDashboard({
   nickname,
   catName,
   growth,
-  isPublic,
   equipped,
   appearanceState,
   activities,
@@ -64,15 +72,17 @@ function CatTowerDashboard({
   isOwner,
   pageReady,
   refreshToken = 0,
+  catDecorateOpen = false,
   onDecorate,
   onBack,
   onEvents,
   onRefresh,
   onReport,
 }: CatTowerDashboardProps) {
+  const navigate = useNavigate();
   const { toast } = useNotification();
   const [centerPanel, setCenterPanel] = useState<CatTowerCenterPanelId>("room");
-  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [postHistoryModalOpen, setPostHistoryModalOpen] = useState(false);
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [roomDecorateOpen, setRoomDecorateOpen] = useState(false);
 
@@ -87,7 +97,17 @@ function CatTowerDashboard({
     [growth.stage, growth.activityCount, activities]
   );
 
-  const roomDecor = useRoomDecor(canEdit ? decorUnlockContext : undefined);
+  const roomDecor = useRoomDecor({
+    unlockContext: decorUnlockContext,
+    appearanceState,
+    canEdit,
+  });
+
+  const postHistory = useCatTowerPostHistory({
+    roomOwnerId,
+    enabled: pageReady,
+    refreshToken,
+  });
 
   const placedDecorTypes = useMemo(
     () => new Set(roomDecor.items.map((item) => item.type)),
@@ -95,31 +115,62 @@ function CatTowerDashboard({
   );
 
   const handleSaveRoomBackground = useCallback(async () => {
-    const ok = await roomBg.saveBackground();
-    if (ok) {
-      toast("방 배경이 저장되었습니다.", "success");
+    const bgOk = await roomBg.saveBackground();
+    const decorOk = canEdit ? await roomDecor.saveNow() : true;
+    if (bgOk && decorOk) {
+      toast("방 꾸미기가 저장되었습니다.", "success");
       setRoomDecorateOpen(false);
+    } else if (bgOk) {
+      toast("방 배경은 저장됐지만 가구 저장에 실패했습니다.", "info");
     }
-  }, [roomBg, toast]);
+  }, [roomBg, roomDecor, canEdit, toast]);
+
+  const openPostHistoryModal = useCallback(() => {
+    setPostHistoryModalOpen(true);
+    postHistory.openModal();
+  }, [postHistory]);
+
+  const handlePostHistoryNavigate = useCallback(
+    (linkPath: string) => {
+      setPostHistoryModalOpen(false);
+      navigate(linkPath);
+    },
+    [navigate]
+  );
+  const openGalleryModal = useCallback(() => setGalleryModalOpen(true), []);
+  const openRoomDecorate = useCallback(() => setRoomDecorateOpen(true), []);
+
+  const roomActive =
+    centerPanel === "room" && !roomDecorateOpen && !catDecorateOpen;
 
   return (
     <div className="relative space-y-3">
-      <header className="relative overflow-hidden rounded-2xl border border-orange-200/60 bg-gradient-to-r from-orange-400 via-rose-400 to-emerald-400 shadow-[0_4px_20px_rgba(255,140,80,0.18)]">
-        <div className="relative flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-5">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/85">
-              {isReadOnly ? "✨ Guest MiniHome" : "✨ My MiniHome"}
+      <header className={CATTOWER_PAGE_HEADER}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-primary-600">
+              {isReadOnly ? "Guest MiniHome" : "My MiniHome"}
             </p>
-            <h1 className="text-base font-extrabold text-white drop-shadow-sm sm:text-lg">
+            <h1 className="text-lg font-extrabold text-slate-900 sm:text-xl">
               {loading ? "불러오는 중…" : `${catName}의 CatTower`}
             </h1>
+            {!loading && isReadOnly && nickname ? (
+              <p className="mt-0.5 text-xs font-medium text-slate-500">{nickname}님의 미니홈</p>
+            ) : null}
+            {!loading ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className={CATTOWER_BADGE_ACCENT}>🌱 {growth.stageLabel}</span>
+                <span className={CATTOWER_BADGE}>📋 활동 {activityCount}회</span>
+                <span className={CATTOWER_BADGE}>📸 갤러리 {galleryCount}개</span>
+              </div>
+            ) : null}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {isReadOnly && onReport ? (
               <button
                 type="button"
                 onClick={onReport}
-                className="rounded-full border border-white/40 bg-white/10 px-2 py-0.5 text-[9px] font-semibold text-white/90 backdrop-blur-sm hover:bg-white/20"
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
               >
                 신고
               </button>
@@ -128,40 +179,53 @@ function CatTowerDashboard({
               <button
                 type="button"
                 onClick={onBack}
-                className="rounded-full border border-white/50 bg-white/15 px-2.5 py-1 text-[9px] font-bold text-white backdrop-blur-sm hover:bg-white/25"
+                className="hidden rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700 hover:bg-primary-100 sm:inline-flex"
               >
                 ← 내 CatTower
               </button>
             ) : null}
-            <div className="rounded-full border border-white/35 bg-white/20 px-3 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
+            <div className="rounded-full border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-bold text-primary-700">
               {resolvingOwner ? "확인 중…" : isReadOnly ? "👀 둘러보기" : "🏡 내 공간"}
             </div>
           </div>
         </div>
       </header>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(180px,220px)_1fr_minmax(150px,180px)]">
-        <CatTowerProfilePanel
+      <div className="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
+        <div className="sidebar-column-shell order-1 lg:order-1">
+          <CatTowerProfilePanel
           nickname={nickname}
           catName={catName}
           growth={growth}
-          isPublic={isPublic}
           galleryCount={galleryCount}
           loading={loading}
           showParticipatingEvents={!isReadOnly}
+          guestView={isReadOnly}
           refreshToken={refreshToken}
         />
+        </div>
 
-        <CatTowerCenterPanel
+        <div className="order-2 flex flex-col gap-2 lg:order-2">
+          <CatTowerMobileTabs
+            activePanel={centerPanel}
+            onPanelChange={setCenterPanel}
+            disabled={busy}
+            guestView={isReadOnly}
+          />
+          <CatTowerCenterPanel
           panel={centerPanel}
           growthStage={growth.stage}
           activityCount={activityCount}
           equipped={equipped}
           roomBackground={roomBg.background}
-          roomDecorItems={canEdit ? roomDecor.items : []}
+          roomDecorItems={roomDecor.items}
           catName={catName}
           isReadOnly={isReadOnly}
-          activities={activities}
+          roomActive={roomActive}
+          postHistoryItems={postHistory.previewItems}
+          postHistoryTotalCount={postHistory.totalPostCount}
+          postHistoryLoading={postHistory.previewLoading}
+          postHistoryError={postHistory.previewError}
           galleries={galleries}
           galleryCount={galleryCount}
           roomOwnerId={roomOwnerId}
@@ -169,11 +233,13 @@ function CatTowerDashboard({
           isOwner={isOwner}
           pageReady={pageReady}
           refreshToken={refreshToken}
-          onViewAllActivity={() => setActivityModalOpen(true)}
-          onViewAllGallery={() => setGalleryModalOpen(true)}
+          onViewAllPostHistory={openPostHistoryModal}
+          onViewAllGallery={openGalleryModal}
         />
+        </div>
 
-        <CatTowerVisitorBlock
+        <div className="sidebar-column-shell order-3 lg:order-3">
+          <CatTowerVisitorBlock
           busy={busy}
           loading={loading}
           readOnly={isReadOnly}
@@ -183,7 +249,7 @@ function CatTowerDashboard({
           isOwner={isOwner}
           pageReady={pageReady}
           refreshToken={refreshToken}
-          onRoomDecorate={canEdit ? () => setRoomDecorateOpen(true) : undefined}
+          onRoomDecorate={canEdit ? openRoomDecorate : undefined}
           onCatDecorate={onDecorate}
           onBack={onBack}
           onEvents={onEvents}
@@ -191,19 +257,29 @@ function CatTowerDashboard({
           activePanel={centerPanel}
           onPanelChange={setCenterPanel}
         />
+        </div>
       </div>
 
       <CatTowerViewAllModal
-        open={activityModalOpen}
-        title="활동 기록"
-        subtitle={`총 ${activities.length}건의 활동`}
-        emoji="📋"
-        onClose={() => setActivityModalOpen(false)}
+        open={postHistoryModalOpen}
+        title="작성 글 히스토리"
+        subtitle={`리뷰 ${postHistory.modalReviewCount} · 모집·참여 ${postHistory.modalRecruitmentCount}`}
+        emoji="📝"
+        onClose={() => setPostHistoryModalOpen(false)}
       >
-        <ActivityHistory
-          activities={activities}
-          variant="full"
-          emptyMessage="아직 활동 기록이 없어요. 행사에 참여해 보세요!"
+        <CatTowerPostHistoryModalBody
+          items={postHistory.modalItems}
+          category={postHistory.modalCategory}
+          page={postHistory.modalPage}
+          totalPages={postHistory.modalTotalPages}
+          totalElements={postHistory.modalTotalElements}
+          reviewCount={postHistory.modalReviewCount}
+          recruitmentCount={postHistory.modalRecruitmentCount}
+          loading={postHistory.modalLoading}
+          error={postHistory.modalError}
+          onCategoryChange={postHistory.setModalCategory}
+          onPageChange={postHistory.setModalPage}
+          onItemNavigate={handlePostHistoryNavigate}
         />
       </CatTowerViewAllModal>
 
@@ -232,8 +308,13 @@ function CatTowerDashboard({
           growthStage={growth.stage}
           decorUnlockContext={decorUnlockContext}
           placedDecorTypes={placedDecorTypes}
+          roomDecorItems={roomDecor.items}
+          equipped={equipped}
+          activityCount={activityCount}
           onToggleDecor={roomDecor.toggleItem}
           onResetDecor={roomDecor.clearAll}
+          onMoveDecorItem={roomDecor.moveItem}
+          onRemoveDecorItem={roomDecor.removeItemById}
           onSelect={roomBg.selectBackground}
           onSave={handleSaveRoomBackground}
           onCatDecorate={onDecorate}

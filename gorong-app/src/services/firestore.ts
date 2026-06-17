@@ -153,7 +153,7 @@ export const joinGroupRoom = async (groupId: string, userId: string) => {
 
 export const markGroupGathered = async (groupId: string) => {
   const roomRef = doc(db, 'group_rooms', groupId)
-  await updateDoc(roomRef, { isGathered: true })
+  await setDoc(roomRef, { isGathered: true }, { merge: true })
 }
 
 export const subscribeGroupRoom = (

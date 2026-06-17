@@ -1,12 +1,14 @@
 import { motion } from "framer-motion";
 import { pickDailyQuote } from "../../../utils/minihome/cat-tower/catTowerPresentation";
+import { CATTOWER_CARD, cattowerCardHeader } from "../../../utils/minihome/cat-tower/catTowerTheme";
 
 type CatTowerDailyQuoteProps = {
   catName: string;
+  guestView?: boolean;
 };
 
-/** 오늘의 한마디 — 싸이월드 감성 */
-export default function CatTowerDailyQuote({ catName }: CatTowerDailyQuoteProps) {
+/** 오늘의 한마디 — 프로필 하단 카드 */
+export default function CatTowerDailyQuote({ catName, guestView = false }: CatTowerDailyQuoteProps) {
   const quote = pickDailyQuote(catName);
 
   return (
@@ -14,13 +16,14 @@ export default function CatTowerDailyQuote({ catName }: CatTowerDailyQuoteProps)
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.25, duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl border border-amber-100/80 bg-gradient-to-r from-amber-50/90 via-white to-rose-50/70 px-3.5 py-2.5 shadow-sm"
+      className={CATTOWER_CARD}
     >
-      <span className="pointer-events-none absolute -right-1 -top-1 text-lg opacity-25">💬</span>
-      <p className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700/70">
-        오늘의 한마디
-      </p>
-      <p className="mt-0.5 text-[10px] font-semibold leading-relaxed text-slate-700/90">{quote}</p>
+      <div className={cattowerCardHeader(guestView)}>
+        <p>💬 {guestView ? `${catName}의 한마디` : "오늘의 한마디"}</p>
+      </div>
+      <div className="sidebar-card-body !space-y-0">
+        <p className="text-xs font-semibold leading-relaxed text-slate-700">{quote}</p>
+      </div>
     </motion.div>
   );
 }
