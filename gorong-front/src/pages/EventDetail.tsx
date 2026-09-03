@@ -113,6 +113,7 @@ export default function EventDetail() {
   const [reviewImages,       setReviewImages]       = useState<ImagePayload[]>([]);
   const [savingReview,       setSavingReview]       = useState(false);
   const [uploadingImage,     setUploadingImage]     = useState(false);
+  const [pendingImages,      setPendingImages]      = useState<File[]>([]);
 
   const authorName = auth.user?.nickname?.trim() || auth.user?.email?.trim() || '익명';
   const currentUserId = (() => {
@@ -281,25 +282,7 @@ export default function EventDetail() {
       showToast('이미지는 최대 5장까지 첨부할 수 있습니다.', 'error');
       return;
     }
-    setUploadingImage(true);
-    try {
-      const uploaded: ImagePayload[] = [];
-      for (const file of Array.from(files)) {
-        const optimized = await optimizeImageFile(file);
-        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true);
-        uploaded.push({
-          imageUrl: response.fileUrl,
-          originalImgName: file.name,
-          saveImgName: String(response.key).split('/').pop() ?? file.name,
-        });
-      }
-      setReviewImages((current) => [...current, ...uploaded]);
-    } catch (error) {
-      console.error('리뷰 이미지 업로드 실패:', error);
-      showToast('이미지 업로드에 실패했습니다.', 'error');
-    } finally {
-      setUploadingImage(false);
-    }
+    setPendingImages((current) => [...Array.from(current), ...Array.from(files)]);
   };
 
   // ── 간편 리뷰 저장 ───────────────────────────────────────────────
@@ -309,20 +292,50 @@ export default function EventDetail() {
       showToast('한 줄 리뷰와 발자국 평점을 입력해 주세요.', 'error');
       return;
     }
+    // Upload pending images to S3 before saving
+    let uploadedImages: ImagePayload[] = [];
+    if (pendingImages.length > 0) {
+      setUploadingImage(true);
+      try {
+        for (const file of Array.from(pendingImages)) {
+          const optimized = await optimizeImageFile(file);
+          const response = await uploadFileToS3(optimized, 'POST_PHOTO', true);
+          uploadedImages.push({
+            imageUrl: response.fileUrl,
+            originalImgName: file.name,
+            saveImgName: String(response.key).split('/').pop() ?? file.name,
+          });
+        }
+      } catch (error) {
+        console.error('이미지 업로드 실패:', error);
+        showToast('이미지 업로드에 실패했습니다.', 'error');
+        setUploadingImage(false);
+        return;
+      } finally {
+        setUploadingImage(false);
+      }
+    }
     setSavingReview(true);
     try {
+      const newReviewImages = [...reviewImages, ...uploadedImages];
       const saved = await saveQuickReview(Number(id), {
         reviewText: reviewText.trim(),
         rating,
         authorName,
-        images: reviewImages,
+        images: newReviewImages,
       });
       setReviewMetaEditable(saved.reviewMetaEditable);
       await loadReviews(0);
       showToast('간편 리뷰가 저장되었습니다.', 'success');
+      // Reset states after successful save
+      setReviewImages([]);
+      setRating(0);
+      setReviewText('');
+      setPendingImages([]);
     } catch (error: any) {
       console.error('간편 리뷰 저장 실패:', error);
       showToast(error?.response?.data?.error || '간편 리뷰 저장 중 오류가 발생했습니다.', 'error');
+      // pendingImages remain - user can re-select or re-save
     } finally {
       setSavingReview(false);
     }
@@ -788,20 +801,50 @@ export default function EventDetail() {
                         onChange={(e) => void handleImageUpload(e.target.files)}
                     />
                   </label>
-                  {reviewImages.length > 0 && (
+                  const existingImageCount = reviewImages.length;
+                  const hasExistingImages = existingImageCount > 0;
+
+                  {hasExistingImages || pendingImages.length > 0 && (
                       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {reviewImages.map((image, index) => (
-                            <div key={`${image.imageUrl}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
-                              <img src={image.imageUrl} alt={`리뷰 이미지 ${index + 1}`} className="h-24 w-full object-cover" />
-                              <button
-                                  type="button"
-                                  className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white"
-                                  onClick={() => setReviewImages((curr) => curr.filter((_, i) => i !== index))}
-                              >
-                                삭제
-                              </button>
-                            </div>
-                        ))}
+                        {existingImageCount > 0 && (
+                          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            {reviewImages.map((image, index) => (
+                                <div key={`${image.imageUrl}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
+                                  <img src={image.imageUrl} alt={`리뷰 이미지 ${index + 1}`} className="h-24 w-full object-cover" />
+                                  <button
+                                      type="button"
+                                      className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white"
+                                      onClick={() => setReviewImages((curr) => curr.filter((_, i) => i !== index))}
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                            ))}
+                          </div>
+                        )}
+                        {pendingImages.length > 0 && (
+                          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            {pendingImages.map((file, index) => {
+                              const previewUrl = URL.createObjectURL(file);
+                              return (
+                                <div key={`pending-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
+                                  <img src={previewUrl} alt={`선택한 이미지 ${index + 1}`} className="h-24 w-full object-cover" />
+                                  <button
+                                      type="button"
+                                      className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white"
+                                      onClick={() => {
+                                        setPendingImages((curr) => curr.filter((_, i) => i !== index));
+                                        URL.revokeObjectURL(previewUrl);
+                                      }}
+                                  >
+                                    삭제
+                                  </button>
+                                  <p className="text-xs text-slate-400 mt-1">선택된 이미지</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                   )}
                 </div>
