@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Primary 버튼 */
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg shadow px-4 py-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary 버튼 */
+  .btn-secondary {
+    @apply bg-secondary-500 hover:bg-secondary-600 text-white font-medium rounded-lg shadow px-4 py-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Icon 버튼 */
+  .btn-icon {
+    @apply inline-flex items-center justify-center rounded-lg p-2 hover:bg-gray-100 transition-colors duration-200;
+  }
+
+  /* 카드 */
+  .card {
+    @apply bg-white rounded-xl shadow p-4 hover:shadow-lg transition-shadow duration-200;
+  }
+
+  /* 지도 영역 */
+  .map-container {
+    @apply w-full h-64 rounded-xl overflow-hidden shadow;
+  }
+
+  /* 입력 필드 */
+  .input-field {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+
+  /* 결과 영역 - 성공 */
+  .result-success {
+    @apply bg-green-50 border border-green-200 text-green-800 p-3 rounded-lg;
+  }
+
+  /* 결과 영역 - 에러 */
+  .result-error {
+    @apply bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg;
+  }
+
+  /* 결과 영역 - 정보 */
+  .result-info {
+    @apply bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-lg;
+  }
+
+  /* 결과 영역 - 경고 */
+  .result-warning {
+    @apply bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-lg;
+  }
+
+  /* 아이콘 라벨 */
+  .icon-label {
+    @apply inline-flex items-center gap-2 px-2 py-1 bg-gray-100 rounded-full text-sm text-gray-700;
+  }
+
+  /* CatTower 좌·우 사이드바 + 중앙 패널 카드 공통 */
+  .sidebar-column-shell {
+    @apply box-border w-full min-w-0 max-w-full lg:w-[240px] lg:max-w-[240px] lg:shrink-0;
+  }
+
+  .sidebar-column {
+    @apply box-border flex w-full min-w-0 max-w-full flex-col items-stretch gap-5;
+  }
+
+  .sidebar-column-compact {
+    @apply gap-3;
+  }
+
+  .sidebar-column > * {
+    @apply box-border w-full min-w-0 max-w-full self-stretch;
+  }
+
+  .sidebar-card {
+    @apply box-border w-full max-w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm;
+  }
+
+  .sidebar-card-header {
+    @apply box-border flex items-center gap-2 border-b px-3 py-2.5 text-center text-xs font-extrabold tracking-wide text-white;
+  }
+
+  .sidebar-card-body {
+    @apply box-border space-y-2.5 p-3;
+  }
+
+  .sidebar-card-actions-grid {
+    @apply grid w-full grid-cols-2 gap-2;
+  }
+
+  .sidebar-action-btn {
+    @apply box-border flex w-full items-center justify-center gap-1.5 rounded-xl border bg-white py-2 text-[11px] font-bold shadow-sm transition hover:shadow-md;
+  }
+}
+
+@layer utilities {
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* 헤더 숨김 클래스 */
+body.hide-header header {
+  display: none;
+}
+
+/* 애니메이션 클래스 */
+.animate-character-reaction {
+  animation: reaction 0.6s ease-in-out;
+}
+
+.animate-fade-in {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+@keyframes reaction {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Go냥이 Rive — canvas 노란/회색 아트보드 배경 숨김 */
+.rive-cat-player,
+.rive-cat-player canvas,
+.riveLayer,
+.riveLayer canvas,
+.riveLayer__canvas,
+.riveLayer__canvas canvas {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* 반응형 개선 */
+@media (max-width: 640px) {
+  .card {
+    @apply p-3;
+  }
+}

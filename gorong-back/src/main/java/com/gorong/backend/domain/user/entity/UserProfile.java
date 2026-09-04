@@ -1,0 +1,78 @@
+package com.gorong.backend.domain.user.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
+import org.locationtech.jts.geom.Point;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+
+// 1. 클래스 레벨의 @Builder 와 @AllArgsConstructor 를 삭제했습니다!
+@Entity
+@Table(name = "user_profiles")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class UserProfile {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "profile_id")
+    private Long id;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    private User user;
+
+    @Column(name = "nickname", nullable = false, columnDefinition = "TEXT")
+    private String nickname;
+
+    @Column(name = "profile_image_url", columnDefinition = "TEXT")
+    private String profileImageUrl;
+
+    @Column(name = "gorong_hz", columnDefinition = "TEXT")
+    private String gorongHz;
+
+    @Column(name = "base_address", columnDefinition = "TEXT")
+    private String baseAddress;
+
+    @Column(name = "base_location", columnDefinition = "geometry(Point, 4326)")
+    private Point baseLocation;
+
+    // @Builder.Default 와 = 38.5 를 삭제했습니다! (생성자에서 알아서 해주니까요)
+    @Column(name = "purr_temperature", nullable = false, columnDefinition = "numeric(3,1)")
+    private Double purrTemperature;
+
+    @Column(name = "total_walk_distance", nullable = false, precision = 10, scale = 2)
+    private BigDecimal totalWalkDistance;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
+    // 오직 이 생성자에만 @Builder를 달아서 통제합니다.
+    // 온보딩 결과 주파수 업데이트 메서드
+    public void updateGorongHz(String gorongHz) {
+        this.gorongHz = gorongHz;
+    }
+    // @Builder 생성자 수정
+    @Builder
+    public UserProfile(User user, String nickname, String gorongHz,
+                       String baseAddress, Point baseLocation,
+                       Double purrTemperature, BigDecimal totalWalkDistance) {
+        this.user = user;
+        this.nickname = nickname;
+        this.gorongHz = gorongHz;
+        this.baseAddress = baseAddress;
+        this.baseLocation = baseLocation;
+        this.purrTemperature = purrTemperature != null ? purrTemperature : 38.5;
+        this.totalWalkDistance = totalWalkDistance != null ? totalWalkDistance : BigDecimal.ZERO;
+    }
+
+    public void updateProfile(String nickname, String baseAddress, Point baseLocation) {
+        if (nickname != null && !nickname.isBlank()) this.nickname = nickname;
+        if (baseAddress != null) this.baseAddress = baseAddress;
+        this.baseLocation = baseLocation; // null이면 위치 초기화
+    }
+}

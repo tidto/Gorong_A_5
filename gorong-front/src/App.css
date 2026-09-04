@@ -1,0 +1,37 @@
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+/* 3D 방 Go냥이 — 노란/크림 PNG 바탕 제거, Html 오버레이 대신 CSS 레이어 */
+.gocat-room-overlay,
+.gocat-room-3d-rig {
+  background: transparent !important;
+}
+
+.gocat-room-overlay canvas,
+.gocat-room-overlay .rive-cat-player,
+.gocat-room-3d-rig canvas,
+.gocat-room-3d-rig .rive-cat-player {
+  background: transparent !important;
+}
+
+.gocat-room-overlay img[data-overlay-mode="aligned"],
+.gocat-room-3d-rig img[data-overlay-mode="aligned"] {
+  mix-blend-mode: multiply;
+}
+
+.gocat-room-3d-rig,
+.gocat-room-3d-rig [data-gocat-body] {
+  overflow: visible !important;
+}
