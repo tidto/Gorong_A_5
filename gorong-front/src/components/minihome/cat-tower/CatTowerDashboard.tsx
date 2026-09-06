@@ -1,9 +1,11 @@
 import { memo, useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ActivityItem, GalleryItem } from "../../../types/minihome/minihome";
 import type { GrowthState } from "../../../utils/minihome/growth/growth";
 import type { EquipPreview } from "../../../utils/minihome/gocat/items";
 import { useRoomBackground } from "../../../pages/minihome/hooks/useRoomBackground";
 import { useRoomDecor } from "../../../pages/minihome/hooks/useRoomDecor";
+import { useCatTowerPostHistory } from "../../../pages/minihome/hooks/useCatTowerPostHistory";
 import { buildRoomDecorUnlockContext } from "../../../utils/minihome/cat-tower/catTowerRoomDecor";
 import { useNotification } from "../../../contexts/NotificationContext";
 import type { CatTowerCenterPanelId } from "./catTowerPanelTypes";
@@ -13,8 +15,8 @@ import CatTowerVisitorBlock from "./CatTowerVisitorBlock";
 import CatTowerViewAllModal from "./CatTowerViewAllModal";
 import CatTowerRoomDecorateModal from "./CatTowerRoomDecorateModal";
 import CatTowerMobileTabs from "./CatTowerMobileTabs";
-import ActivityHistory from "../mini-home/ActivityHistory";
 import GallerySection from "../mini-home/GallerySection";
+import { CatTowerPostHistoryModalBody } from "./CatTowerPostHistoryList";
 import {
   CATTOWER_BADGE,
   CATTOWER_BADGE_ACCENT,
@@ -77,9 +79,10 @@ function CatTowerDashboard({
   onRefresh,
   onReport,
 }: CatTowerDashboardProps) {
+  const navigate = useNavigate();
   const { toast } = useNotification();
   const [centerPanel, setCenterPanel] = useState<CatTowerCenterPanelId>("room");
-  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [postHistoryModalOpen, setPostHistoryModalOpen] = useState(false);
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [roomDecorateOpen, setRoomDecorateOpen] = useState(false);
 
@@ -100,6 +103,12 @@ function CatTowerDashboard({
     canEdit,
   });
 
+  const postHistory = useCatTowerPostHistory({
+    roomOwnerId,
+    enabled: pageReady,
+    refreshToken,
+  });
+
   const placedDecorTypes = useMemo(
     () => new Set(roomDecor.items.map((item) => item.type)),
     [roomDecor.items]
@@ -116,7 +125,18 @@ function CatTowerDashboard({
     }
   }, [roomBg, roomDecor, canEdit, toast]);
 
-  const openActivityModal = useCallback(() => setActivityModalOpen(true), []);
+  const openPostHistoryModal = useCallback(() => {
+    setPostHistoryModalOpen(true);
+    postHistory.openModal();
+  }, [postHistory]);
+
+  const handlePostHistoryNavigate = useCallback(
+    (linkPath: string) => {
+      setPostHistoryModalOpen(false);
+      navigate(linkPath);
+    },
+    [navigate]
+  );
   const openGalleryModal = useCallback(() => setGalleryModalOpen(true), []);
   const openRoomDecorate = useCallback(() => setRoomDecorateOpen(true), []);
 
@@ -202,7 +222,10 @@ function CatTowerDashboard({
           catName={catName}
           isReadOnly={isReadOnly}
           roomActive={roomActive}
-          activities={activities}
+          postHistoryItems={postHistory.previewItems}
+          postHistoryTotalCount={postHistory.totalPostCount}
+          postHistoryLoading={postHistory.previewLoading}
+          postHistoryError={postHistory.previewError}
           galleries={galleries}
           galleryCount={galleryCount}
           roomOwnerId={roomOwnerId}
@@ -210,7 +233,7 @@ function CatTowerDashboard({
           isOwner={isOwner}
           pageReady={pageReady}
           refreshToken={refreshToken}
-          onViewAllActivity={openActivityModal}
+          onViewAllPostHistory={openPostHistoryModal}
           onViewAllGallery={openGalleryModal}
         />
         </div>
@@ -238,16 +261,25 @@ function CatTowerDashboard({
       </div>
 
       <CatTowerViewAllModal
-        open={activityModalOpen}
-        title="활동 기록"
-        subtitle={`총 ${activities.length}건의 활동`}
-        emoji="📋"
-        onClose={() => setActivityModalOpen(false)}
+        open={postHistoryModalOpen}
+        title="작성 글 히스토리"
+        subtitle={`리뷰 ${postHistory.modalReviewCount} · 모집·참여 ${postHistory.modalRecruitmentCount}`}
+        emoji="📝"
+        onClose={() => setPostHistoryModalOpen(false)}
       >
-        <ActivityHistory
-          activities={activities}
-          variant="full"
-          emptyMessage="아직 활동 기록이 없어요. 행사에 참여해 보세요!"
+        <CatTowerPostHistoryModalBody
+          items={postHistory.modalItems}
+          category={postHistory.modalCategory}
+          page={postHistory.modalPage}
+          totalPages={postHistory.modalTotalPages}
+          totalElements={postHistory.modalTotalElements}
+          reviewCount={postHistory.modalReviewCount}
+          recruitmentCount={postHistory.modalRecruitmentCount}
+          loading={postHistory.modalLoading}
+          error={postHistory.modalError}
+          onCategoryChange={postHistory.setModalCategory}
+          onPageChange={postHistory.setModalPage}
+          onItemNavigate={handlePostHistoryNavigate}
         />
       </CatTowerViewAllModal>
 

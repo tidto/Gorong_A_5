@@ -5,6 +5,7 @@ import EventDetail from '../pages/EventDetail'
 import Review from '../pages/Review'
 import ReviewPage from '../pages/ReviewPage'
 import PostingDetail from '../pages/PostingDetail'
+import PostingWritePage from '../pages/PostingWritePage'
 import Chat from '../pages/Chat'
 import { lazy, Suspense, useEffect } from 'react'
 const CatTowerPage = lazy(() => import('../pages/minihome/CatTower'))
@@ -121,6 +122,8 @@ export default function AppRouter() {
                     <Route path="/error/:code" element={<ErrorPage />} />
                     <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
                     <Route path="/posting" element={<Navigate to="/reviews" replace />} />
+                    <Route path="/posting/write" element={<ProtectedRoute><PostingWritePage /></ProtectedRoute>} />
+                    <Route path="/posting/edit/:reviewId" element={<ProtectedRoute><PostingWritePage /></ProtectedRoute>} />
                     <Route path="/posting/:id" element={<ProtectedRoute><PostingDetail /></ProtectedRoute>} />
                     <Route path="/events/:id" element={<EventDetail />} />
                     <Route path="/events/:id/review" element={<ProtectedRoute><Review /></ProtectedRoute>} />

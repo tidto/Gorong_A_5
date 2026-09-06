@@ -14,6 +14,7 @@ import com.gorong.backend.domain.minihome.dto.MiniHomeItemDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomePageResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeResponseDto;
 import com.gorong.backend.domain.minihome.dto.MiniHomeUpdateRequestDto;
+import com.gorong.backend.domain.minihome.dto.UserPostHistoryPageDto;
 import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.service.EventCategoryItemRewardService;
 import com.gorong.backend.domain.minihome.service.MiniHomeService;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -224,6 +226,19 @@ public class MiniHomeController {
     ) {
         Long viewerUserId = miniHomeUserResolver.resolveUserIdOptional(authentication);
         return miniHomeService.getMiniHomePage(userId, viewerUserId);
+    }
+
+    /** CatTower 히스토리 — 작성 게시글(리뷰·모집) 목록 */
+    @GetMapping("/{userId}/post-history")
+    public UserPostHistoryPageDto getUserPostHistory(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "ALL") String category,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication
+    ) {
+        Long viewerUserId = miniHomeUserResolver.resolveUserIdOptional(authentication);
+        return miniHomeService.getUserPostHistory(userId, viewerUserId, category, page, size);
     }
 
     @PostMapping("/{userId}/activities")
