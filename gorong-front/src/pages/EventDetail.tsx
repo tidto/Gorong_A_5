@@ -299,7 +299,7 @@ export default function EventDetail() {
       try {
         for (const file of Array.from(pendingImages)) {
           const optimized = await optimizeImageFile(file);
-          const response = await uploadFileToS3(optimized, 'POST_PHOTO', true);
+          const response = await uploadFileToS3(optimized, 'POST_PHOTO', true, Number(id));
           uploadedImages.push({
             imageUrl: response.fileUrl,
             originalImgName: file.name,
@@ -801,12 +801,9 @@ export default function EventDetail() {
                         onChange={(e) => void handleImageUpload(e.target.files)}
                     />
                   </label>
-                  const existingImageCount = reviewImages.length;
-                  const hasExistingImages = existingImageCount > 0;
-
-                  {hasExistingImages || pendingImages.length > 0 && (
+                  {(reviewImages.length > 0 || pendingImages.length > 0) && (
                       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {existingImageCount > 0 && (
+                        {reviewImages.length > 0 && (
                           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                             {reviewImages.map((image, index) => (
                                 <div key={`${image.imageUrl}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
