@@ -4,7 +4,7 @@
 // 화면 전환 로직:
 //   Firebase 미로그인       → AuthStack (Login → Signup)
 //   Firebase OK, 미등록     → AuthStack/Signup (needsSignup)
-//   Firebase OK, 백엔드 등록 → MainTab (Map / Chat / Trail / Group)
+//   Firebase OK, 백엔드 등록 → MainTab (Map / Chat / Trail / Group / CatTower / Report)
 //
 // Expo Go 호환:
 //   createStackNavigator → GestureHandlerRootView 필요 (App.tsx에서 감쌈)
@@ -24,6 +24,7 @@ import ChatScreen from '../screens/ChatScreen'
 import TrailScreen from '../screens/TrailScreen'
 import GroupScreen from '../screens/GroupScreen'
 import ReportScreen from '../screens/ReportScreen'
+import CatTowerStack from './CatTowerStack'
 
 // ─── 네비게이션 파라미터 타입 ─────────────────
 // AuthStack 화면 목록 & 파라미터
@@ -38,6 +39,7 @@ export type MainTabParamList = {
   채팅: undefined
   발자국: undefined
   모임: undefined
+  캣타워: undefined
   신고: undefined
 }
 
@@ -122,6 +124,17 @@ export function MainNavigator() {
         options={{
           tabBarIcon: ({ color }) => (
             <Text style={{ fontSize: 20, color }}>👥</Text>
+          ),
+        }}
+      />
+
+      {/* 캣타워 — 성장·방문·활동 조회 (발자국과 분리) */}
+      <MainTab.Screen
+        name="캣타워"
+        component={CatTowerStack}
+        options={{
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 20, color }}>🐱</Text>
           ),
         }}
       />

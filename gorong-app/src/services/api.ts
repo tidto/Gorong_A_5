@@ -11,7 +11,8 @@ const api = axios.create({
   timeout: 10000,  // 10초 타임아웃 추가
 })
 
-const publicApi = axios.create({
+/** /api/* (v1 아님) — minihome·guestbook·cattower·event-participation 등 */
+export const publicApi = axios.create({
   baseURL: rootUrl,
   timeout: 10000,
 })
