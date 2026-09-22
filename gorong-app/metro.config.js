@@ -8,7 +8,7 @@ config.resolver.nodeModulesPaths = [
   path.resolve(__dirname, 'node_modules/firebase/node_modules'),
   path.resolve(__dirname, 'node_modules'),
 ];
-config.resolver.disableHierarchicalLookup = true;
+config.resolver.disableHierarchicalLookup = false;
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'cjs'];
 
 module.exports = config;
