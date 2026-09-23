@@ -16,6 +16,7 @@ import CatTowerViewAllModal from "./CatTowerViewAllModal";
 import CatTowerRoomDecorateModal from "./CatTowerRoomDecorateModal";
 import CatTowerMobileTabs from "./CatTowerMobileTabs";
 import GallerySection from "../mini-home/GallerySection";
+import { deleteGalleryImage } from "../../../api/minihome/miniHomeApi";
 import { CatTowerPostHistoryModalBody } from "./CatTowerPostHistoryList";
 import {
   CATTOWER_BADGE,
@@ -85,6 +86,7 @@ function CatTowerDashboard({
   const [postHistoryModalOpen, setPostHistoryModalOpen] = useState(false);
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [roomDecorateOpen, setRoomDecorateOpen] = useState(false);
+  const [deletingImage, setDeletingImage] = useState<number | null>(null);
 
   const roomBg = useRoomBackground({
     growthStage: growth.stage,
@@ -142,6 +144,28 @@ function CatTowerDashboard({
 
   const roomActive =
     centerPanel === "room" && !roomDecorateOpen && !catDecorateOpen;
+
+  const handleDeleteGalleryImage = useCallback(
+    function(galleryImageId: number) {
+      setDeletingImage(galleryImageId);
+
+      if (myUserId) {
+        deleteGalleryImage(galleryImageId, myUserId)
+          .then(() => {
+            toast("이미지가 삭제되었습니다.", "success");
+            setGalleryModalOpen(false);
+          })
+          .catch((error: any) => {
+            const errorMessage = error.response?.data?.message || "이미지 삭제에 실패했습니다.";
+            toast(errorMessage, "error");
+          })
+          .finally(() => {
+            setDeletingImage(null);
+          });
+      }
+    },
+    [myUserId]
+  );
 
   return (
     <div className="relative space-y-3">
@@ -294,6 +318,8 @@ function CatTowerDashboard({
           galleries={galleries}
           variant="preview"
           emptyMessage="등록된 갤러리가 없습니다."
+          onDeleteGalleryImage={handleDeleteGalleryImage}
+          deleteImageDisabled={!isOwner}
         />
       </CatTowerViewAllModal>
 

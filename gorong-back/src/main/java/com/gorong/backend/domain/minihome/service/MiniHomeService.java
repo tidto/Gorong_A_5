@@ -2,6 +2,7 @@ package com.gorong.backend.domain.minihome.service;
 
 import com.gorong.backend.domain.minihome.dto.ActivityCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
+import com.gorong.backend.domain.file.service.S3StorageService;
 import com.gorong.backend.domain.minihome.dto.GoCatAppearanceUpdateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GoCatCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
@@ -23,7 +24,9 @@ import com.gorong.backend.domain.minihome.entity.MiniHome;
 import com.gorong.backend.domain.minihome.entity.MiniHomeGallery;
 import com.gorong.backend.domain.minihome.entity.UserItem;
 import com.gorong.backend.domain.minihome.exception.GalleryNotFoundException;
+import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.exception.MiniHomeNotFoundException;
+import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.repository.ActivityLogRepository;
 import com.gorong.backend.domain.minihome.repository.CatEquipRepository;
 import com.gorong.backend.domain.minihome.repository.GalleryImageRepository;
@@ -38,6 +41,7 @@ import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.review.entity.Review;
 import com.gorong.backend.domain.review.repository.ReviewRepository;
+import com.gorong.backend.domain.review.repository.ReviewImageRepository;
 import com.gorong.backend.domain.review.service.ReviewService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
@@ -70,12 +74,14 @@ public class MiniHomeService {
 
     private final MiniHomeRepository miniHomeRepository;
     private final GoCatRepository goCatRepository;
+    private final S3StorageService s3StorageService;
     private final ActivityLogRepository activityLogRepository;
     private final MiniHomeGalleryRepository miniHomeGalleryRepository;
     private final GalleryImageRepository galleryImageRepository;
     private final CatEquipRepository catEquipRepository;
     private final ItemRepository itemRepository;
     private final UserItemRepository userItemRepository;
+    private final ReviewImageRepository reviewImageRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final EventCategoryItemRewardService eventCategoryItemRewardService;
@@ -656,6 +662,77 @@ public class MiniHomeService {
         );
 
         return MiniHomePageResponseDto.GalleryImageDto.from(image);
+    }
+
+    @Transactional
+    public void deleteGalleryImage(Long galleryImageId, Long userId) {
+        GalleryImage galleryImage = galleryImageRepository.findById(galleryImageId)
+                .orElseThrow(() -> new GalleryNotFoundException("갤러리 이미지를 찾을 수 없습니다. galleryImageId=" + galleryImageId));
+
+        // 1. 현재 로그인 사용자의 소유 이미지인지 확인
+        // GalleryImage -> MiniHomeGallery -> MiniHome -> userId 경로로 소유권 확인
+        Long miniHomeId = miniHomeGalleryRepository.findByGalleryId(galleryImage.getGalleryId())
+                .map(MiniHomeGallery::getMiniHomeId)
+                .orElseThrow(() -> new IllegalStateException("갤러리 정보를 찾을 수 없습니다. galleryId=" + galleryImage.getGalleryId()));
+
+        MiniHome miniHome = miniHomeRepository.findById(miniHomeId)
+                .orElseThrow(() -> new IllegalStateException("미니홈을 찾을 수 없습니다. miniHomeId=" + miniHomeId));
+
+        if (!miniHome.getUserId().equals(userId)) {
+            throw new MiniHomeForbiddenException("본인의 갤러리 이미지만 삭제할 수 있습니다.");
+        }
+
+        // 2. review_image에서 해당 이미지가 사용 중인지 확인 (image_url 기준)
+        String imageUrl = galleryImage.getImageUrl();
+        boolean isUsedInReview = reviewImageRepository.existsByImageUrl(imageUrl);
+
+        if (isUsedInReview) {
+            throw new IllegalArgumentException("리뷰에 등록된 이미지는 삭제할 수 없습니다.");
+        }
+
+        // 3. S3 객체 삭제
+        String s3Key = extractS3KeyFromImageUrl(imageUrl);
+        s3StorageService.delete(s3Key);
+
+        // 4. DB에서 gallery_image 삭제
+        galleryImageRepository.delete(galleryImage);
+    }
+
+    private String extractS3KeyFromImageUrl(String imageUrl) {
+        if (imageUrl == null) {
+            throw new IllegalArgumentException("이미지 URL은 null이 될 수 없습니다.");
+        }
+        // fileUrl 형태: baseUrl + "/" + key
+        // 예: https://bucket/users/35/post_photo/20260101/uuid.jpg
+        // S3 key는 users/35/post_photo/20260101/uuid.jpg 형태 (전체 경로, leading slash 제외)
+        String key = imageUrl;
+        // URL에서 http:// 또는 https:// 프로토콜 부분 제거 후 key 추출
+        int protocolEnd = key.indexOf("://");
+        if (protocolEnd > 0) {
+            key = key.substring(protocolEnd + 3); // "://".length() = 3, "https://".length() = 8, minus 3 = 5... wait
+        }
+        // 실제로는 "https://".length() = 8이므로 protocolEnd=4(시작 인덱스), +3 하면 7이 되지만
+        // "://"는 3문자이므로 protocolEnd+3은 "://" 이후의 인덱스가 됨
+        // 예: "https://bucket/..."에서 "://"는 4번째 인덱스에 시작하므로 +3 하면 7이 됨
+        // 하지만 String.length()는 8이므로... 실제로 테스트해보면 "https://".length() = 8
+        // 그러므로 protocolEnd = key.indexOf("://") = 4 (0-indexed position of "://")
+        // key.substring(protocolEnd + 3) = key.substring(7) = "bucket/users/..."의 "users/..." 부분부터
+        
+        // 쿼리 문자열이나 프레그먼트가 있으면 제거
+        int queryIndex = key.indexOf("?");
+        if (queryIndex > 0) {
+            key = key.substring(0, queryIndex);
+        }
+        int fragmentIndex = key.indexOf("#");
+        if (fragmentIndex > 0) {
+            key = key.substring(0, fragmentIndex);
+        }
+        // /users/ 이후를 추출하고 leading slash 제거
+int usersIndex = key.indexOf("/users/");
+        if (usersIndex >= 0) {
+            key = key.substring(usersIndex + 1);
+        }
+        return key;
     }
 
     @Transactional

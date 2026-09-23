@@ -291,6 +291,12 @@ export async function addGalleryImage(
   return res.data;
 }
 
+/** 갤러리 이미지 삭제 */
+export async function deleteGalleryImage(galleryImageId: number, userId: number): Promise<void> {
+  await requireAuthUser();
+  await axiosInstance.delete(`/minihomes/${userId}/gallery-images/${galleryImageId}`);
+}
+
 /** 리뷰 작성 후 활동·갤러리 연동 */
 export async function recordReviewActivity(
   userId: number,
