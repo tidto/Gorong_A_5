@@ -124,7 +124,7 @@ export default function PostingWritePage() {
       const uploaded: ImagePayload[] = []
       for (const file of pickedFiles) {
         const optimized = await optimizeImageFile(file)
-        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true)
+        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true, composer.eventId)
         uploaded.push({
           imageUrl: response.fileUrl,
           originalImgName: file.name,
