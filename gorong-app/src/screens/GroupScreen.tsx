@@ -1,19 +1,25 @@
 import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
+import { useFocusEffect } from '@react-navigation/native'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useNavigation } from '@react-navigation/native'
+import type { NavigationProp } from '@react-navigation/native'
+import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { auth } from '../config/firebaseConfig'
 import {
   checkArrivalStatus,
+  createAppGroup,
+  deleteAppGroup,
   fetchAppGroups,
   fetchMyParticipations,
-  gatherAppGroup,
   joinAppGroup,
   uploadFileToS3,
   verifyArrival,
 } from '../services/api'
 import type { AppGroup, EventParticipation } from '../types'
+import type { MainStackParamList } from '../navigation/AppNavigator'
+import GroupPostFormFields from '../components/GroupPostFormFields'
 import { prepareImageForUpload } from '../utils/imageUpload'
 
 const PREVIEW_LIMIT = 5
@@ -52,6 +58,7 @@ function formatVisitDate(value?: string | null) {
 }
 
 export default function GroupScreen() {
+  const navigation = useNavigation<NavigationProp<MainStackParamList>>()
   const [groups, setGroups] = useState<AppGroup[]>([])
   const [participations, setParticipations] = useState<EventParticipation[]>([])
   const [refreshing, setRefreshing] = useState(false)
@@ -60,6 +67,10 @@ export default function GroupScreen() {
   const [verifyingVenueId, setVerifyingVenueId] = useState<string | null>(null)
   const [showAllGroups, setShowAllGroups] = useState(false)
   const [showAllParticipations, setShowAllParticipations] = useState(false)
+  const [activeTab, setActiveTab] = useState<'participations' | 'groups'>('participations')
+  const [createVisible, setCreateVisible] = useState(false)
+  const [savingGroup, setSavingGroup] = useState(false)
+  const [draft, setDraft] = useState({ title: '', event: '', eventContentId: '', location: '', content: '', maxMembers: '4', meetingDate: '', meetingTime: '', condition: '' })
   const insets = useSafeAreaInsets()
 
   const waitForAuthReady = useCallback(async () => {
@@ -109,9 +120,12 @@ export default function GroupScreen() {
     }
   }, [waitForAuthReady])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  // 모임 탭에 들어올 때마다 목록을 다시 불러온다 (웹에서 새로 올린 모집글 반영)
+  useFocusEffect(
+      useCallback(() => {
+        loadData()
+      }, [loadData])
+  )
 
   const trackedVenueIds = useMemo(() => {
     const ids = [
@@ -174,10 +188,10 @@ export default function GroupScreen() {
     let cancelled = false
     ;(async () => {
       const statuses = await Promise.allSettled(
-        trackedVenueIds.map(async (venueId) => {
-          const res = await checkArrivalStatus(venueId)
-          return [venueId, Boolean(res.data?.verified)] as const
-        })
+          trackedVenueIds.map(async (venueId) => {
+            const res = await checkArrivalStatus(venueId)
+            return [venueId, Boolean(res.data?.verified)] as const
+          })
       )
 
       if (cancelled) return
@@ -197,22 +211,22 @@ export default function GroupScreen() {
   }, [trackedVenueIds])
 
   const upcomingParticipations = useMemo(
-    () => participations.filter(isUpcomingParticipation),
-    [participations]
+      () => participations.filter(isUpcomingParticipation),
+      [participations]
   )
 
   const recruitingGroups = useMemo(
-    () => groups.filter((group) => group.status?.toUpperCase() === 'RECRUITING'),
-    [groups]
+      () => groups.filter((group) => group.status?.toUpperCase() === 'RECRUITING'),
+      [groups]
   )
 
   const visibleParticipations = showAllParticipations
-    ? upcomingParticipations
-    : upcomingParticipations.slice(0, PREVIEW_LIMIT)
+      ? upcomingParticipations
+      : upcomingParticipations.slice(0, PREVIEW_LIMIT)
 
   const visibleGroups = showAllGroups
-    ? recruitingGroups
-    : recruitingGroups.slice(0, PREVIEW_LIMIT)
+      ? recruitingGroups
+      : recruitingGroups.slice(0, PREVIEW_LIMIT)
 
   const handleJoin = async (groupId: number) => {
     try {
@@ -225,16 +239,44 @@ export default function GroupScreen() {
     }
   }
 
-  const handleGather = async (groupId: number) => {
+  const handleCreateGroup = async () => {
+    if (!draft.title.trim() || !draft.event.trim() || !draft.location.trim() || !draft.meetingDate.trim() || !draft.meetingTime.trim()) {
+      Alert.alert('입력 확인', '모임명, 행사, 장소, 날짜와 시간은 필수입니다.')
+      return
+    }
+    const maxMembers = Number(draft.maxMembers)
+    if (!Number.isInteger(maxMembers) || maxMembers < 2 || maxMembers > 100) {
+      Alert.alert('입력 확인', '모집 인원은 2명 이상 100명 이하로 입력해주세요.')
+      return
+    }
+    setSavingGroup(true)
     try {
-      await gatherAppGroup(groupId)
-      Alert.alert('완료', '모였다 인증이 완료되었습니다.')
-      loadData()
+      await createAppGroup({ ...draft, title: draft.title.trim(), event: draft.event.trim(), location: draft.location.trim(), content: draft.content.trim(), condition: draft.condition.trim(), maxMembers })
+      setCreateVisible(false)
+      setDraft({ title: '', event: '', eventContentId: '', location: '', content: '', maxMembers: '4', meetingDate: '', meetingTime: '', condition: '' })
+      await loadData()
+      Alert.alert('완료', '모집글을 등록했습니다.')
     } catch (error) {
-      console.error('모였다 인증 실패:', error)
-      Alert.alert('안내', '모였다 인증에 실패했습니다. 인원 충족 여부를 확인해주세요.')
+      console.error('모집글 등록 실패:', error)
+      Alert.alert('안내', '모집글 등록에 실패했습니다. 로그인 상태를 확인해주세요.')
+    } finally {
+      setSavingGroup(false)
     }
   }
+
+  const confirmDeleteGroup = (group: AppGroup) => Alert.alert('모집글 삭제', '이 모집글을 삭제할까요?', [
+    { text: '취소', style: 'cancel' },
+    { text: '삭제', style: 'destructive', onPress: async () => {
+      try {
+        await deleteAppGroup(group.id)
+        setGroups((current) => current.filter((item) => item.id !== group.id))
+        Alert.alert('완료', '모집글을 삭제했습니다.')
+      } catch (error) {
+        console.error('모집글 삭제 실패:', error)
+        Alert.alert('안내', '모집글 삭제에 실패했습니다.')
+      }
+    } },
+  ])
 
   const handleUploadPhoto = async (group: AppGroup) => {
     try {
@@ -289,150 +331,193 @@ export default function GroupScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <Text>그룹 정보를 불러오는 중...</Text>
-      </View>
+        <View style={styles.center}>
+          <Text>그룹 정보를 불러오는 중...</Text>
+        </View>
     )
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: 16 + insets.top, paddingBottom: 24 + insets.bottom }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true)
-            loadData()
-          }}
-        />
-      }
-    >
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>모임</Text>
-        <Text style={styles.heroSub}>
-          혼자참여와 그룹참여를 나눠서 보여주고, 모집중인 모임만 따로 확인합니다.
-        </Text>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>내 참여 행사</Text>
-        <Text style={styles.sectionMeta}>{visibleParticipations.length}/{upcomingParticipations.length}</Text>
-      </View>
-
-      {visibleParticipations.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>당일 또는 예정된 참여 행사가 없습니다.</Text>
-          <Text style={styles.emptyText}>혼자참여한 행사도 여기에 표시됩니다.</Text>
+      <ScrollView
+          style={styles.container}
+          contentContainerStyle={[styles.content, { paddingTop: 16 + insets.top, paddingBottom: 24 + insets.bottom }]}
+          refreshControl={
+            <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true)
+                  loadData()
+                }}
+            />
+          }
+      >
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>모임</Text>
+          <Text style={styles.heroSub}>
+            혼자참여와 그룹참여를 나눠서 보여주고, 모집중인 모임만 따로 확인합니다.
+          </Text>
         </View>
-      ) : (
-        visibleParticipations.map((item) => (
-          <View key={item.id} style={styles.card}>
-            <View style={styles.badgeRow}>
-              <Text style={styles.badge}>{item.participationType === 'SOLO' ? '혼자참여' : '그룹참여'}</Text>
-              <Text style={styles.statusBadge}>
-                {arrivalVerifiedByVenueId[item.eventContentId] ? '지오펜싱 완료' : formatVisitDate(item.visitDate)}
-              </Text>
-            </View>
-            <Text style={styles.eventTitle}>{item.eventTitle || '행사명 미정'}</Text>
-            <Text style={styles.meta}>행사 ID: {item.eventContentId}</Text>
-            <Text style={styles.meta}>참여 방식: {item.participationType === 'SOLO' ? '혼자' : '모임'}</Text>
-            <TouchableOpacity
-              style={[
-                styles.secondaryButton,
-                (!item.eventContentId || verifyingVenueId === item.eventContentId) && styles.buttonDisabled,
-              ]}
-              disabled={!item.eventContentId || verifyingVenueId === item.eventContentId}
-              onPress={() => verifyVenueArrival(item.eventContentId, item.eventTitle)}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {verifyingVenueId === item.eventContentId
-                  ? '인증 중...'
-                  : arrivalVerifiedByVenueId[item.eventContentId]
-                    ? '지오펜싱 완료'
-                    : '지오펜싱 인증'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ))
-      )}
 
-      {upcomingParticipations.length > PREVIEW_LIMIT && (
-        <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAllParticipations((prev) => !prev)}>
-          <Text style={styles.moreBtnText}>{showAllParticipations ? '접기' : '더보기'}</Text>
-        </TouchableOpacity>
-      )}
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>모집 중 모임</Text>
-        <Text style={styles.sectionMeta}>{visibleGroups.length}/{recruitingGroups.length}</Text>
-      </View>
-
-      {visibleGroups.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>모집 중인 모임이 없습니다.</Text>
-          <Text style={styles.emptyText}>마감/완료 모임은 숨기고 모집중만 보여줍니다.</Text>
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'participations' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('participations')}
+          >
+            <Text style={[styles.tabText, activeTab === 'participations' && styles.tabTextActive]}>
+              내 참여 행사 {upcomingParticipations.length}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'groups' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('groups')}
+          >
+            <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>
+              모집 중 모임 {recruitingGroups.length}
+            </Text>
+          </TouchableOpacity>
         </View>
-      ) : (
-        visibleGroups.map((group) => {
-          const isFull = group.currentMembers >= group.maxMembers
-          return (
-            <View key={group.id} style={styles.card}>
-              <View style={styles.badgeRow}>
-                <Text style={styles.badge}>모임</Text>
-                <Text style={styles.statusBadge}>{mapStatusLabel(group.status)}</Text>
-              </View>
-              <Text style={styles.eventTitle}>{group.event || '이벤트 미정'}</Text>
-              <Text style={styles.groupTitle}>{group.title || '모임 정보'}</Text>
-              <Text style={styles.meta}>만나는 장소: {group.location || '미정'}</Text>
-              <Text style={styles.meta}>만나는 시간: {(group.meetingDate || '미정')} {group.meetingTime || ''}</Text>
-              <Text style={styles.meta}>인원: {group.currentMembers}/{group.maxMembers}</Text>
-              <View style={styles.row}>
-                <TouchableOpacity
-                  style={[styles.button, (group.joined || isFull) && styles.buttonDisabled]}
-                  disabled={group.joined || isFull}
-                  onPress={() => handleJoin(group.id)}
-                >
-                  <Text style={styles.buttonText}>{group.joined ? '참가 완료' : isFull ? '정원 마감' : '참가하기'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.button, (!group.joined || !isFull || group.gathered) && styles.buttonDisabled]}
-                  disabled={!group.joined || !isFull || group.gathered}
-                  onPress={() => handleGather(group.id)}
-                >
-                  <Text style={styles.buttonText}>{group.gathered ? '인증 완료' : '모였다 인증'}</Text>
-                </TouchableOpacity>
-              </View>
-              {group.joined && (
-                <TouchableOpacity
-                  style={[
-                    styles.secondaryButton,
-                    (!resolveGroupVenueId(group) || verifyingVenueId === resolveGroupVenueId(group)) && styles.buttonDisabled,
-                  ]}
-                  disabled={!resolveGroupVenueId(group) || verifyingVenueId === resolveGroupVenueId(group)}
-                  onPress={() => handleGroupSecondaryAction(group)}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    {verifyingVenueId === resolveGroupVenueId(group)
-                      ? '인증 중...'
-                      : resolveGroupVenueId(group) && arrivalVerifiedByVenueId[resolveGroupVenueId(group)!]
-                        ? '행사 사진 올리기'
-                        : '지오펜싱 인증'}
-                  </Text>
-                </TouchableOpacity>
+
+        {activeTab === 'participations' && (
+            <>
+              {visibleParticipations.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyTitle}>당일 또는 예정된 참여 행사가 없습니다.</Text>
+                    <Text style={styles.emptyText}>혼자참여한 행사도 여기에 표시됩니다.</Text>
+                  </View>
+              ) : (
+                  visibleParticipations.map((item) => (
+                      <View key={item.id} style={styles.card}>
+                        <View style={styles.badgeRow}>
+                          <Text style={styles.badge}>{item.participationType === 'SOLO' ? '혼자참여' : '그룹참여'}</Text>
+                          <Text style={styles.statusBadge}>
+                            {arrivalVerifiedByVenueId[item.eventContentId] ? '지오펜싱 완료' : formatVisitDate(item.visitDate)}
+                          </Text>
+                        </View>
+                        <Text style={styles.eventTitle}>{item.eventTitle || '행사명 미정'}</Text>
+                        <Text style={styles.meta}>행사 ID: {item.eventContentId}</Text>
+                        <Text style={styles.meta}>참여 방식: {item.participationType === 'SOLO' ? '혼자' : '모임'}</Text>
+                        <TouchableOpacity
+                            style={[
+                              styles.secondaryButton,
+                              (!item.eventContentId || verifyingVenueId === item.eventContentId) && styles.buttonDisabled,
+                            ]}
+                            disabled={!item.eventContentId || verifyingVenueId === item.eventContentId}
+                            onPress={() => verifyVenueArrival(item.eventContentId, item.eventTitle)}
+                        >
+                          <Text style={styles.secondaryButtonText}>
+                            {verifyingVenueId === item.eventContentId
+                                ? '인증 중...'
+                                : arrivalVerifiedByVenueId[item.eventContentId]
+                                    ? '지오펜싱 완료'
+                                    : '지오펜싱 인증'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                  ))
               )}
-            </View>
-          )
-        })
-      )}
 
-      {recruitingGroups.length > PREVIEW_LIMIT && (
-        <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAllGroups((prev) => !prev)}>
-          <Text style={styles.moreBtnText}>{showAllGroups ? '접기' : '더보기'}</Text>
-        </TouchableOpacity>
-      )}
-    </ScrollView>
+              {upcomingParticipations.length > PREVIEW_LIMIT && (
+                  <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAllParticipations((prev) => !prev)}>
+                    <Text style={styles.moreBtnText}>{showAllParticipations ? '접기' : '더보기'}</Text>
+                  </TouchableOpacity>
+              )}
+            </>
+        )}
+
+        {activeTab === 'groups' && (
+            <>
+              <TouchableOpacity style={styles.createButton} onPress={() => setCreateVisible(true)}>
+                <Text style={styles.createButtonText}>＋ 모집글 작성</Text>
+              </TouchableOpacity>
+              {visibleGroups.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyTitle}>모집 중인 모임이 없습니다.</Text>
+                    <Text style={styles.emptyText}>마감/완료 모임은 숨기고 모집중만 보여줍니다.</Text>
+                  </View>
+              ) : (
+                  visibleGroups.map((group) => {
+                    const isFull = group.currentMembers >= group.maxMembers
+                    return (
+                        <View key={group.id} style={styles.card}>
+                          <View style={styles.badgeRow}>
+                            <Text style={styles.badge}>모임</Text>
+                            <Text style={styles.statusBadge}>{mapStatusLabel(group.status)}</Text>
+                          </View>
+                          <Text style={styles.eventTitle}>{group.event || '이벤트 미정'}</Text>
+                          <Text style={styles.groupTitle}>{group.title || '모임 정보'}</Text>
+                          <Text style={styles.meta}>만나는 장소: {group.location || '미정'}</Text>
+                          <Text style={styles.meta}>만나는 시간: {(group.meetingDate || '미정')} {group.meetingTime || ''}</Text>
+                          <Text style={styles.meta}>인원: {group.currentMembers}/{group.maxMembers}</Text>
+                          {group.ownedByMe && (
+                              <TouchableOpacity style={styles.deleteButton} onPress={() => confirmDeleteGroup(group)}>
+                                <Text style={styles.deleteButtonText}>모집글 삭제</Text>
+                              </TouchableOpacity>
+                          )}
+                          <View style={styles.row}>
+                            <TouchableOpacity
+                                style={[styles.button, (group.joined || isFull) && styles.buttonDisabled]}
+                                disabled={group.joined || isFull}
+                                onPress={() => handleJoin(group.id)}
+                            >
+                              <Text style={styles.buttonText}>{group.joined ? '참가 완료' : isFull ? '정원 마감' : '참가하기'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.button, styles.detailButton]}
+                                onPress={() => navigation.navigate('GroupDetail', { group })}
+                            >
+                              <Text style={styles.buttonText}>상세보기</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {group.joined && (
+                              <TouchableOpacity
+                                  style={[
+                                    styles.secondaryButton,
+                                    (!resolveGroupVenueId(group) || verifyingVenueId === resolveGroupVenueId(group)) && styles.buttonDisabled,
+                                  ]}
+                                  disabled={!resolveGroupVenueId(group) || verifyingVenueId === resolveGroupVenueId(group)}
+                                  onPress={() => handleGroupSecondaryAction(group)}
+                              >
+                                <Text style={styles.secondaryButtonText}>
+                                  {verifyingVenueId === resolveGroupVenueId(group)
+                                      ? '인증 중...'
+                                      : resolveGroupVenueId(group) && arrivalVerifiedByVenueId[resolveGroupVenueId(group)!]
+                                          ? '행사 사진 올리기'
+                                          : '지오펜싱 인증'}
+                                </Text>
+                              </TouchableOpacity>
+                          )}
+                        </View>
+                    )
+                  })
+              )}
+
+              {recruitingGroups.length > PREVIEW_LIMIT && (
+                  <TouchableOpacity style={styles.moreBtn} onPress={() => setShowAllGroups((prev) => !prev)}>
+                    <Text style={styles.moreBtnText}>{showAllGroups ? '접기' : '더보기'}</Text>
+                  </TouchableOpacity>
+              )}
+            </>
+        )}
+        <Modal visible={createVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setCreateVisible(false)}>
+          <View style={[styles.modal, { paddingTop: Math.max(insets.top, 18) }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>모집글 작성</Text>
+              <TouchableOpacity onPress={() => setCreateVisible(false)}><Text style={styles.modalClose}>닫기</Text></TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
+              <GroupPostFormFields
+                value={{ ...draft, maxMembers: Number(draft.maxMembers) || 0 }}
+                onChange={(key, value) => setDraft((current) => ({ ...current, [key]: key === 'maxMembers' ? String(value) : String(value) }))}
+                footer={(
+                  <TouchableOpacity style={[styles.submitButton, savingGroup && styles.buttonDisabled]} disabled={savingGroup} onPress={handleCreateGroup}>
+                    <Text style={styles.submitButtonText}>{savingGroup ? '등록 중...' : '모집글 등록'}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </ScrollView>
+          </View>
+        </Modal>
+      </ScrollView>
   )
 }
 
@@ -447,6 +532,28 @@ const styles = StyleSheet.create({
   },
   heroTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
   heroSub: { color: '#fff', fontSize: 12, marginTop: 6, opacity: 0.9, lineHeight: 18 },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#EBEDF2',
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  tabButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabText: { fontSize: 13, fontWeight: '700', color: '#6b7280' },
+  tabTextActive: { color: '#FF6B35', fontWeight: '800' },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -500,6 +607,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: '#C9CDD5' },
   buttonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  detailButton: { backgroundColor: '#334155' },
   secondaryButton: {
     marginTop: 10,
     backgroundColor: '#111827',
@@ -508,6 +616,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  createButton: { backgroundColor: '#FF6B35', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  createButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  deleteButton: { alignSelf: 'flex-end', marginTop: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, backgroundColor: '#FFF1F0' },
+  deleteButtonText: { color: '#C2413A', fontSize: 12, fontWeight: '800' },
+  modal: { flex: 1, backgroundColor: '#F6F7FB', paddingHorizontal: 18 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
+  modalTitle: { color: '#1e293b', fontSize: 19, fontWeight: '900' },
+  modalClose: { color: '#64748b', fontWeight: '700', padding: 8 },
+  form: { gap: 13, paddingBottom: 32 },
+  field: { gap: 6 },
+  fieldLabel: { color: '#334155', fontSize: 13, fontWeight: '700' },
+  input: { borderWidth: 1, borderColor: '#DDE2EA', backgroundColor: '#fff', borderRadius: 11, paddingHorizontal: 12, paddingVertical: 11, color: '#1e293b', fontSize: 14 },
+  multilineInput: { minHeight: 100, paddingTop: 12 },
+  submitButton: { backgroundColor: '#FF6B35', borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 6 },
+  submitButtonText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   emptyCard: {
     backgroundColor: '#FFF',
     borderRadius: 18,

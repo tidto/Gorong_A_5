@@ -35,6 +35,37 @@ public class AppGroupController {
         }
     }
 
+    @DeleteMapping("/{groupId}")
+    public ResponseEntity<Void> deleteGroup(@PathVariable Long groupId, Authentication authentication) {
+        try {
+            appGroupService.deleteGroup(authentication, groupId);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PutMapping("/{groupId}")
+    public ResponseEntity<AppGroupResponseDto> updateGroup(
+            @PathVariable Long groupId,
+            @RequestBody AppGroupCreateRequestDto requestDto,
+            Authentication authentication
+    ) {
+        try {
+            return ResponseEntity.ok(appGroupService.updateGroup(authentication, groupId, requestDto));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     @PostMapping("/{groupId}/join")
     public ResponseEntity<AppGroupResponseDto> joinGroup(
             @PathVariable Long groupId,

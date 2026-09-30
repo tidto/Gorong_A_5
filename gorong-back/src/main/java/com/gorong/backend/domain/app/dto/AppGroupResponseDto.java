@@ -11,6 +11,8 @@ public class AppGroupResponseDto {
     private String event;
     private String eventContentId;
     private String location;
+    private String content;
+    private String condition;
     private String meetingDate;
     private String meetingTime;
     private Integer maxMembers;
@@ -18,4 +20,5 @@ public class AppGroupResponseDto {
     private boolean joined;
     private boolean gathered;
     private String status;
+    private boolean ownedByMe;
 }
