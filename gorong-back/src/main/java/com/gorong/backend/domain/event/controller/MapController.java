@@ -6,7 +6,6 @@ import com.gorong.backend.domain.group.repository.EventParticipationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -89,18 +88,5 @@ public class MapController {
     public ResponseEntity<String> syncTourApi() {
         List<TourItemDto> result = tourApiService.getAndSyncApiData();
         return ResponseEntity.ok("동기화 완료: " + result.size() + "건");
-    }
-
-    /**
-     * 행사 기간 백필 (ADMIN 전용). 기본은 dryRun=true → DB 수정 없이 리포트만 반환.
-     * 예) POST /api/admin/tour/backfill-event-periods?dryRun=true&limit=5
-     */
-    @PreAuthorize("hasRole('ADMIN')")
-    @PostMapping("/admin/tour/backfill-event-periods")
-    public ResponseEntity<List<String>> backfillEventPeriods(
-            @RequestParam(defaultValue = "true") boolean dryRun,
-            @RequestParam(defaultValue = "5") int limit
-    ) {
-        return ResponseEntity.ok(tourApiService.backfillEventPeriods(dryRun, limit));
     }
 }
