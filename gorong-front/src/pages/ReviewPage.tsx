@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { PenSquare } from 'lucide-react'
 import Button from '../components/Button'
 import PawRating from '../components/PawRating'
+import { useAuth } from '../contexts/AuthContext'
+import { fetchCachedMyUserId } from '../utils/minihome/core/miniHomeMeCache'
 import {
   getPublishedPosts,
   deleteReview,
@@ -11,6 +13,9 @@ import {
 
 export default function ReviewPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.roleType === 'ADMIN'
+  const [myUserId, setMyUserId] = useState<number | null>(null)
   const [posts, setPosts] = useState<ReviewSummary[]>([])
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -34,6 +39,19 @@ export default function ReviewPage() {
   useEffect(() => {
     loadPosts(0)
   }, [])
+
+  useEffect(() => {
+    let active = true
+    fetchCachedMyUserId().then((id) => {
+      if (active) setMyUserId(id)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const canDelete = (post: ReviewSummary) =>
+    isAdmin || (myUserId != null && post.userId === myUserId)
 
   const handleDelete = async (
   e: React.MouseEvent,
@@ -115,12 +133,14 @@ export default function ReviewPage() {
                       <p className="text-xs text-slate-400">간편 리뷰: {post.reviewText}</p>
                     </div>
                     <PawRating value={post.rating} readOnly size="sm" />
-                    <button
-                      onClick={(e) => handleDelete(e, post.id)}
-                      className="rounded bg-red-500 px-2 py-1 text-xs text-white"
-                    >
-                      삭제
-                    </button>
+                    {canDelete(post) && (
+                      <button
+                        onClick={(e) => handleDelete(e, post.id)}
+                        className="rounded bg-red-500 px-2 py-1 text-xs text-white"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
