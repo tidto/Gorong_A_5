@@ -9,6 +9,7 @@ import com.gorong.backend.domain.minihome.entity.GalleryImage;
 import com.gorong.backend.domain.minihome.repository.GalleryImageRepository;
 import com.gorong.backend.domain.review.entity.Review;
 import com.gorong.backend.domain.review.entity.ReviewImage;
+import com.gorong.backend.domain.review.exception.ReviewForbiddenException;
 import com.gorong.backend.domain.review.repository.ReviewImageRepository;
 import com.gorong.backend.domain.review.repository.ReviewRepository;
 import com.gorong.backend.domain.user.entity.User;
@@ -159,7 +160,7 @@ public class ReviewService {
                 user.getRoleType() == User.RoleType.ADMIN;
 
         if (!isAuthor && !isAdmin) {
-            throw new IllegalArgumentException("삭제 권한이 없습니다.");
+            throw new ReviewForbiddenException("삭제 권한이 없습니다.");
         }
 
         // 리뷰 삭제 전: 해당 리뷰의 이미지 URL과 이벤트 ID를 확보하여
