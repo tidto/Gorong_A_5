@@ -29,6 +29,7 @@ export interface Venue {
   eventStartDate?: string
   eventEndDate?: string
   overview?: string
+  tel?: string // 상세페이지 '전화하기'용
 }
 
 // ─── 공개 행사 목록 (백엔드 /api/public/map) ─────
