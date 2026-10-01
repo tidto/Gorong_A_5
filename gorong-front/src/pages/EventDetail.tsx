@@ -320,24 +320,25 @@ export default function EventDetail() {
     reviewDraftTouched &&
     (reviewText.trim() !== '' || rating !== 0 || pendingImages.length > 0);
 
-  const handleContinueToPosting = async () => {
+  const handleContinueToPosting = () => {
     if (!id) return;
     if (!hasDraftReview()) {
       navigate(`/posting/write?eventId=${id}`);
       return;
     }
 
-    // 작성 중 이미지(아직 S3 미업로드)를 기존 업로드 경로로 변환해 전달한다.
-    const uploadedImages = await uploadPendingImages();
-    if (uploadedImages === null) return;
-
+    // 이어쓰기는 단순 화면 전환이다. 여기서 S3 업로드를 수행하지 않는다.
+    // reviewImages(이미 S3 URL)는 그대로 전달하고, pendingImages(File)는
+    // Router state로 넘겨 PostingWritePage의 최종 등록 시점에 업로드한다.
+    // File은 history.pushState의 structured clone으로 전달된다.
     navigate(`/posting/write?eventId=${id}`, {
       state: {
         quickReviewDraft: {
           reviewText: reviewText.trim(),
           rating,
           contents: reviewText.trim(),
-          images: [...reviewImages, ...uploadedImages],
+          images: reviewImages,
+          pendingImages,
           authorName,
         },
       },
