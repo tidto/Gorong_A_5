@@ -114,6 +114,8 @@ export default function EventDetail() {
   const [savingReview,       setSavingReview]       = useState(false);
   const [uploadingImage,     setUploadingImage]     = useState(false);
   const [pendingImages,      setPendingImages]      = useState<File[]>([]);
+  // 사용자가 저장하지 않은 작성 중 데이터가 있는지. loadReviews 프리필과 사용자 입력을 구분하기 위함.
+  const [reviewDraftTouched, setReviewDraftTouched] = useState(false);
 
   const authorName = auth.user?.nickname?.trim() || auth.user?.email?.trim() || '익명';
   const currentUserId = (() => {
@@ -283,6 +285,63 @@ export default function EventDetail() {
       return;
     }
     setPendingImages((current) => [...Array.from(current), ...Array.from(files)]);
+    setReviewDraftTouched(true);
+  };
+
+  // 작성 중인 파일 이미지를 S3에 올려 ImagePayload로 변환한다.
+  // 실패 시 null을 반환하고 호출측이 저장을 중단한다.
+  const uploadPendingImages = async (): Promise<ImagePayload[] | null> => {
+    if (pendingImages.length === 0) return [];
+    setUploadingImage(true);
+    try {
+      const uploadedImages: ImagePayload[] = [];
+      for (const file of Array.from(pendingImages)) {
+        const optimized = await optimizeImageFile(file);
+        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true, Number(id));
+        uploadedImages.push({
+          imageUrl: response.fileUrl,
+          originalImgName: file.name,
+          saveImgName: String(response.key).split('/').pop() ?? file.name,
+        });
+      }
+      return uploadedImages;
+    } catch (error) {
+      console.error('이미지 업로드 실패:', error);
+      showToast('이미지 업로드에 실패했습니다.', 'error');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // ── 정식 포스팅으로 이어쓰기 ───────────────────────────────────────
+  // 작성 중인 데이터가 있으면 그것을 우선 전달하고, 없을 때만 서버 REVIEW_ONLY를 사용한다.
+  const hasDraftReview = (): boolean =>
+    reviewDraftTouched &&
+    (reviewText.trim() !== '' || rating !== 0 || pendingImages.length > 0);
+
+  const handleContinueToPosting = async () => {
+    if (!id) return;
+    if (!hasDraftReview()) {
+      navigate(`/posting/write?eventId=${id}`);
+      return;
+    }
+
+    // 작성 중 이미지(아직 S3 미업로드)를 기존 업로드 경로로 변환해 전달한다.
+    const uploadedImages = await uploadPendingImages();
+    if (uploadedImages === null) return;
+
+    navigate(`/posting/write?eventId=${id}`, {
+      state: {
+        quickReviewDraft: {
+          reviewText: reviewText.trim(),
+          rating,
+          contents: reviewText.trim(),
+          images: [...reviewImages, ...uploadedImages],
+          authorName,
+        },
+      },
+    });
   };
 
   // ── 간편 리뷰 저장 ───────────────────────────────────────────────
@@ -293,28 +352,9 @@ export default function EventDetail() {
       return;
     }
     // Upload pending images to S3 before saving
-    let uploadedImages: ImagePayload[] = [];
-    if (pendingImages.length > 0) {
-      setUploadingImage(true);
-      try {
-        for (const file of Array.from(pendingImages)) {
-          const optimized = await optimizeImageFile(file);
-          const response = await uploadFileToS3(optimized, 'POST_PHOTO', true, Number(id));
-          uploadedImages.push({
-            imageUrl: response.fileUrl,
-            originalImgName: file.name,
-            saveImgName: String(response.key).split('/').pop() ?? file.name,
-          });
-        }
-      } catch (error) {
-        console.error('이미지 업로드 실패:', error);
-        showToast('이미지 업로드에 실패했습니다.', 'error');
-        setUploadingImage(false);
-        return;
-      } finally {
-        setUploadingImage(false);
-      }
-    }
+    const uploadedImages = await uploadPendingImages();
+    if (uploadedImages === null) return;
+
     setSavingReview(true);
     try {
       const newReviewImages = [...reviewImages, ...uploadedImages];
@@ -332,6 +372,7 @@ export default function EventDetail() {
       setRating(0);
       setReviewText('');
       setPendingImages([]);
+      setReviewDraftTouched(false);
     } catch (error: any) {
       console.error('간편 리뷰 저장 실패:', error);
       showToast(error?.response?.data?.error || '간편 리뷰 저장 중 오류가 발생했습니다.', 'error');
@@ -760,7 +801,8 @@ export default function EventDetail() {
               </div>
               <button
                   className="rounded-full border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600 whitespace-nowrap"
-                  onClick={() => navigate(`/posting/write?eventId=${id}`)}
+                  onClick={() => void handleContinueToPosting()}
+                  disabled={uploadingImage || savingReview}
               >
                 정식 포스팅으로 이어쓰기
               </button>

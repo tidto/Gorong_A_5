@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, FileText, Image, Clock, X, Upload } from 'lucide-react'
 import PawRating from '../components/PawRating'
 import { useAuth } from '../contexts/AuthContext'
@@ -45,10 +45,21 @@ const initialComposer: ComposerState = {
 // 간편 리뷰 생성 시 백엔드가 부여하는 임시 제목. 정식 포스팅 제목으로는 사용하지 않는다.
 const QUICK_REVIEW_PLACEHOLDER_TITLE = '임시 포스팅'
 
+// EventDetail의 미저장 간편 리뷰 작성 값을 전달받는 라우트 state
+type QuickReviewDraft = {
+  reviewText: string
+  rating: number
+  contents: string
+  images: ImagePayload[]
+  authorName?: string
+}
+
 export default function PostingWritePage() {
   const { reviewId: editReviewId } = useParams<{ reviewId: string }>()
   const [searchParams] = useSearchParams()
   const preselectedEventId = searchParams.get('eventId')
+  const location = useLocation()
+  const quickReviewDraft = (location.state as { quickReviewDraft?: QuickReviewDraft } | null)?.quickReviewDraft
 
   const isEditMode = Boolean(editReviewId)
   const auth = useAuth()
@@ -104,6 +115,23 @@ export default function PostingWritePage() {
       })),
       status: template.status,
       reviewMetaEditable: template.reviewMetaEditable,
+    })
+  }
+
+  // 작성 중 데이터(1순위)를 적용한다. 서버의 저장된 REVIEW_ONLY를 조회하지 않아
+  // reviewId/title/status는 여기서 결정하지 않는다. reviewId를 비워두면 최종 publishPosting에서
+  // resolvePostingTarget이 기존 REVIEW_ONLY를 찾아 승격하므로 lifecycle이 유지된다.
+  const applyQuickReviewDraft = (draft: QuickReviewDraft, eventId: number, eventTitle: string) => {
+    setComposer({
+      reviewId: null,
+      eventId,
+      title: `${eventTitle} 후기`,
+      reviewText: draft.reviewText,
+      rating: draft.rating,
+      contents: draft.contents,
+      images: draft.images ?? [],
+      status: 'REVIEW_ONLY',
+      reviewMetaEditable: true,
     })
   }
 
@@ -234,7 +262,17 @@ export default function PostingWritePage() {
       if (isEditMode && editReviewId) {
         await loadPostForEdit(Number(editReviewId))
       } else if (preselectedEventId) {
-        await handleEventSelect(Number(preselectedEventId), loadedEvents)
+        const eventId = Number(preselectedEventId)
+        const eventTitle = loadedEvents.find((event) => event.eventId === eventId)?.title ?? `행사 #${eventId}`
+
+        // 1순위: 작성 중 데이터가 있으면 서버 조회를 하지 않고 그대로 적용한다.
+        if (quickReviewDraft) {
+          applyQuickReviewDraft(quickReviewDraft, eventId, eventTitle)
+          return
+        }
+
+        // 2순위: 작성 중 데이터가 없으면 기존 REVIEW_ONLY(3순위: 신규) 흐름을 따른다.
+        await handleEventSelect(eventId, loadedEvents)
       }
     }
 
