@@ -817,7 +817,10 @@ export default function EventDetail() {
                   <textarea
                       className="min-h-[110px] w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 outline-none resize-none focus:border-orange-300 transition-colors"
                       value={reviewText}
-                      onChange={(e) => setReviewText(e.target.value)}
+                      onChange={(e) => {
+                        setReviewText(e.target.value);
+                        setReviewDraftTouched(true);
+                      }}
                       disabled={!reviewMetaEditable}
                       placeholder="행사를 다녀온 한 줄 감상을 남겨 주세요."
                   />
@@ -825,7 +828,14 @@ export default function EventDetail() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">발자국 평점</label>
-                  <PawRating value={rating} onChange={setRating} readOnly={!reviewMetaEditable} />
+                  <PawRating
+                    value={rating}
+                    onChange={(v) => {
+                      setRating(v);
+                      setReviewDraftTouched(true);
+                    }}
+                    readOnly={!reviewMetaEditable}
+                  />
                 </div>
 
                 <div>
