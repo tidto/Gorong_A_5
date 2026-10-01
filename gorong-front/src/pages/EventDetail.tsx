@@ -760,7 +760,7 @@ export default function EventDetail() {
               </div>
               <button
                   className="rounded-full border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600 whitespace-nowrap"
-                  onClick={() => navigate('/reviews')}
+                  onClick={() => navigate(`/posting/write?eventId=${id}`)}
               >
                 정식 포스팅으로 이어쓰기
               </button>

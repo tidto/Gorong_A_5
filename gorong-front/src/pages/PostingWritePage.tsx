@@ -42,6 +42,9 @@ const initialComposer: ComposerState = {
   reviewMetaEditable: true,
 }
 
+// 간편 리뷰 생성 시 백엔드가 부여하는 임시 제목. 정식 포스팅 제목으로는 사용하지 않는다.
+const QUICK_REVIEW_PLACEHOLDER_TITLE = '임시 포스팅'
+
 export default function PostingWritePage() {
   const { reviewId: editReviewId } = useParams<{ reviewId: string }>()
   const [searchParams] = useSearchParams()
@@ -61,10 +64,13 @@ export default function PostingWritePage() {
 
   const loadParticipatedEvents = async () => {
     try {
-      setEvents(await getParticipatedEvents())
+      const loaded = await getParticipatedEvents()
+      setEvents(loaded)
+      return loaded
     } catch (error) {
       console.error('참여 행사 조회 실패:', error)
       setEvents([])
+      return [] as ParticipatedEvent[]
     }
   }
 
@@ -78,10 +84,16 @@ export default function PostingWritePage() {
       return
     }
 
+    const templateTitle = template.title?.trim()
+    const resolvedTitle =
+      templateTitle && templateTitle !== QUICK_REVIEW_PLACEHOLDER_TITLE
+        ? templateTitle
+        : `${eventTitle} 후기`
+
     setComposer({
       reviewId: template.id,
       eventId,
-      title: template.title?.trim() || `${eventTitle} 후기`,
+      title: resolvedTitle,
       reviewText: template.reviewText ?? '',
       rating: template.rating ?? 0,
       contents: template.contents ?? '',
@@ -95,8 +107,11 @@ export default function PostingWritePage() {
     })
   }
 
-  const handleEventSelect = async (eventId: number) => {
-    const selectedEvent = events.find((event) => event.eventId === eventId)
+  // availableEvents는 최초 진입 시 useEffect에서 loadParticipatedEvents() 결과를 직접 넘겨
+  // events state가 아직 반영되지 않은 stale closure를 피하기 위한 것이다.
+  const handleEventSelect = async (eventId: number, availableEvents?: ParticipatedEvent[]) => {
+    const source = availableEvents ?? events
+    const selectedEvent = source.find((event) => event.eventId === eventId)
     setComposer((current) => ({
       ...current,
       eventId,
@@ -212,14 +227,18 @@ export default function PostingWritePage() {
   }
 
   useEffect(() => {
-    loadParticipatedEvents()
-    getMyVerifiedVenueIds().then(setVerifiedVenueIds).catch(() => {})
+    const initialize = async () => {
+      const loadedEvents = await loadParticipatedEvents()
+      getMyVerifiedVenueIds().then(setVerifiedVenueIds).catch(() => {})
 
-    if (isEditMode && editReviewId) {
-      loadPostForEdit(Number(editReviewId))
-    } else if (preselectedEventId) {
-      handleEventSelect(Number(preselectedEventId))
+      if (isEditMode && editReviewId) {
+        await loadPostForEdit(Number(editReviewId))
+      } else if (preselectedEventId) {
+        await handleEventSelect(Number(preselectedEventId), loadedEvents)
+      }
     }
+
+    void initialize()
   }, [])
 
   const ratingLabels = ['', '별로예요', '그저 그래요', '괜찮아요', '좋아요', '최고예요']
