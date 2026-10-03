@@ -79,6 +79,8 @@ export interface AppGroup {
   event: string
   eventContentId?: string | null
   location: string
+  content?: string | null
+  condition?: string | null
   meetingDate?: string
   meetingTime?: string
   maxMembers: number
@@ -86,6 +88,7 @@ export interface AppGroup {
   joined: boolean       // 내가 이미 참가했는지
   gathered: boolean     // 모임 성사 인증 여부
   status: string
+  ownedByMe?: boolean
 }
 
 export interface EventParticipation {

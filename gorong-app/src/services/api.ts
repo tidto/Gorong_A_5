@@ -175,6 +175,43 @@ export const verifyArrival = (venueId: string, lat: number, lng: number) => {
 export const fetchAppGroups = () =>
     api.get<AppGroup[]>('/app/groups')
 
+export type CreateAppGroupPayload = {
+    title: string
+    event: string
+    eventContentId?: string
+    location: string
+    content: string
+    maxMembers: number
+    meetingDate: string
+    meetingTime: string
+    condition: string
+}
+
+export const createAppGroup = (payload: CreateAppGroupPayload) => {
+    const { maxMembers, ...groupPost } = payload
+    // 웹 모집글 작성 API는 모임 인원을 maxCapacity 필드로 받는다.
+    return publicApi.post<{ id: number }>('/api/groups', { ...groupPost, maxCapacity: maxMembers })
+}
+
+export const updateAppGroup = (groupId: number, payload: CreateAppGroupPayload) =>
+    api.put<AppGroup>(`/app/groups/${groupId}`, payload)
+
+export const deleteAppGroup = (groupId: number) =>
+    api.delete<void>(`/app/groups/${groupId}`)
+
+// 웹 모임 채팅과 같은 DB 이력을 조회합니다. 이 엔드포인트는 /api/v1 접두사 밖에 있습니다.
+export interface GroupChatHistoryMessage {
+    roomId?: string
+    user?: string
+    senderEmail?: string
+    senderUserId?: number | null
+    text?: string
+    sentAt?: string | number[] | number | null
+}
+
+export const fetchGroupChatHistory = (groupId: number) =>
+    publicApi.get<GroupChatHistoryMessage[]>(`/api/chat/${groupId}/history`)
+
 export const fetchMyParticipations = () =>
     publicApi.get<EventParticipation[]>('/api/event-participation/me')
 

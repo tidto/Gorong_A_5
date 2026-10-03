@@ -25,6 +25,8 @@ import TrailScreen from '../screens/TrailScreen'
 import GroupScreen from '../screens/GroupScreen'
 import ReportScreen from '../screens/ReportScreen'
 import CatTowerStack from './CatTowerStack'
+import GroupDetailScreen from '../screens/GroupDetailScreen'
+import type { AppGroup } from '../types'
 
 // ─── 네비게이션 파라미터 타입 ─────────────────
 // AuthStack 화면 목록 & 파라미터
@@ -43,9 +45,15 @@ export type MainTabParamList = {
   신고: undefined
 }
 
+export type MainStackParamList = {
+  MainTabs: undefined
+  GroupDetail: { group: AppGroup }
+}
+
 // ─── 네비게이터 인스턴스 ──────────────────────
 const AuthStack = createStackNavigator<AuthStackParamList>()
 const MainTab = createBottomTabNavigator<MainTabParamList>()
+const MainStack = createStackNavigator<MainStackParamList>()
 
 // ─────────────────────────────────────────────
 // AuthNavigator — 로그인/회원가입 Stack
@@ -68,6 +76,15 @@ export function AuthNavigator() {
 // MainNavigator — 로그인 후 탭 네비게이션
 // ─────────────────────────────────────────────
 export function MainNavigator() {
+  return (
+    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+      <MainStack.Screen name="MainTabs" component={MainTabs} />
+      <MainStack.Screen name="GroupDetail" component={GroupDetailScreen} />
+    </MainStack.Navigator>
+  )
+}
+
+function MainTabs() {
   const insets = useSafeAreaInsets()
 
   return (

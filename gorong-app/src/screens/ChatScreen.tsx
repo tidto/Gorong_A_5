@@ -20,6 +20,7 @@ import {
 } from 'react-native'
 import * as Location from 'expo-location'
 import { useChat } from '../hooks/useChat'
+import { useGroupChat } from '../hooks/useGroupChat'
 import { useAuthStore } from '../store/authStore'
 import { auth } from '../config/firebaseConfig'
 import { AppGroup } from '../types'
@@ -28,17 +29,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ensureGroupRoom,
   markGroupGathered,
-  sendGroupMessage,
   shareLocation,
-  subscribeGroupChat,
   subscribeGroupLocations,
   subscribeGroupRoom,
 } from '../services/firestore'
 
+type ChatScreenMessage = {
+  id: string
+  user: string
+  nickname: string
+  userId: string
+  isMe: boolean
+  text: string
+  sentAt?: string | number
+}
+
 export default function ChatScreen() {
   const [mode, setMode] = useState<'anonymous' | 'group'>('anonymous')
   const [input, setInput] = useState('')
-  const [groupMessages, setGroupMessages] = useState<any[]>([])
   const [groupMembers, setGroupMembers] = useState<string[]>([])
   const [groupGathered, setGroupGathered] = useState(false)
   const [sharedCount, setSharedCount] = useState(0)
@@ -51,29 +59,36 @@ export default function ChatScreen() {
   const [loadingGroups, setLoadingGroups] = useState(true)
 
   // [수정] 방 준비 실패 상태 별도 추적 → 재시도 버튼 노출용
-  const [roomPrepFailed, setRoomPrepFailed] = useState(false)
-  // [수정] 방 준비 중 로딩 표시용
-  const [roomPreparing, setRoomPreparing] = useState(false)
 
   const insets = useSafeAreaInsets()
-  const { insideVenueId, user } = useAuthStore()
-  const myNickname = user?.nickname ?? '익명'
+  const { insideVenueId } = useAuthStore()
   const myUid = auth.currentUser?.uid ?? null
 
   const { messages, sendMessage, isConnected } = useChat(insideVenueId)
 
   const selectedGroup = useMemo(
-    () => joinedGroups.find((group) => String(group.id) === selectedGroupId) ?? null,
-    [joinedGroups, selectedGroupId]
+      () => joinedGroups.find((group) => String(group.id) === selectedGroupId) ?? null,
+      [joinedGroups, selectedGroupId]
   )
 
-  const canUseGroupChat = Boolean(selectedGroup)
-  const isGroupRoomClosed = Boolean(groupRoomClosedAt && Date.now() > groupRoomClosedAt)
+  const {
+    messages: groupMessages,
+    isConnected: isGroupChatConnected,
+    isLoading: isGroupChatLoading,
+    error: groupChatError,
+    sendMessage: sendGroupChatMessage,
+    retry: retryGroupChat,
+  } = useGroupChat(selectedGroup?.id ?? null, mode === 'group')
+
+  const isGroupRoomClosed = Boolean(
+      (selectedGroup && isGroupListingClosed(selectedGroup)) ||
+      (groupRoomClosedAt && Date.now() > groupRoomClosedAt)
+  )
 
   const canSendAnonymousMessage = mode === 'anonymous' && isConnected
-  const canSendGroupMessage = Boolean(selectedGroup && canUseGroupChat && !isGroupRoomClosed)
+  const canSendGroupMessage = Boolean(selectedGroup && isGroupChatConnected && !isGroupRoomClosed)
 
-  const parseChatDate = (value?: string | null) => {
+  function parseChatDate(value?: string | null) {
     if (!value) return null
     const parts = value.split('-').map(Number)
     if (parts.length === 3 && parts.every(Number.isFinite)) {
@@ -83,8 +98,8 @@ export default function ChatScreen() {
     return Number.isNaN(parsed.getTime()) ? null : parsed
   }
 
-  // [수정 5] 당일 기준 다음날 23:59까지만 표시 (2일 이후는 만료 처리)
-  const isGroupListingClosed = (group: AppGroup) => {
+  // 만남 다음날이 지나면 이전 모임 기록만 볼 수 있도록 채팅방을 읽기 전용 처리합니다.
+  function isGroupListingClosed(group: AppGroup) {
     const meetingDate = parseChatDate(group.meetingDate)
     if (!meetingDate) return false
     const expireAt = new Date(meetingDate)
@@ -93,7 +108,6 @@ export default function ChatScreen() {
     return Date.now() > expireAt.getTime()
   }
 
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
   const waitForAuthReady = async () => {
     if (auth.currentUser) return true
     return new Promise<boolean>((resolve) => {
@@ -114,18 +128,9 @@ export default function ChatScreen() {
         const response = await fetchAppGroups()
         const groups = response.data.filter((group) => group.joined)
         setJoinedGroups(groups)
-        // [수정 5] 만료되지 않은 모임만 선택 가능
-        const activeGroups = groups.filter((g) => {
-          const meetingDate = parseChatDate(g.meetingDate)
-          if (!meetingDate) return true
-          const expireAt = new Date(meetingDate)
-          expireAt.setDate(expireAt.getDate() + 1)
-          expireAt.setHours(23, 59, 59, 999)
-          return Date.now() <= expireAt.getTime()
-        })
         setSelectedGroupId((current) => {
-          if (current && activeGroups.some((g) => String(g.id) === current)) return current
-          return activeGroups[0] ? String(activeGroups[0].id) : null
+          if (current && groups.some((g) => String(g.id) === current)) return current
+          return groups[0] ? String(groups[0].id) : null
         })
       } catch (error) {
         console.error('[ChatScreen] 모임 목록 조회 실패:', error)
@@ -141,29 +146,33 @@ export default function ChatScreen() {
     if (!selectedGroup || !myUid) {
       setGroupRoomReady(false)
       setGroupRoomClosedAt(null)
-      setGroupMessages([])
       setGroupMembers([])
       setGroupGathered(false)
       setSharedLocs({})
       setSharedCount(0)
       setVerifyMessage('')
-      setRoomPrepFailed(false)
       return
     }
 
     setSharedLocs({})
     setSharedCount(0)
     setVerifyMessage('')
-    setRoomPrepFailed(false)
-    setRoomPreparing(true)
 
-    let unsubMsg: (() => void) | null = null
+    // 지난 모임은 서버 채팅 이력을 열람할 수 있도록 두되,
+    // Firestore 방을 다시 준비해 종료된 채팅방을 실수로 열지 않습니다.
+    if (isGroupListingClosed(selectedGroup)) {
+      setGroupRoomReady(false)
+      setGroupRoomClosedAt(null)
+      setGroupMembers([])
+      setGroupGathered(false)
+      return
+    }
+
     let unsubLoc: (() => void) | null = null
     let unsubRoom: (() => void) | null = null
     let cancelled = false
 
     const groupId = String(selectedGroup.id)
-    unsubMsg = subscribeGroupChat(groupId, setGroupMessages)
     unsubLoc = subscribeGroupLocations(groupId, (locs) => {
       setSharedLocs(locs)
       setSharedCount(Object.keys(locs).length)
@@ -175,7 +184,6 @@ export default function ChatScreen() {
       setGroupRoomReady(true)
     })
     setGroupRoomReady(true)
-    setRoomPreparing(false)
 
     ;(async () => {
       try {
@@ -183,14 +191,12 @@ export default function ChatScreen() {
       } catch (error) {
         if (cancelled) return
         console.error('[ChatScreen] 모임 룸 생성 실패:', error)
-        setRoomPrepFailed(true)
         setVerifyMessage('모임 채팅방 생성에 실패했습니다. 채팅은 계속 사용할 수 있습니다.')
       }
     })()
 
     return () => {
       cancelled = true
-      unsubMsg?.()
       unsubLoc?.()
       unsubRoom?.()
     }
@@ -198,38 +204,52 @@ export default function ChatScreen() {
 
   // ── [수정] 재시도 함수 ────────────────────────────────────
   const handleRetryRoomPrep = async () => {
-    if (!selectedGroup || !myUid) return
-    setRoomPrepFailed(false)
-    setRoomPreparing(true)
+    if (!selectedGroup || !myUid || isGroupListingClosed(selectedGroup)) return
     setVerifyMessage('')
     try {
       await ensureGroupRoom(selectedGroup, myUid)
       setGroupRoomReady(true)
+      retryGroupChat()
     } catch (err) {
-      setRoomPrepFailed(true)
       setVerifyMessage('재시도 실패. 네트워크를 확인해 주세요.')
-    } finally {
-      setRoomPreparing(false)
     }
   }
 
-  const visibleMessages = useMemo(
-    () => (mode === 'anonymous' ? messages : groupMessages),
-    [mode, messages, groupMessages]
-  )
+  const visibleMessages = useMemo<ChatScreenMessage[]>(() => {
+    if (mode === 'anonymous') {
+      return messages.map((message) => ({
+        id: message.id,
+        user: message.nickname || '익명',
+        nickname: message.nickname || '익명',
+        userId: message.userId,
+        isMe: message.userId === myUid,
+        text: message.text,
+        sentAt: message.createdAt,
+      }))
+    }
+    return groupMessages.map((message) => ({
+      id: message.id,
+      user: message.user,
+      nickname: message.user,
+      userId: message.senderEmail ?? '',
+      isMe: message.isMe,
+      text: message.text,
+      sentAt: message.sentAt,
+    }))
+  }, [mode, messages, groupMessages, myUid])
 
   const getDistanceMeters = (
-    a: { lat: number; lng: number },
-    b: { lat: number; lng: number }
+      a: { lat: number; lng: number },
+      b: { lat: number; lng: number }
   ) => {
     const R = 6371000
     const dLat = (b.lat - a.lat) * Math.PI / 180
     const dLon = (b.lng - a.lng) * Math.PI / 180
     const x =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(a.lat * Math.PI / 180) *
-      Math.cos(b.lat * Math.PI / 180) *
-      Math.sin(dLon / 2) ** 2
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(a.lat * Math.PI / 180) *
+        Math.cos(b.lat * Math.PI / 180) *
+        Math.sin(dLon / 2) ** 2
     return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x))
   }
 
@@ -285,13 +305,7 @@ export default function ChatScreen() {
         await sendMessage(text)
         sent = true
       } else if (selectedGroup && !isGroupRoomClosed) {
-        await sendGroupMessage(String(selectedGroup.id), {
-          text,
-          userId: myUid,
-          nickname: myNickname,
-          createdAt: Date.now(),
-          isAnonymous: false,
-        })
+        sendGroupChatMessage(text)
         sent = true
       }
     } catch (error) {
@@ -308,199 +322,192 @@ export default function ChatScreen() {
       return isConnected ? '메시지 입력...' : '행사장 진입 후 이용 가능'
     }
     if (!selectedGroup) return '모임을 선택해 주세요'
-    if (roomPreparing) return '채팅방 연결 중...'
-    if (roomPrepFailed) return '채팅방 연결 실패 (재시도 버튼 누르세요)'
-    if (isGroupRoomClosed) return '종료된 채팅방입니다'
+    if (isGroupRoomClosed) return '종료된 채팅방의 기록을 확인 중입니다'
+    if (isGroupChatLoading) return '채팅방 연결 중...'
+    if (!isGroupChatConnected) return '채팅방 연결 후 메시지를 보낼 수 있습니다'
     return '모임 메시지 입력...'
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={[styles.header, { paddingTop: 16 + insets.top }]}>
-        <Text style={styles.headerTitle}>💬 현장 채팅</Text>
-        <Text style={styles.headerSub}>
-          {mode === 'anonymous'
-            ? (isConnected ? '📍 행사장 내 익명 채팅' : '행사장에 입장하면 채팅 가능')
-            : (selectedGroup
-              ? `👥 ${selectedGroup.event || selectedGroup.title} · ${selectedGroup.meetingDate || '미정'}`
-              : '참여 중인 모임을 선택하세요')}
-        </Text>
-      </View>
-
-      {/* 탭 전환 */}
-      <View style={styles.modeRow}>
-        <TouchableOpacity
-          style={[styles.modeBtn, mode === 'anonymous' && styles.modeBtnActive]}
-          onPress={() => setMode('anonymous')}
-        >
-          <Text style={[styles.modeText, mode === 'anonymous' && styles.modeTextActive]}>익명</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeBtn, mode === 'group' && styles.modeBtnActive]}
-          onPress={() => setMode('group')}
-        >
-          <Text style={[styles.modeText, mode === 'group' && styles.modeTextActive]}>모임</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 모임 패널 */}
-      {mode === 'group' && (
-        <View style={styles.groupPanel}>
-          <Text style={styles.panelTitle}>참여 중인 모임</Text>
-
-          {loadingGroups ? (
-            <ActivityIndicator color="#FF6B35" style={{ marginVertical: 8 }} />
-          ) : joinedGroups.length === 0 ? (
-            <Text style={styles.panelText}>
-              참여 중인 모임이 없습니다. 모임 탭에서 먼저 참가해 주세요.
-            </Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupChipRow}>
-              {/* [수정 5] 만료된 모임(당일+1일 이후)은 목록에서 숨김 */}
-              {joinedGroups.filter((g) => !isGroupListingClosed(g)).length === 0 ? (
-                <Text style={[styles.panelText, { marginVertical: 4 }]}>
-                  표시할 채팅방이 없습니다. (만남 다음날 이후 채팅방은 자동으로 숨겨집니다)
-                </Text>
-              ) : (
-                joinedGroups.filter((g) => !isGroupListingClosed(g)).map((group) => {
-                const active = String(group.id) === selectedGroupId
-                return (
-                  <TouchableOpacity
-                    key={group.id}
-                    style={[styles.groupChip, active && styles.groupChipActive]}
-                    onPress={() => setSelectedGroupId(String(group.id))}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.groupChipTitle, active && styles.groupChipTitleActive]} numberOfLines={1}>
-                      {group.event || group.title}
-                    </Text>
-                    <Text style={[styles.groupChipSub, active && styles.groupChipSubActive]} numberOfLines={1}>
-                      {group.meetingDate || '미정'} {group.meetingTime || ''}
-                    </Text>
-                    <Text style={[styles.groupChipMeta, active && styles.groupChipMetaActive]}>
-                      {`${group.currentMembers}/${group.maxMembers}명`}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              })
-              )}
-            </ScrollView>
-          )}
-
-          {selectedGroup && (
-            <View style={styles.groupInfoBox}>
-              <Text style={styles.groupInfoTitle}>{selectedGroup.event || selectedGroup.title}</Text>
-              <Text style={styles.groupInfoText}>장소: {selectedGroup.location || '미정'}</Text>
-              <Text style={styles.groupInfoText}>
-                만남: {selectedGroup.meetingDate || '미정'} {selectedGroup.meetingTime || ''}
-              </Text>
-              <Text style={styles.groupInfoText}>
-                인원: {selectedGroup.currentMembers}/{selectedGroup.maxMembers}
-              </Text>
-
-              {/* ── [수정] 방 상태 표시 ─────────────────────────── */}
-              {roomPreparing && (
-                <View style={styles.roomStatusRow}>
-                  <ActivityIndicator size="small" color="#FF6B35" />
-                  <Text style={styles.okText}> 채팅방 연결 중...</Text>
-                </View>
-              )}
-              {!roomPreparing && groupRoomReady && !isGroupRoomClosed && (
-                <Text style={styles.okText}>✅ 모임 채팅 연결됨</Text>
-              )}
-              {!roomPreparing && roomPrepFailed && (
-                <TouchableOpacity style={styles.retryBtn} onPress={handleRetryRoomPrep}>
-                  <Text style={styles.retryBtnText}>🔄 채팅방 재연결</Text>
-                </TouchableOpacity>
-              )}
-              {isGroupRoomClosed && (
-                <Text style={styles.verifyText}>채팅방이 종료되었습니다 (모임 날짜 3일 경과)</Text>
-              )}
-
-              {!!verifyMessage && <Text style={styles.verifyText}>{verifyMessage}</Text>}
-
-              {/* ── 위치 공유 / 모임 성사 인증 버튼 ─────────────── */}
-              <View style={styles.groupActionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.smallBtn,
-                    isGroupRoomClosed && styles.smallBtnDisabled,
-                  ]}
-                  onPress={handleShareLocation}
-                  disabled={isGroupRoomClosed}
-                >
-                  <Text style={styles.smallBtnText}>📍 위치 공유(5초)</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.smallBtn,
-                    (groupGathered || isGroupRoomClosed) && styles.smallBtnDisabled,
-                  ]}
-                  onPress={handleVerifyGathering}
-                  disabled={groupGathered || isGroupRoomClosed}
-                >
-                  <Text style={styles.smallBtnText}>
-                    {groupGathered ? '✅ 인증됨' : '모임 성사 인증'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.shareInfo}>현재 위치 공유 중 {sharedCount}명</Text>
-            </View>
-          )}
+      <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={[styles.header, { paddingTop: 16 + insets.top }]}>
+          <Text style={styles.headerTitle}>💬 현장 채팅</Text>
+          <Text style={styles.headerSub}>
+            {mode === 'anonymous'
+                ? (isConnected ? '📍 행사장 내 익명 채팅' : '행사장에 입장하면 채팅 가능')
+                : (selectedGroup
+                    ? `👥 ${selectedGroup.event || selectedGroup.title} · ${selectedGroup.meetingDate || '미정'}`
+                    : '참여 중인 모임을 선택하세요')}
+          </Text>
         </View>
-      )}
 
-      {/* 메시지 목록 */}
-      <FlatList
-        data={visibleMessages}
-        keyExtractor={(item) => item.id}
-        style={styles.messageList}
-        renderItem={({ item }) => {
-          const isMine = item.userId === myUid
-          return (
-            <View style={[styles.bubbleWrap, isMine && styles.bubbleWrapMine]}>
-              <View style={[styles.bubble, isMine && styles.bubbleMine]}>
-                {!isMine && <Text style={styles.nickname}>{item.nickname}</Text>}
-                <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
-                  {item.text}
-                </Text>
-              </View>
+        {/* 탭 전환 */}
+        <View style={styles.modeRow}>
+          <TouchableOpacity
+              style={[styles.modeBtn, mode === 'anonymous' && styles.modeBtnActive]}
+              onPress={() => setMode('anonymous')}
+          >
+            <Text style={[styles.modeText, mode === 'anonymous' && styles.modeTextActive]}>익명</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+              style={[styles.modeBtn, mode === 'group' && styles.modeBtnActive]}
+              onPress={() => setMode('group')}
+          >
+            <Text style={[styles.modeText, mode === 'group' && styles.modeTextActive]}>모임 채팅방</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 모임 패널 */}
+        {mode === 'group' && (
+            <View style={styles.groupPanel}>
+              <Text style={styles.panelTitle}>참가 중인 모임 채팅방</Text>
+
+              {loadingGroups ? (
+                  <ActivityIndicator color="#FF6B35" style={{ marginVertical: 8 }} />
+              ) : joinedGroups.length === 0 ? (
+                  <Text style={styles.panelText}>
+                    참여 중인 모임이 없습니다. 모임 탭에서 먼저 참가해 주세요.
+                  </Text>
+              ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupChipRow}>
+                    {joinedGroups.map((group) => {
+                      const active = String(group.id) === selectedGroupId
+                      return (
+                          <TouchableOpacity
+                              key={group.id}
+                              style={[styles.groupChip, active && styles.groupChipActive]}
+                              onPress={() => setSelectedGroupId(String(group.id))}
+                              activeOpacity={0.85}
+                          >
+                            <Text style={[styles.groupChipTitle, active && styles.groupChipTitleActive]} numberOfLines={1}>
+                              {group.event || group.title}
+                            </Text>
+                            <Text style={[styles.groupChipSub, active && styles.groupChipSubActive]} numberOfLines={1}>
+                              {group.meetingDate || '미정'} {group.meetingTime || ''}
+                            </Text>
+                            <Text style={[styles.groupChipMeta, active && styles.groupChipMetaActive]}>
+                              {`${group.currentMembers}/${group.maxMembers}명`}
+                            </Text>
+                          </TouchableOpacity>
+                      )
+                    })}
+                  </ScrollView>
+              )}
+
+              {selectedGroup && (
+                  <View style={styles.groupInfoBox}>
+                    <Text style={styles.groupInfoTitle}>{selectedGroup.event || selectedGroup.title}</Text>
+                    <Text style={styles.groupInfoText}>장소: {selectedGroup.location || '미정'}</Text>
+                    <Text style={styles.groupInfoText}>
+                      만남: {selectedGroup.meetingDate || '미정'} {selectedGroup.meetingTime || ''}
+                    </Text>
+                    <Text style={styles.groupInfoText}>
+                      인원: {selectedGroup.currentMembers}/{selectedGroup.maxMembers}
+                    </Text>
+
+                    {/* ── [수정] 방 상태 표시 ─────────────────────────── */}
+                    {isGroupChatLoading && (
+                        <View style={styles.roomStatusRow}>
+                          <ActivityIndicator size="small" color="#FF6B35" />
+                          <Text style={styles.okText}> 채팅방 연결 중...</Text>
+                        </View>
+                    )}
+                    {isGroupChatConnected && !isGroupRoomClosed && (
+                        <Text style={styles.okText}>✅ 모임 채팅 연결됨 · DB 동기화</Text>
+                    )}
+                    {isGroupRoomClosed && (
+                        <Text style={styles.verifyText}>종료된 모임입니다. 이전 채팅 기록만 볼 수 있습니다.</Text>
+                    )}
+                    {!!groupChatError && !isGroupRoomClosed && (
+                        <TouchableOpacity style={styles.retryBtn} onPress={() => { void handleRetryRoomPrep() }}>
+                          <Text style={styles.retryBtnText}>🔄 채팅방 재연결</Text>
+                        </TouchableOpacity>
+                    )}
+                    {!!groupChatError && <Text style={styles.verifyText}>{groupChatError}</Text>}
+                    {!!verifyMessage && <Text style={styles.verifyText}>{verifyMessage}</Text>}
+
+                    {/* ── 위치 공유 / 모임 성사 인증 버튼 ─────────────── */}
+                    <View style={styles.groupActionRow}>
+                      <TouchableOpacity
+                          style={[
+                            styles.smallBtn,
+                            isGroupRoomClosed && styles.smallBtnDisabled,
+                          ]}
+                          onPress={handleShareLocation}
+                          disabled={isGroupRoomClosed}
+                      >
+                        <Text style={styles.smallBtnText}>📍 위치 공유(5초)</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                          style={[
+                            styles.smallBtn,
+                            (groupGathered || isGroupRoomClosed) && styles.smallBtnDisabled,
+                          ]}
+                          onPress={handleVerifyGathering}
+                          disabled={groupGathered || isGroupRoomClosed}
+                      >
+                        <Text style={styles.smallBtnText}>
+                          {groupGathered ? '✅ 인증됨' : '모임 성사 인증'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.shareInfo}>현재 위치 공유 중 {sharedCount}명</Text>
+                  </View>
+              )}
             </View>
-          )
-        }}
-      />
+        )}
 
-      {/* 입력창 */}
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder={getInputPlaceholder()}
-          placeholderTextColor="#aaa"
-          editable={
-            mode === 'anonymous'
-              ? isConnected
-              : Boolean(selectedGroup && !isGroupRoomClosed)
-          }
-          onSubmitEditing={handleSend}
-          returnKeyType="send"
+        {/* 메시지 목록 */}
+        <FlatList
+            data={visibleMessages}
+            keyExtractor={(item) => item.id}
+            style={styles.messageList}
+            renderItem={({ item }) => {
+              const isMine = item.isMe
+              return (
+                  <View style={[styles.bubbleWrap, isMine && styles.bubbleWrapMine]}>
+                    <View style={[styles.bubble, isMine && styles.bubbleMine]}>
+                      {!isMine && <Text style={styles.nickname}>{item.nickname ?? item.user}</Text>}
+                      <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
+                        {item.text}
+                      </Text>
+                    </View>
+                  </View>
+              )
+            }}
         />
-        <TouchableOpacity
-          style={[
-            styles.sendBtn,
-            !(canSendAnonymousMessage || canSendGroupMessage) && styles.sendBtnDisabled,
-          ]}
-          onPress={handleSend}
-          disabled={!(canSendAnonymousMessage || canSendGroupMessage)}
-        >
-          <Text style={styles.sendBtnText}>전송</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+
+        {/* 입력창 */}
+        <View style={styles.inputRow}>
+          <TextInput
+              style={styles.input}
+              value={input}
+              onChangeText={setInput}
+              placeholder={getInputPlaceholder()}
+              placeholderTextColor="#aaa"
+              editable={
+                mode === 'anonymous'
+                    ? isConnected
+                    : Boolean(selectedGroup && !isGroupRoomClosed)
+              }
+              onSubmitEditing={handleSend}
+              returnKeyType="send"
+          />
+          <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                !(canSendAnonymousMessage || canSendGroupMessage) && styles.sendBtnDisabled,
+              ]}
+              onPress={handleSend}
+              disabled={!(canSendAnonymousMessage || canSendGroupMessage)}
+          >
+            <Text style={styles.sendBtnText}>전송</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
   )
 }
 
