@@ -99,6 +99,7 @@ export interface EventParticipation {
   groupPostTitle?: string | null
   participationType: 'SOLO' | 'GROUP'
   visitDate?: string | null
+  status?: string
   appliedAt: string
 }
 

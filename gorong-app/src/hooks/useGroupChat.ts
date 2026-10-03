@@ -97,16 +97,16 @@ export function useGroupChat(groupId: number | null, enabled: boolean) {
                 setMessages(historyResponse.data.map((message, index) => toMessage(message, index)))
 
                 const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1'
-                const root = apiBase.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '')
-                const socketHost = root
-                    .replace(/^https?:\/\//, '')
-                    .replace(/:\d+$/, '')
-                const socketProtocol = root.startsWith('https://') ? 'wss' : 'ws'
+                const backendUrl = new URL(apiBase)
+                const socketProtocol = backendUrl.protocol === 'https:' ? 'wss' : 'ws'
+                // API 주소에 포트가 명시되어 있으면 그대로 사용한다. 생략된 배포 주소는 기존처럼 8080을 사용한다.
+                const socketPort = backendUrl.port || '8080'
                 const session = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 
                 const socket = new WebSocket(
-                    `${socketProtocol}://${socketHost}:8080/api/ws-chat/000/${session}/websocket`
+                    `${socketProtocol}://${backendUrl.hostname}:${socketPort}/api/ws-chat/000/${session}/websocket`
                 )
+                socketRef.current = socket
 
                 socket.onopen = () => {
                     // Spring SockJS는 STOMP 프레임을 JSON 배열로 감싸서 주고받습니다.

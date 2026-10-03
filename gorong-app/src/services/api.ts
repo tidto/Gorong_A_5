@@ -193,11 +193,57 @@ export const createAppGroup = (payload: CreateAppGroupPayload) => {
     return publicApi.post<{ id: number }>('/api/groups', { ...groupPost, maxCapacity: maxMembers })
 }
 
-export const updateAppGroup = (groupId: number, payload: CreateAppGroupPayload) =>
-    api.put<AppGroup>(`/app/groups/${groupId}`, payload)
+type WebGroupPostResponse = {
+    id: number
+    title: string
+    event: string
+    eventContentId?: string | null
+    location: string
+    content?: string | null
+    condition?: string | null
+    meetingDate?: string
+    meetingTime?: string
+    maxCapacity: number
+    currentCapacity: number
+    status: string
+}
+
+const toAppGroup = (group: WebGroupPostResponse): AppGroup => ({
+    id: group.id,
+    title: group.title,
+    event: group.event,
+    eventContentId: group.eventContentId,
+    location: group.location,
+    content: group.content,
+    condition: group.condition,
+    meetingDate: group.meetingDate,
+    meetingTime: group.meetingTime,
+    maxMembers: group.maxCapacity,
+    currentMembers: group.currentCapacity,
+    joined: false,
+    gathered: group.status?.toUpperCase() === 'FINISHED',
+    status: group.status,
+    ownedByMe: true,
+})
+
+export const updateAppGroup = async (groupId: number, payload: CreateAppGroupPayload) => {
+    const { maxMembers, ...groupPost } = payload
+    const response = await publicApi.put<WebGroupPostResponse>(`/api/groups/${groupId}`, {
+        ...groupPost,
+        maxCapacity: maxMembers,
+    })
+    return toAppGroup(response.data)
+}
 
 export const deleteAppGroup = (groupId: number) =>
-    api.delete<void>(`/app/groups/${groupId}`)
+    publicApi.delete<void>(`/api/groups/${groupId}`)
+
+// Android FCM 토큰을 현재 로그인 사용자에 연결해 모임 채팅 푸시를 받는다.
+export const registerPushToken = (token: string, platform: 'ANDROID') =>
+    api.put<void>('/app/push-tokens', { token, platform })
+
+export const unregisterPushToken = (token: string) =>
+    api.delete<void>('/app/push-tokens', { data: { token, platform: 'ANDROID' } })
 
 // 웹 모임 채팅과 같은 DB 이력을 조회합니다. 이 엔드포인트는 /api/v1 접두사 밖에 있습니다.
 export interface GroupChatHistoryMessage {
