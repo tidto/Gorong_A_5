@@ -4,6 +4,7 @@ package com.gorong.backend.domain.group.controller;
 import com.gorong.backend.domain.group.dto.ChatMessage;
 import com.gorong.backend.domain.group.entity.ChatMessageEntity;
 import com.gorong.backend.domain.group.repository.ChatMessageRepository;
+import com.gorong.backend.domain.group.service.GroupChatPushNotificationService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
 import com.gorong.backend.domain.user.repository.UserProfileRepository;
@@ -34,6 +35,7 @@ public class ChatController {
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;             // ✅ 추가
     private final UserProfileRepository userProfileRepository; // ✅ 추가
+    private final GroupChatPushNotificationService groupChatPushNotificationService;
 
     // ✅ 이메일 → 닉네임 조회 헬퍼
     private String getNicknameByEmail(String email) {
@@ -81,6 +83,12 @@ public class ChatController {
         chatMessage.setType(ChatMessage.MessageType.CHAT);
 
         messagingTemplate.convertAndSend("/topic/group/" + roomId, chatMessage);
+        groupChatPushNotificationService.notifyOtherParticipants(
+                groupId,
+                sender.map(User::getId).orElse(null),
+                displayName,
+                chatMessage.getText()
+        );
     }
 
     // ── 채팅 이력 조회 (REST) ───────────────────────────────────────
