@@ -10,11 +10,15 @@
 //   createStackNavigator → GestureHandlerRootView 필요 (App.tsx에서 감쌈)
 // ─────────────────────────────────────────────────────────────────
 
-import React from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Text } from 'react-native'
+import { AppState, View } from 'react-native'
 import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { fetchAppGroups } from '../services/api'
+import { useGroupChatUnread } from '../hooks/useGroupChatUnread'
+import { useChatUnreadStore } from '../store/chatUnreadStore'
 
 // ─── 화면 임포트 ──────────────────────────────
 import LoginScreen from '../screens/auth/LoginScreen'
@@ -86,8 +90,36 @@ export function MainNavigator() {
 
 function MainTabs() {
   const insets = useSafeAreaInsets()
+  const [joinedGroupIds, setJoinedGroupIds] = useState<number[]>([])
+  const [isChatTabFocused, setIsChatTabFocused] = useState(false)
+  const [chatSocketRevision, setChatSocketRevision] = useState(0)
+  const hasNewMessages = useChatUnreadStore((state) => state.hasNewMessages)
+  const clearNewMessages = useChatUnreadStore((state) => state.clearNewMessages)
+
+  const refreshJoinedGroups = useCallback(async () => {
+    try {
+      const response = await fetchAppGroups()
+      setJoinedGroupIds(response.data.filter((group) => group.joined).map((group) => group.id))
+    } catch (error) {
+      console.warn('[chat-unread] 참여 모임 갱신 실패:', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshJoinedGroups()
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void refreshJoinedGroups()
+        setChatSocketRevision((revision) => revision + 1)
+      }
+    })
+    return () => subscription.remove()
+  }, [refreshJoinedGroups])
+
+  useGroupChatUnread(joinedGroupIds, isChatTabFocused, chatSocketRevision)
 
   return (
+    <View style={{ flex: 1 }}>
       <MainTab.Navigator
       screenOptions={{
         tabBarActiveTintColor: '#FF6B35',
@@ -116,9 +148,35 @@ function MainTabs() {
       <MainTab.Screen
         name="채팅"
         component={ChatScreen}
+        listeners={{
+          focus: () => {
+            setIsChatTabFocused(true)
+            clearNewMessages()
+            void refreshJoinedGroups()
+          },
+          blur: () => setIsChatTabFocused(false),
+        }}
         options={{
           tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>💬</Text>
+            <View style={{ width: 42, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 20, color }}>💬</Text>
+              {hasNewMessages && !isChatTabFocused && (
+                <View style={{
+                  position: 'absolute',
+                  top: -5,
+                  right: -8,
+                  minWidth: 28,
+                  height: 16,
+                  paddingHorizontal: 5,
+                  borderRadius: 8,
+                  backgroundColor: '#EF4444',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>NEW</Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
@@ -166,6 +224,7 @@ function MainTabs() {
           ),
         }}
       />
-    </MainTab.Navigator>
+      </MainTab.Navigator>
+    </View>
   )
 }

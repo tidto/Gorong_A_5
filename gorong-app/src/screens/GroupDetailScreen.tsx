@@ -1,9 +1,11 @@
-import React, { useState } from 'react'
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import React, { useEffect, useState } from 'react'
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import * as Location from 'expo-location'
+import MapView, { Marker } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { MainStackParamList } from '../navigation/AppNavigator'
-import { updateAppGroup, type CreateAppGroupPayload } from '../services/api'
+import { deleteAppGroup, updateAppGroup, type CreateAppGroupPayload } from '../services/api'
 import type { AppGroup } from '../types'
 import GroupPostFormFields from '../components/GroupPostFormFields'
 
@@ -28,6 +30,46 @@ export default function GroupDetailScreen({ route, navigation }: Props) {
   const [form, setForm] = useState<FormState>(() => toForm(route.params.group))
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [meetingCoordinate, setMeetingCoordinate] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [mapLoading, setMapLoading] = useState(false)
+  const [mapError, setMapError] = useState('')
+
+  useEffect(() => {
+    const address = group.location?.trim()
+    if (!address) {
+      setMeetingCoordinate(null)
+      setMapError('저장된 만나는 장소가 없습니다.')
+      return
+    }
+
+    let cancelled = false
+    setMapLoading(true)
+    setMapError('')
+    Location.geocodeAsync(address)
+      .then((results) => {
+        if (cancelled) return
+        const result = results[0]
+        if (!result || !Number.isFinite(result.latitude) || !Number.isFinite(result.longitude)) {
+          setMeetingCoordinate(null)
+          setMapError('저장된 주소에서 위치를 찾지 못했습니다.')
+          return
+        }
+        setMeetingCoordinate({ latitude: result.latitude, longitude: result.longitude })
+      })
+      .catch((error) => {
+        console.warn('모임 장소 지도 조회 실패:', error)
+        if (!cancelled) {
+          setMeetingCoordinate(null)
+          setMapError('장소 지도를 불러오지 못했습니다.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMapLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [group.location])
 
   const updateField = (key: keyof FormState, value: string) => {
     setForm((current) => ({ ...current, [key]: key === 'maxMembers' ? (Number(value) || 0) : value }) as FormState)
@@ -49,7 +91,7 @@ export default function GroupDetailScreen({ route, navigation }: Props) {
     }
     setSaving(true)
     try {
-      const response = await updateAppGroup(group.id, {
+      const updatedGroup = await updateAppGroup(group.id, {
         ...form,
         title: form.title.trim(),
         event: form.event.trim(),
@@ -57,8 +99,13 @@ export default function GroupDetailScreen({ route, navigation }: Props) {
         content: form.content.trim(),
         condition: form.condition.trim(),
       })
-      setGroup(response.data)
-      setForm(toForm(response.data))
+      setGroup((current) => ({
+        ...updatedGroup,
+        joined: current.joined,
+        gathered: current.gathered,
+        ownedByMe: current.ownedByMe,
+      }))
+      setForm(toForm(updatedGroup))
       setEditing(false)
       Alert.alert('완료', '모집글을 수정했습니다.')
     } catch (error) {
@@ -68,6 +115,28 @@ export default function GroupDetailScreen({ route, navigation }: Props) {
       setSaving(false)
     }
   }
+
+  const confirmDelete = () => Alert.alert('모집글 삭제', '이 모집글을 삭제할까요?', [
+    { text: '취소', style: 'cancel' },
+    {
+      text: '삭제',
+      style: 'destructive',
+      onPress: async () => {
+        setDeleting(true)
+        try {
+          await deleteAppGroup(group.id)
+          setDeleting(false)
+          navigation.goBack()
+          Alert.alert('완료', '모집글을 삭제했습니다.')
+        } catch (error) {
+          console.error('모집글 삭제 실패:', error)
+          Alert.alert('안내', '모집글 삭제에 실패했습니다.')
+        } finally {
+          setDeleting(false)
+        }
+      },
+    },
+  ])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8, paddingBottom: insets.bottom }]}>
@@ -104,19 +173,43 @@ export default function GroupDetailScreen({ route, navigation }: Props) {
           <>
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>모임 정보</Text>
-              <InfoRow label="만나는 장소" value={group.location || '미정'} />
               <InfoRow label="날짜와 시간" value={`${group.meetingDate || '미정'} ${group.meetingTime || ''}`} />
               <InfoRow label="참여 인원" value={`${group.currentMembers} / ${group.maxMembers}명`} />
               <InfoRow label="참여 조건" value={group.condition?.trim() || '제한 없음'} />
+            </View>
+            <View style={styles.mapCard}>
+              <Text style={styles.sectionTitle}>만나는 장소</Text>
+              <Text style={styles.mapAddress}>{group.location || '장소 미정'}</Text>
+              {meetingCoordinate ? (
+                <MapView
+                  style={styles.detailMap}
+                  initialRegion={{ ...meetingCoordinate, latitudeDelta: 0.012, longitudeDelta: 0.012 }}
+                  scrollEnabled
+                  zoomEnabled
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                >
+                  <Marker coordinate={meetingCoordinate} title={group.title} description={group.location} pinColor="#FF6B35" />
+                </MapView>
+              ) : (
+                <View style={styles.mapPlaceholder}>
+                  {mapLoading ? <ActivityIndicator color="#FF6B35" /> : <Text style={styles.mapError}>{mapError || '지도를 불러오는 중...'}</Text>}
+                </View>
+              )}
             </View>
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>모임 소개</Text>
               <Text style={styles.description}>{group.content?.trim() || '등록된 소개가 없습니다.'}</Text>
             </View>
             {group.ownedByMe && (
-              <TouchableOpacity style={styles.primaryButton} onPress={startEditing}>
-                <Text style={styles.primaryText}>모집글 수정</Text>
-              </TouchableOpacity>
+              <View style={styles.ownerActions}>
+                <TouchableOpacity style={styles.primaryButton} onPress={startEditing}>
+                  <Text style={styles.primaryText}>모집글 수정</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.deleteButton, deleting && styles.disabled]} onPress={confirmDelete} disabled={deleting}>
+                  <Text style={styles.deleteText}>{deleting ? '삭제 중...' : '모집글 삭제'}</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </>
         )}
@@ -148,6 +241,11 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 21, fontWeight: '900' },
   event: { color: '#fff', opacity: 0.9, fontSize: 14, fontWeight: '700', marginTop: 5 },
   card: { backgroundColor: '#fff', borderRadius: 17, padding: 17, gap: 14 },
+  mapCard: { backgroundColor: '#fff', borderRadius: 17, padding: 17, gap: 10 },
+  mapAddress: { color: '#64748b', fontSize: 13, fontWeight: '700' },
+  detailMap: { height: 230, borderRadius: 12 },
+  mapPlaceholder: { height: 180, borderRadius: 12, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  mapError: { color: '#64748b', fontSize: 13, fontWeight: '700', textAlign: 'center' },
   sectionTitle: { color: '#1e293b', fontSize: 15, fontWeight: '900', marginBottom: 2 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   infoLabel: { color: '#64748b', fontSize: 13, fontWeight: '700' },
@@ -162,5 +260,8 @@ const styles = StyleSheet.create({
   cancelText: { color: '#475569', fontSize: 14, fontWeight: '800' },
   primaryButton: { flex: 1, backgroundColor: '#FF6B35', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   primaryText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  ownerActions: { gap: 10 },
+  deleteButton: { borderWidth: 1, borderColor: '#FCA5A5', backgroundColor: '#fff', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  deleteText: { color: '#DC2626', fontSize: 14, fontWeight: '900' },
   disabled: { backgroundColor: '#C9CDD5' },
 })

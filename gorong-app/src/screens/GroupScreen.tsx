@@ -31,11 +31,14 @@ function parseDate(value?: string | null) {
 }
 
 function isUpcomingParticipation(item: EventParticipation) {
+  const status = item.status?.toUpperCase()
+  if (status === 'CLOSED' || status === 'FINISHED') return false
+
   const visitDate = parseDate(item.visitDate)
   if (!visitDate) return true
   const today = new Date()
-  today.setHours(23, 59, 59, 999)
-  return visitDate.getTime() <= today.getTime()
+  today.setHours(0, 0, 0, 0)
+  return visitDate.getTime() >= today.getTime()
 }
 
 function mapStatusLabel(status: string) {

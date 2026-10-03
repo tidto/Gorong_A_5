@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native'
 import * as Location from 'expo-location'
@@ -22,6 +22,8 @@ export default function GroupPostFormFields({ value, onChange, footer }: Props) 
   const [eventsError, setEventsError] = useState('')
   const [eventSearch, setEventSearch] = useState('')
   const [locationCandidate, setLocationCandidate] = useState('')
+  const [locationResolving, setLocationResolving] = useState(false)
+  const addressRequestId = useRef(0)
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null)
   const [pickedCoordinate, setPickedCoordinate] = useState<{ latitude: number; longitude: number } | null>(null)
   const [placeQuery, setPlaceQuery] = useState('')
@@ -62,6 +64,8 @@ export default function GroupPostFormFields({ value, onChange, footer }: Props) 
   }
 
   const openLocationPicker = () => {
+    addressRequestId.current += 1
+    setLocationResolving(false)
     setLocationCandidate(value.location)
     setPickedCoordinate(null)
     setPlaceQuery('')
@@ -69,23 +73,30 @@ export default function GroupPostFormFields({ value, onChange, footer }: Props) 
   }
 
   const formatCoordinateAddress = async (coordinate: { latitude: number; longitude: number }) => {
-    const fallback = `위도 ${coordinate.latitude.toFixed(5)}, 경도 ${coordinate.longitude.toFixed(5)}`
     try {
       const [address] = await Location.reverseGeocodeAsync(coordinate)
-      if (!address) return fallback
+      if (!address) return ''
       const street = [address.street, address.streetNumber].filter(Boolean).join(' ')
-      return street || address.name || [address.district, address.city, address.region].filter(Boolean).join(' ') || fallback
+      const addressParts = [address.region, address.city, address.district, street]
+          .filter((part): part is string => Boolean(part?.trim()))
+      const completeAddress = Array.from(new Set(addressParts)).join(' ')
+      return completeAddress || address.name || ''
     } catch (error) {
       console.warn('선택한 위치의 주소 조회 실패:', error)
-      return fallback
+      return ''
     }
   }
 
   const selectMapCoordinate = async (coordinate: { latitude: number; longitude: number }) => {
+    const requestId = ++addressRequestId.current
     setPickedCoordinate(coordinate)
+    setLocationResolving(true)
     setLocationCandidate('주소 확인 중...')
     const address = await formatCoordinateAddress(coordinate)
+    if (requestId !== addressRequestId.current) return
     setLocationCandidate(address)
+    setLocationResolving(false)
+    if (!address) Alert.alert('주소 확인 실패', '주소를 찾지 못했습니다. 장소명이나 주소를 검색해 선택해주세요.')
   }
 
   const searchPlace = async () => {
@@ -109,7 +120,8 @@ export default function GroupPostFormFields({ value, onChange, footer }: Props) 
   }
 
   const confirmLocation = () => {
-    if (locationCandidate.trim()) onChange('location', locationCandidate.trim())
+    if (locationResolving || !locationCandidate.trim() || locationCandidate === '주소 확인 중...') return
+    onChange('location', locationCandidate.trim())
     setPicker(null)
   }
 
@@ -252,8 +264,8 @@ export default function GroupPostFormFields({ value, onChange, footer }: Props) 
           <Text style={styles.selectedLabel}>선택한 장소</Text>
           <Text style={styles.selectedValue} numberOfLines={2}>{locationCandidate || '지도의 위치를 선택해주세요.'}</Text>
         </View>
-        <TouchableOpacity style={[styles.confirmButton, !locationCandidate.trim() && styles.disabled]} disabled={!locationCandidate.trim()} onPress={confirmLocation}>
-          <Text style={styles.confirmText}>이 장소로 선택</Text>
+        <TouchableOpacity style={[styles.confirmButton, (!locationCandidate.trim() || locationResolving || locationCandidate === '주소 확인 중...') && styles.disabled]} disabled={!locationCandidate.trim() || locationResolving || locationCandidate === '주소 확인 중...'} onPress={confirmLocation}>
+          <Text style={styles.confirmText}>{locationResolving ? '주소 확인 중...' : '이 장소로 선택'}</Text>
         </TouchableOpacity>
       </View>
     )

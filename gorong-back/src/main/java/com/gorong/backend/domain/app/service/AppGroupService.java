@@ -29,7 +29,6 @@ public class AppGroupService {
     private final GroupParticipantRepository participantRepository;
     private final GroupService groupService;
     private final UserRepository userRepository;
-    private final com.gorong.backend.domain.group.repository.EventParticipationRepository eventParticipationRepository;
     private final EventParticipationService eventParticipationService;
 
     @Transactional(readOnly = true)
@@ -136,9 +135,7 @@ public class AppGroupService {
         if (group.getAuthor() == null || !group.getAuthor().getId().equals(currentUser.getId())) {
             throw new SecurityException("작성자만 모임을 삭제할 수 있습니다.");
         }
-        eventParticipationRepository.deleteByGroupPostId(groupId);
-        participantRepository.deleteByGroupPostId(groupId);
-        groupRepository.delete(group);
+        groupService.deleteGroupSafely(groupId);
     }
 
     @Transactional
