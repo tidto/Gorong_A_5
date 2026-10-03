@@ -56,15 +56,22 @@ public class ReviewService {
                         .reviewDate(OffsetDateTime.now())
                         .build());
 
+        boolean isPublished = review.getStatus() == Review.PostStatus.PUBLISHED;
+
         assertReviewMetaEditable(review, rating, reviewText);
 
         review.updateQuickReview(rating, reviewText);
 
-        // ⭐️ [수정 사항] DB의 content 컬럼 NOT NULL 제약조건 에러를 막기 위해
-        // 간편 리뷰 저장 시에도 본문(content) 자리에 한 줄 리뷰 텍스트를 채워줍니다.
-        review.updateContent(review.getTitle(), normalizeText(reviewText));
+        // 이미 정식 포스팅(PUBLISHED)으로 승격된 리뷰는 간편 리뷰 저장으로
+        // 본문(content)과 이미지가 덮어써지지 않도록 건드리지 않는다.
+        if (!isPublished) {
+            // ⭐️ [수정 사항] DB의 content 컬럼 NOT NULL 제약조건 에러를 막기 위해
+            // 간편 리뷰 저장 시에도 본문(content) 자리에 한 줄 리뷰 텍스트를 채워줍니다.
+            review.updateContent(review.getTitle(), normalizeText(reviewText));
 
-        syncImages(review, images);
+            syncImages(review, images);
+        }
+
         return reviewRepository.save(review);
     }
 

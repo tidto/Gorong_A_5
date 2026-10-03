@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, FileText, Image, Clock, X, Upload } from 'lucide-react'
 import PawRating from '../components/PawRating'
 import { useAuth } from '../contexts/AuthContext'
@@ -42,10 +42,55 @@ const initialComposer: ComposerState = {
   reviewMetaEditable: true,
 }
 
+// 간편 리뷰 생성 시 백엔드가 부여하는 임시 제목. 정식 포스팅 제목으로는 사용하지 않는다.
+const QUICK_REVIEW_PLACEHOLDER_TITLE = '임시 포스팅'
+
+// EventDetail의 미저장 간편 리뷰 작성 값을 전달받는 라우트 state.
+// pendingImages는 아직 S3에 없는 File로, 최종 등록 시점에 업로드한다.
+// File은 history.pushState의 structured clone으로 전달되므로 그대로 실려 온다.
+type QuickReviewDraft = {
+  reviewText: string
+  rating: number
+  contents: string
+  images: ImagePayload[]
+  pendingImages?: File[]
+  authorName?: string
+}
+
+// 최종 등록 전까지 S3에 올리지 않은 파일을 로컬 object URL로만 미리 보여준다.
+// 언마운트 시 URL을 해제해 메모리 누수를 막는다.
+function PendingImagePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  return (
+    <div className="relative group rounded-xl overflow-hidden bg-[#f2f0ed] aspect-video">
+      {previewUrl && (
+        <img src={previewUrl} alt={`등록 대기 이미지`} className="w-full h-full object-cover" />
+      )}
+      <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+        등록 시 업로드
+      </span>
+      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <button type="button" onClick={onRemove} className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow">
+          <X className="w-4 h-4 text-[#1a1714]" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function PostingWritePage() {
   const { reviewId: editReviewId } = useParams<{ reviewId: string }>()
   const [searchParams] = useSearchParams()
   const preselectedEventId = searchParams.get('eventId')
+  const location = useLocation()
+  const quickReviewDraft = (location.state as { quickReviewDraft?: QuickReviewDraft } | null)?.quickReviewDraft
 
   const isEditMode = Boolean(editReviewId)
   const auth = useAuth()
@@ -54,6 +99,8 @@ export default function PostingWritePage() {
   const [events, setEvents] = useState<ParticipatedEvent[]>([])
   const [verifiedVenueIds, setVerifiedVenueIds] = useState<string[]>([])
   const [composer, setComposer] = useState<ComposerState>(initialComposer)
+  // draft로 전달되어 아직 S3에 올라가지 않은 File. 최종 등록 시에만 업로드한다.
+  const [pendingImages, setPendingImages] = useState<File[]>([])
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
 
@@ -61,10 +108,13 @@ export default function PostingWritePage() {
 
   const loadParticipatedEvents = async () => {
     try {
-      setEvents(await getParticipatedEvents())
+      const loaded = await getParticipatedEvents()
+      setEvents(loaded)
+      return loaded
     } catch (error) {
       console.error('참여 행사 조회 실패:', error)
       setEvents([])
+      return [] as ParticipatedEvent[]
     }
   }
 
@@ -78,10 +128,16 @@ export default function PostingWritePage() {
       return
     }
 
+    const templateTitle = template.title?.trim()
+    const resolvedTitle =
+      templateTitle && templateTitle !== QUICK_REVIEW_PLACEHOLDER_TITLE
+        ? templateTitle
+        : `${eventTitle} 후기`
+
     setComposer({
       reviewId: template.id,
       eventId,
-      title: template.title?.trim() || `${eventTitle} 후기`,
+      title: resolvedTitle,
       reviewText: template.reviewText ?? '',
       rating: template.rating ?? 0,
       contents: template.contents ?? '',
@@ -95,8 +151,31 @@ export default function PostingWritePage() {
     })
   }
 
-  const handleEventSelect = async (eventId: number) => {
-    const selectedEvent = events.find((event) => event.eventId === eventId)
+  // 작성 중 데이터(1순위)를 적용한다. 서버의 저장된 REVIEW_ONLY를 조회하지 않아
+  // reviewId/title/status는 여기서 결정하지 않는다. reviewId를 비워두면 최종 publishPosting에서
+  // resolvePostingTarget이 기존 REVIEW_ONLY를 찾아 승격하므로 lifecycle이 유지된다.
+  const applyQuickReviewDraft = (draft: QuickReviewDraft, eventId: number, eventTitle: string) => {
+    setComposer({
+      reviewId: null,
+      eventId,
+      title: `${eventTitle} 후기`,
+      reviewText: draft.reviewText,
+      rating: draft.rating,
+      contents: draft.contents,
+      // 저장된 이미지는 이미 S3에 있으므로 그대로 유지한다.
+      images: draft.images ?? [],
+      status: 'REVIEW_ONLY',
+      reviewMetaEditable: true,
+    })
+    // 미저장 파일은 여기서 업로드하지 않고 보관만 한다.
+    setPendingImages(draft.pendingImages ?? [])
+  }
+
+  // availableEvents는 최초 진입 시 useEffect에서 loadParticipatedEvents() 결과를 직접 넘겨
+  // events state가 아직 반영되지 않은 stale closure를 피하기 위한 것이다.
+  const handleEventSelect = async (eventId: number, availableEvents?: ParticipatedEvent[]) => {
+    const source = availableEvents ?? events
+    const selectedEvent = source.find((event) => event.eventId === eventId)
     setComposer((current) => ({
       ...current,
       eventId,
@@ -114,7 +193,8 @@ export default function PostingWritePage() {
     if (!files?.length) return
 
     const pickedFiles = Array.from(files)
-    if (composer.images.length + pickedFiles.length > 5) {
+    // draft로 넘어온 미저장 파일도 5장 제한에 함께 계산한다.
+    if (composer.images.length + pendingImages.length + pickedFiles.length > 5) {
       alert('이미지는 최대 5장까지 첨부할 수 있습니다.')
       return
     }
@@ -169,6 +249,32 @@ export default function PostingWritePage() {
     }
   }
 
+  // draft로 넘어온 미저장 File을 기존 업로드 경로로 ImagePayload에 합친다.
+  // 저장된 이미지(composer.images)는 이미 S3 URL이므로 재업로드하지 않는다.
+  const buildImagesWithPending = async (): Promise<ImagePayload[] | null> => {
+    if (pendingImages.length === 0) return composer.images
+    setUploading(true)
+    try {
+      const uploaded: ImagePayload[] = []
+      for (const file of pendingImages) {
+        const optimized = await optimizeImageFile(file)
+        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true, composer.eventId ?? undefined)
+        uploaded.push({
+          imageUrl: response.fileUrl,
+          originalImgName: file.name,
+          saveImgName: String(response.key).split('/').pop() ?? file.name,
+        })
+      }
+      return [...composer.images, ...uploaded]
+    } catch (error) {
+      console.error('이미지 업로드 실패:', error)
+      alert('이미지 업로드에 실패했습니다.')
+      return null
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleSubmit = async () => {
     if (!composer.eventId) {
       alert('행사를 선택해 주세요.')
@@ -182,6 +288,14 @@ export default function PostingWritePage() {
       alert('제목, 한 줄 리뷰, 발자국 평점을 입력해 주세요.')
       return
     }
+    if (composer.images.length + pendingImages.length > 5) {
+      alert('이미지는 최대 5장까지 첨부할 수 있습니다.')
+      return
+    }
+
+    // 최종 등록 시점에야 pending 파일을 S3에 올린다.
+    const images = await buildImagesWithPending()
+    if (images === null) return
 
     setSaving(true)
     try {
@@ -193,7 +307,7 @@ export default function PostingWritePage() {
         rating: composer.rating,
         contents: composer.contents.trim(),
         authorName,
-        images: composer.images,
+        images,
       }
 
       if (composer.reviewId) {
@@ -212,19 +326,33 @@ export default function PostingWritePage() {
   }
 
   useEffect(() => {
-    loadParticipatedEvents()
-    getMyVerifiedVenueIds().then(setVerifiedVenueIds).catch(() => {})
+    const initialize = async () => {
+      const loadedEvents = await loadParticipatedEvents()
+      getMyVerifiedVenueIds().then(setVerifiedVenueIds).catch(() => {})
 
-    if (isEditMode && editReviewId) {
-      loadPostForEdit(Number(editReviewId))
-    } else if (preselectedEventId) {
-      handleEventSelect(Number(preselectedEventId))
+      if (isEditMode && editReviewId) {
+        await loadPostForEdit(Number(editReviewId))
+      } else if (preselectedEventId) {
+        const eventId = Number(preselectedEventId)
+        const eventTitle = loadedEvents.find((event) => event.eventId === eventId)?.title ?? `행사 #${eventId}`
+
+        // 1순위: 작성 중 데이터가 있으면 서버 조회를 하지 않고 그대로 적용한다.
+        if (quickReviewDraft) {
+          applyQuickReviewDraft(quickReviewDraft, eventId, eventTitle)
+          return
+        }
+
+        // 2순위: 작성 중 데이터가 없으면 기존 REVIEW_ONLY(3순위: 신규) 흐름을 따른다.
+        await handleEventSelect(eventId, loadedEvents)
+      }
     }
+
+    void initialize()
   }, [])
 
   const ratingLabels = ['', '별로예요', '그저 그래요', '괜찮아요', '좋아요', '최고예요']
   const charCount = composer.contents.replace(/<[^>]*>/g, '').length
-  const imageCount = composer.images.length
+  const imageCount = composer.images.length + pendingImages.length
   const readingTime = Math.max(1, Math.ceil(charCount / 500))
 
   return (
@@ -355,7 +483,7 @@ export default function PostingWritePage() {
                 </label>
                 <span className="text-xs text-[#c4bfb8]">최대 5장</span>
               </div>
-              {composer.images.length < 5 && (
+              {composer.images.length + pendingImages.length < 5 && (
                 <label className="border-2 border-dashed border-[#e0dbd3] bg-[#faf9f7] rounded-2xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-[#FF8A3D] hover:bg-[#fff4ec] transition-all">
                   <div className="w-12 h-12 rounded-full bg-[#fff4ec] flex items-center justify-center">
                     {uploading ? (
@@ -371,7 +499,7 @@ export default function PostingWritePage() {
                     <p className="text-xs text-[#8c887f] mt-1">JPG, PNG, WebP 지원 · 최대 5장</p>
                   </div>
                   <span className="text-xs px-3 py-1 bg-white border border-[#e0dbd3] rounded-full text-[#5a5650]">
-                    {composer.images.length}/5장
+                    {composer.images.length + pendingImages.length}/5장
                   </span>
                   <input
                     type="file"
@@ -404,6 +532,24 @@ export default function PostingWritePage() {
                         </button>
                       </div>
                     </div>
+                  ))}
+                  {pendingImages.map((file, index) => (
+                    <PendingImagePreview
+                      key={`pending-${file.name}-${file.size}-${index}`}
+                      file={file}
+                      onRemove={() => setPendingImages((current) => current.filter((_, i) => i !== index))}
+                    />
+                  ))}
+                </div>
+              )}
+              {pendingImages.length > 0 && composer.images.length === 0 && (
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {pendingImages.map((file, index) => (
+                    <PendingImagePreview
+                      key={`pending-only-${file.name}-${file.size}-${index}`}
+                      file={file}
+                      onRemove={() => setPendingImages((current) => current.filter((_, i) => i !== index))}
+                    />
                   ))}
                 </div>
               )}
