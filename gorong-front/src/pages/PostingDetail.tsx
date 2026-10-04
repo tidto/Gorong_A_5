@@ -138,11 +138,24 @@ export default function EventDetail() {
       if (!id) return;
       try {
         setLoading(true);
-        const response = await axiosInstance.get(`/public/map/${id}`);
+
+        // [버그 수정] id는 Review 테이블의 DB PK이므로,
+        // 먼저 포스팅(리뷰)을 조회해서 실제 Tour API용 eventId를 꺼낸 뒤
+        // 행사 상세를 불러옵니다.
+        const reviewRes = await axiosInstance.get(`/v1/reviews/posts/${id}`);
+        const eventId = reviewRes.data.eventId;
+
+        if (!eventId) {
+          console.error('포스팅에 연결된 행사 정보가 없습니다.');
+          return;
+        }
+
+        const response = await axiosInstance.get(`/public/map/${eventId}`);
         setEvent(response.data);
+
         try {
           const checkRes = await axiosInstance.get(`/event-participation/solo/check`, {
-            params: { eventContentId: id },
+            params: { eventContentId: eventId },
           });
           setSoloApplied(checkRes.data.applied);
         } catch {
@@ -155,7 +168,7 @@ export default function EventDetail() {
       }
     };
     fetchEventDetail();
-  }, [id, auth.user]);
+  }, [id]);
 
   useEffect(() => {
     const applyFallback = () => setUserLocation(DEFAULT_LOCATION);
