@@ -12,5 +12,8 @@ public interface ReviewImageRepository extends JpaRepository<ReviewImage, Long> 
     // ─── 리뷰별 이미지 조회 ───
     List<ReviewImage> findByReviewId(Long reviewId);
 
+    // ─── 이미지 URL로 존재 여부 확인 ───
+    boolean existsByImageUrl(String imageUrl);
+
     // ─── 리뷰 삭제 시 관련 이미지 자동 삭제 (CascadeType.ALL로 처리됨) ───
 }

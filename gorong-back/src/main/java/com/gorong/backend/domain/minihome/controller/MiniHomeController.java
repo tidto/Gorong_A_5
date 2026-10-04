@@ -37,6 +37,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 @Slf4j
 @RestController
@@ -280,10 +282,17 @@ public class MiniHomeController {
         return miniHomeService.equip(userId, req);
     }
 
-    @DeleteMapping("/{userId}/equip/{slotType}")
-    public ResponseEntity<Void> unequip(@PathVariable Long userId, @PathVariable String slotType) {
-        miniHomeService.unequip(userId, slotType);
-        return ResponseEntity.noContent().build();
+    @DeleteMapping("/{userId}/gallery-images/{galleryImageId}")
+    public ResponseEntity<Map<String, Object>> deleteGalleryImage(
+            @PathVariable Long userId,
+            @PathVariable Long galleryImageId,
+            Authentication authentication
+    ) {
+        Long loginUserId = miniHomeUserResolver.resolveUserId(authentication);
+        miniHomeService.deleteGalleryImage(galleryImageId, loginUserId);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("message", "이미지가 삭제되었습니다.");
+        return ResponseEntity.ok(response);
     }
 
     private Long resolveUserId(Authentication authentication) {

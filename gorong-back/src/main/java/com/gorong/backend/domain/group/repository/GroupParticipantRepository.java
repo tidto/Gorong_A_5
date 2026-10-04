@@ -4,6 +4,8 @@ import com.gorong.backend.domain.group.entity.GroupParticipant;
 import com.gorong.backend.domain.group.entity.GroupPost;
 import com.gorong.backend.domain.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +17,13 @@ public interface GroupParticipantRepository extends JpaRepository<GroupParticipa
     Optional<GroupParticipant> findByUser_IdAndGroupPost_Id(Long userId, Long groupPostId);
 
     boolean existsByUserAndGroupPost(User user, GroupPost groupPost);
+
+    @Query("select distinct participant.user.id from GroupParticipant participant " +
+            "where participant.groupPost.id = :groupId and participant.user.id <> :senderId")
+    List<Long> findOtherParticipantUserIdsByGroupId(
+            @Param("groupId") Long groupId,
+            @Param("senderId") Long senderId
+    );
 
     @Transactional
     void deleteByUserIdAndGroupPostId(Long userId, Long groupPostId);

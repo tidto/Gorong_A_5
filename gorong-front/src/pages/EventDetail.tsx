@@ -113,6 +113,9 @@ export default function EventDetail() {
   const [reviewImages,       setReviewImages]       = useState<ImagePayload[]>([]);
   const [savingReview,       setSavingReview]       = useState(false);
   const [uploadingImage,     setUploadingImage]     = useState(false);
+  const [pendingImages,      setPendingImages]      = useState<File[]>([]);
+  // 사용자가 저장하지 않은 작성 중 데이터가 있는지. loadReviews 프리필과 사용자 입력을 구분하기 위함.
+  const [reviewDraftTouched, setReviewDraftTouched] = useState(false);
 
   const authorName = auth.user?.nickname?.trim() || auth.user?.email?.trim() || '익명';
   const currentUserId = (() => {
@@ -281,25 +284,65 @@ export default function EventDetail() {
       showToast('이미지는 최대 5장까지 첨부할 수 있습니다.', 'error');
       return;
     }
+    setPendingImages((current) => [...Array.from(current), ...Array.from(files)]);
+    setReviewDraftTouched(true);
+  };
+
+  // 작성 중인 파일 이미지를 S3에 올려 ImagePayload로 변환한다.
+  // 실패 시 null을 반환하고 호출측이 저장을 중단한다.
+  const uploadPendingImages = async (): Promise<ImagePayload[] | null> => {
+    if (pendingImages.length === 0) return [];
     setUploadingImage(true);
     try {
-      const uploaded: ImagePayload[] = [];
-      for (const file of Array.from(files)) {
+      const uploadedImages: ImagePayload[] = [];
+      for (const file of Array.from(pendingImages)) {
         const optimized = await optimizeImageFile(file);
-        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true);
-        uploaded.push({
+        const response = await uploadFileToS3(optimized, 'POST_PHOTO', true, Number(id));
+        uploadedImages.push({
           imageUrl: response.fileUrl,
           originalImgName: file.name,
           saveImgName: String(response.key).split('/').pop() ?? file.name,
         });
       }
-      setReviewImages((current) => [...current, ...uploaded]);
+      return uploadedImages;
     } catch (error) {
-      console.error('리뷰 이미지 업로드 실패:', error);
+      console.error('이미지 업로드 실패:', error);
       showToast('이미지 업로드에 실패했습니다.', 'error');
+      return null;
     } finally {
       setUploadingImage(false);
     }
+  };
+
+  // ── 정식 포스팅으로 이어쓰기 ───────────────────────────────────────
+  // 작성 중인 데이터가 있으면 그것을 우선 전달하고, 없을 때만 서버 REVIEW_ONLY를 사용한다.
+  const hasDraftReview = (): boolean =>
+    reviewDraftTouched &&
+    (reviewText.trim() !== '' || rating !== 0 || pendingImages.length > 0);
+
+  const handleContinueToPosting = () => {
+    if (!id) return;
+    if (!hasDraftReview()) {
+      navigate(`/posting/write?eventId=${id}`);
+      return;
+    }
+
+    // 이어쓰기는 단순 화면 전환이다. 여기서 S3 업로드를 수행하지 않는다.
+    // reviewImages(이미 S3 URL)는 그대로 전달하고, pendingImages(File)는
+    // Router state로 넘겨 PostingWritePage의 최종 등록 시점에 업로드한다.
+    // File은 history.pushState의 structured clone으로 전달된다.
+    navigate(`/posting/write?eventId=${id}`, {
+      state: {
+        quickReviewDraft: {
+          reviewText: reviewText.trim(),
+          rating,
+          contents: reviewText.trim(),
+          images: reviewImages,
+          pendingImages,
+          authorName,
+        },
+      },
+    });
   };
 
   // ── 간편 리뷰 저장 ───────────────────────────────────────────────
@@ -309,20 +352,32 @@ export default function EventDetail() {
       showToast('한 줄 리뷰와 발자국 평점을 입력해 주세요.', 'error');
       return;
     }
+    // Upload pending images to S3 before saving
+    const uploadedImages = await uploadPendingImages();
+    if (uploadedImages === null) return;
+
     setSavingReview(true);
     try {
+      const newReviewImages = [...reviewImages, ...uploadedImages];
       const saved = await saveQuickReview(Number(id), {
         reviewText: reviewText.trim(),
         rating,
         authorName,
-        images: reviewImages,
+        images: newReviewImages,
       });
       setReviewMetaEditable(saved.reviewMetaEditable);
       await loadReviews(0);
       showToast('간편 리뷰가 저장되었습니다.', 'success');
+      // Reset states after successful save
+      setReviewImages([]);
+      setRating(0);
+      setReviewText('');
+      setPendingImages([]);
+      setReviewDraftTouched(false);
     } catch (error: any) {
       console.error('간편 리뷰 저장 실패:', error);
       showToast(error?.response?.data?.error || '간편 리뷰 저장 중 오류가 발생했습니다.', 'error');
+      // pendingImages remain - user can re-select or re-save
     } finally {
       setSavingReview(false);
     }
@@ -747,7 +802,8 @@ export default function EventDetail() {
               </div>
               <button
                   className="rounded-full border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600 whitespace-nowrap"
-                  onClick={() => navigate('/reviews')}
+                  onClick={() => void handleContinueToPosting()}
+                  disabled={uploadingImage || savingReview}
               >
                 정식 포스팅으로 이어쓰기
               </button>
@@ -761,7 +817,10 @@ export default function EventDetail() {
                   <textarea
                       className="min-h-[110px] w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 outline-none resize-none focus:border-orange-300 transition-colors"
                       value={reviewText}
-                      onChange={(e) => setReviewText(e.target.value)}
+                      onChange={(e) => {
+                        setReviewText(e.target.value);
+                        setReviewDraftTouched(true);
+                      }}
                       disabled={!reviewMetaEditable}
                       placeholder="행사를 다녀온 한 줄 감상을 남겨 주세요."
                   />
@@ -769,7 +828,14 @@ export default function EventDetail() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">발자국 평점</label>
-                  <PawRating value={rating} onChange={setRating} readOnly={!reviewMetaEditable} />
+                  <PawRating
+                    value={rating}
+                    onChange={(v) => {
+                      setRating(v);
+                      setReviewDraftTouched(true);
+                    }}
+                    readOnly={!reviewMetaEditable}
+                  />
                 </div>
 
                 <div>
@@ -788,20 +854,47 @@ export default function EventDetail() {
                         onChange={(e) => void handleImageUpload(e.target.files)}
                     />
                   </label>
-                  {reviewImages.length > 0 && (
+                  {(reviewImages.length > 0 || pendingImages.length > 0) && (
                       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {reviewImages.map((image, index) => (
-                            <div key={`${image.imageUrl}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
-                              <img src={image.imageUrl} alt={`리뷰 이미지 ${index + 1}`} className="h-24 w-full object-cover" />
-                              <button
-                                  type="button"
-                                  className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white"
-                                  onClick={() => setReviewImages((curr) => curr.filter((_, i) => i !== index))}
-                              >
-                                삭제
-                              </button>
-                            </div>
-                        ))}
+                        {reviewImages.length > 0 && (
+                          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            {reviewImages.map((image, index) => (
+                                <div key={`${image.imageUrl}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
+                                  <img src={image.imageUrl} alt={`리뷰 이미지 ${index + 1}`} className="h-24 w-full object-cover" />
+                                  <button
+                                      type="button"
+                                      className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white"
+                                      onClick={() => setReviewImages((curr) => curr.filter((_, i) => i !== index))}
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                            ))}
+                          </div>
+                        )}
+                        {pendingImages.length > 0 && (
+                          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            {pendingImages.map((file, index) => {
+                              const previewUrl = URL.createObjectURL(file);
+                              return (
+                                <div key={`pending-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200">
+                                  <img src={previewUrl} alt={`선택한 이미지 ${index + 1}`} className="h-24 w-full object-cover" />
+                                  <button
+                                      type="button"
+                                      className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white"
+                                      onClick={() => {
+                                        setPendingImages((curr) => curr.filter((_, i) => i !== index));
+                                        URL.revokeObjectURL(previewUrl);
+                                      }}
+                                  >
+                                    삭제
+                                  </button>
+                                  <p className="text-xs text-slate-400 mt-1">선택된 이미지</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                   )}
                 </div>

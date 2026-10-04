@@ -29,6 +29,7 @@ export interface Venue {
   eventStartDate?: string
   eventEndDate?: string
   overview?: string
+  tel?: string // 상세페이지 '전화하기'용
 }
 
 // ─── 공개 행사 목록 (백엔드 /api/public/map) ─────
@@ -78,6 +79,8 @@ export interface AppGroup {
   event: string
   eventContentId?: string | null
   location: string
+  content?: string | null
+  condition?: string | null
   meetingDate?: string
   meetingTime?: string
   maxMembers: number
@@ -85,6 +88,7 @@ export interface AppGroup {
   joined: boolean       // 내가 이미 참가했는지
   gathered: boolean     // 모임 성사 인증 여부
   status: string
+  ownedByMe?: boolean
 }
 
 export interface EventParticipation {
@@ -95,6 +99,7 @@ export interface EventParticipation {
   groupPostTitle?: string | null
   participationType: 'SOLO' | 'GROUP'
   visitDate?: string | null
+  status?: string
   appliedAt: string
 }
 

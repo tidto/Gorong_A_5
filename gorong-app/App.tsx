@@ -25,6 +25,12 @@ import { auth } from './src/config/firebaseConfig'
 import { useAuthStore } from './src/store/authStore'
 import { AuthNavigator, MainNavigator } from './src/navigation/AppNavigator'
 import { setUnauthorizedHandler } from './src/services/api'
+import {
+  registerAndroidPushNotifications,
+  subscribeToAndroidPushToken,
+  supportsAndroidRemotePush,
+  syncAndroidPushToken,
+} from './src/services/pushNotifications'
 
 const queryClient = new QueryClient()
 
@@ -96,6 +102,39 @@ function AppContent() {
     }
   }, [accessRestricted, accessRestrictedMessage])
 
+  // user 있고 needsSignup 아닐 때만 메인탭
+  const isAuthenticated = !!user && !needsSignup
+
+  useEffect(() => {
+    // Expo Go에서는 Android 원격 푸시가 제공되지 않아 네이티브 API 호출을 건너뛴다.
+    if (!supportsAndroidRemotePush || !isAuthenticated || !authBootstrapped) return
+
+    let active = true
+    let tokenSubscription: { remove: () => void } | null = null
+    subscribeToAndroidPushToken((token) => {
+      syncAndroidPushToken(token).catch((error) => {
+        console.warn('[push] FCM 토큰 갱신 등록 실패:', error)
+      })
+    }).then((subscription) => {
+      if (!active) {
+        subscription?.remove()
+        return
+      }
+      tokenSubscription = subscription
+    }).catch((error) => {
+      console.warn('[push] FCM 토큰 감지 설정 실패:', error)
+    })
+
+    registerAndroidPushNotifications().catch((error) => {
+      console.warn('[push] 알림 등록 실패:', error)
+    })
+
+    return () => {
+      active = false
+      tokenSubscription?.remove()
+    }
+  }, [authBootstrapped, isAuthenticated])
+
   // AsyncStorage 로드 전이거나 백엔드 확인 중이면 로딩 스피너
   if (!isHydrated || !authBootstrapped) {
     return (
@@ -104,9 +143,6 @@ function AppContent() {
       </View>
     )
   }
-
-  // user 있고 needsSignup 아닐 때만 메인탭
-  const isAuthenticated = !!user && !needsSignup
 
   return (
     <View style={{ flex: 1 }}>
