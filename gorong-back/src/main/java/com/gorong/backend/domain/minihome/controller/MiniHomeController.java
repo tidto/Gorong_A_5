@@ -249,13 +249,18 @@ public class MiniHomeController {
     }
 
     @PostMapping("/{userId}/galleries")
-    public MiniHomePageResponseDto.GalleryDto createGallery(@PathVariable Long userId, @Valid @RequestBody GalleryCreateRequestDto req) {
+    public MiniHomePageResponseDto.GalleryDto createGallery(@PathVariable Long userId, @Valid @RequestBody GalleryCreateRequestDto req, Authentication authentication) {
+        // 경로의 userId 는 조작할 수 있으므로 로그인 사용자와 일치하는지 확인한다.
+        Long loginUserId = resolveUserId(authentication);
+        if (!loginUserId.equals(userId)) {
+            throw new MiniHomeForbiddenException("본인의 갤러리만 만들 수 있습니다.");
+        }
         return miniHomeService.createGallery(userId, req);
     }
 
     @PostMapping("/galleries/{galleryId}/images")
-    public MiniHomePageResponseDto.GalleryImageDto addGalleryImage(@PathVariable Long galleryId, @Valid @RequestBody GalleryImageCreateRequestDto req) {
-        return miniHomeService.addGalleryImage(galleryId, req);
+    public MiniHomePageResponseDto.GalleryImageDto addGalleryImage(@PathVariable Long galleryId, @Valid @RequestBody GalleryImageCreateRequestDto req, Authentication authentication) {
+        return miniHomeService.addGalleryImage(galleryId, req, resolveUserId(authentication));
     }
 
     @GetMapping("/{userId}/items")

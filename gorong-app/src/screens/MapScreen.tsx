@@ -190,8 +190,15 @@ export default function MapScreen() {
     }
   }, [isRecording, insideVenueId, setRecordingVenueId])
 
-  const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
+  const finalizeTrailArt = useCallback(async (venueId: string | null): Promise<string | undefined> => {
     if (!mapRef.current || trail.length < 2) return undefined
+    // 트레일 기록(venueId)이 없는 러닝아트는 갤러리에 등록하지 않는다.
+    // referenceId 없이 업로드하면 백엔드가 REFERENCE_ID가 비어 있는 갤러리에
+    // 저장해 버려 트레일과 무관한 이미지가 갤러리에 노출된다.
+    if (!venueId) {
+      console.warn('러닝아트 업로드 생략 - 트레일 기록 venueId가 없습니다.')
+      return undefined
+    }
     try {
       const snapshotUri = await mapRef.current.takeSnapshot({
         width: 1080, height: 1920, format: 'jpg', quality: 0.85, result: 'file',
@@ -200,7 +207,13 @@ export default function MapScreen() {
       // takeSnapshot이 네트워크 소켓을 잠시 블로킹하므로, 복구 대기
       await new Promise(resolve => setTimeout(resolve, 500))
 
-      const res = await uploadFileToS3(snapshotUri, `trail-art-${Date.now()}.jpg`, 'TRAIL_ART', true)
+      const res = await uploadFileToS3(
+        snapshotUri,
+        `trail-art-${Date.now()}.jpg`,
+        'TRAIL_ART',
+        true,
+        venueId,
+      )
       const artUrl: string | undefined =
           res.data?.url ?? res.data?.fileUrl ?? res.data?.imageUrl ?? undefined
       return artUrl
@@ -215,8 +228,10 @@ export default function MapScreen() {
   ) => {
     setIsStoppingTrail(true)
     try {
-      const trailArtUrl = await finalizeTrailArt()
-      await stopRecording(reason, null, trailArtUrl)
+      // stopRecording()이 recordingVenueId를 정리하기 전에 먼저 읽어야 한다.
+      const venueId = useTrailStore.getState().recordingVenueId ?? null
+      const trailArtUrl = await finalizeTrailArt(venueId)
+      await stopRecording(reason, venueId, trailArtUrl)
     } finally {
       setIsStoppingTrail(false)
     }
