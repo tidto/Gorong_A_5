@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface GalleryImageRepository extends JpaRepository<GalleryImage, Long> {
     List<GalleryImage> findByGalleryIdOrderByCreateAtDesc(Long galleryId);
@@ -29,6 +30,27 @@ public interface GalleryImageRepository extends JpaRepository<GalleryImage, Long
             List<String> imageUrls,
             String referenceId,
             Long ownerUserId
+    );
+
+    /**
+     * imageUrl 로 갤러리 이미지를 찾되, MiniHome 를 경유해 소유자를 반드시 검증하고
+     * locationName 으로 범위를 좁힙니다.
+     * 트레일 러닝아트 연동 삭제에서 사용하며, locationName 이 "TRAIL_ART" 로 고정되어
+     * 같은 갤러리에 함께 저장될 수 있는 APP_PHOTO / POST_PHOTO 는 절대 매칭되지 않습니다.
+     */
+    @Query("""
+        SELECT gi
+        FROM GalleryImage gi, MiniHomeGallery mh, MiniHome mhHome
+        WHERE gi.galleryId = mh.galleryId
+          AND mh.miniHomeId = mhHome.miniHomeId
+          AND gi.imageUrl = ?1
+          AND mhHome.userId = ?2
+          AND gi.locationName = ?3
+    """)
+    Optional<GalleryImage> findByImageUrlAndOwnerUserIdAndLocationName(
+            String imageUrl,
+            Long ownerUserId,
+            String locationName
     );
 }
 

@@ -26,4 +26,16 @@ public class AppTrailController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("트레일 저장 실패");
         }
     }
+
+    /**
+     * 트레일 기록 삭제에 따른 러닝아트(TRAIL_ART) 갤러리 이미지 연동 삭제.
+     *
+     * 삭제되어 있거나 존재하지 않는 URL 도 204 를 반환하는 멱등 동작입니다.
+     * 광범위한 예외 포착은 의도적으로 추가하지 않아 오류 상태를 그대로 전파합니다.
+     */
+    @DeleteMapping("/trail-art")
+    public ResponseEntity<Void> deleteTrailArt(@RequestParam String imageUrl, Authentication authentication) {
+        appTrailService.deleteTrailArt(authentication, imageUrl);
+        return ResponseEntity.noContent().build();
+    }
 }
