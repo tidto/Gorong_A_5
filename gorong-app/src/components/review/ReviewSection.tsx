@@ -124,8 +124,10 @@ function ReviewSection({ eventId }: Props) {
     }
 
     const showEmpty = !loading && !error && reviews.length === 0
-    // totalElements가 없으면 지금 렌더된 개수로 표기
+    // 전체 개수는 백엔드 totalElements 기준 (헤더 표기용 폴백: 값이 없으면 렌더된 개수)
     const count = total > 0 ? total : reviews.length
+    // 아직 불러오지 않은 리뷰 수 — 더보기 버튼 문구와 표시 여부를 결정한다
+    const remainingCount = Math.max(total - reviews.length, 0)
     const showErrorBox = !!error && (
         <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
@@ -167,19 +169,20 @@ function ReviewSection({ eventId }: Props) {
                     {showErrorBox}
 
                     {/* 에러가 있으면 아래 오류 박스의 '다시 시도'로 통일해 중복 노출을 막는다 */}
-                    {reviews.length > 0 && !last && !error && (
+                    {/* remainingCount가 0이면(또는 last면) 더 볼 리뷰가 없으므로 버튼을 감춘다 */}
+                    {reviews.length > 0 && remainingCount > 0 && !last && !error && (
                         <TouchableOpacity
                             style={styles.moreBtn}
                             onPress={handleLoadMore}
                             disabled={loadingMore}
                             activeOpacity={0.85}
                             accessibilityRole="button"
-                            accessibilityLabel={`리뷰 ${REVIEW_PAGE_SIZE}개 더 보기`}
+                            accessibilityLabel={`리뷰 ${remainingCount}개 더 보기`}
                         >
                             {loadingMore ? (
                                 <ActivityIndicator color="#FF6B35" />
                             ) : (
-                                <Text style={styles.moreText}>{REVIEW_PAGE_SIZE}개 더 보기</Text>
+                                <Text style={styles.moreText}>{`리뷰 ${remainingCount}개 더 보기`}</Text>
                             )}
                         </TouchableOpacity>
                     )}
