@@ -375,4 +375,8 @@ export const saveTrail = (
     trail: { lat: number; lng: number; timestamp: number }[]
 ) => api.post('/app/trails', { venueId, trail })
 
+// 트레일 러닝아트 이미지 삭제(미니홈 갤러리 연동 삭제)
+export const deleteTrailArt = (imageUrl: string) =>
+  api.delete('/app/trails/trail-art', { params: { imageUrl } })
+
 export default api

@@ -39,6 +39,19 @@ const PAW_MIN_SPACING_M = 10
 const MAX_PAWS = 300
 const SCREEN_H = Dimensions.get('window').height
 
+// [추가] 러닝아트 캡처 상수
+// takeSnapshot 은 좌표를 받지 않고 '지도에 지금 그려진 것'만 담는다.
+// 따라서 캡처 전에 ① 폴리라인을 확실히 마운트시키고 ② 카메라를 트레일에 맞춘 뒤
+// ③ 실제 렌더가 끝난 다음에 촬영해야 한다.
+// EDGE_PADDING 의 bottom 은 하단 버튼 시트(buttonRowBottom)가 가리는 만큼의 여백이다.
+const TRAIL_ART_EDGE_PADDING = { top: 120, right: 70, bottom: 300, left: 70 }
+// onRegionChangeComplete 가 아예 오지 않는 경우를 대비한 안전 타임아웃
+const REGION_SETTLE_TIMEOUT_MS = 1500
+// 상태 변경 후 네이티브 뷰 갱신이 반영될 때까지의 최소 대기
+const PAINT_SETTLE_MS = 80
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 // 발자국 마커 — 안드로이드에서 마커 안 뷰가 계속 다시 그려지면 느려지고 일부가 사라지므로
 // 처음 잠깐만 추적하고 이후엔 멈춤(tracksViewChanges=false). React.memo로 이미 찍힌 발자국은 다시 그리지 않음
 const PawMarker = React.memo(function PawMarker({ latitude, longitude }: { latitude: number; longitude: number }) {
@@ -130,6 +143,8 @@ export default function MapScreen() {
   const [detailVenue, setDetailVenue] = useState<Venue | null>(null)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [showPawPrint, setShowPawPrint] = useState(false)
+  // [추가] 러닝아트 캡처 중인지 — 캡처 순간에만 폴리라인을 발자국 모드와 무관하게 그린다
+  const [isCapturingTrailArt, setIsCapturingTrailArt] = useState(false)
   // 지도 확대 정도(latitudeDelta의 log2를 0.5 단위로 반올림) — 줌이 바뀔 때만 발자국 간격을 다시 계산
   const [zoomBucket, setZoomBucket] = useState(Math.round(Math.log2(0.05) * 2) / 2)
   const [outsideTimer, setOutsideTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
@@ -150,6 +165,8 @@ export default function MapScreen() {
   const [sheetHeight, setSheetHeight] = useState(0)
 
   const mapRef = useRef<MapView | null>(null)
+  // [추가] 지도 영역 변경 완료를 기다리는 리졸버 — onRegionChangeComplete 에서 resolve 된다
+  const regionSettledRef = useRef<(() => void) | null>(null)
   // [추가] 줌 버튼용 — 지도가 멈출 때마다 현재 보이는 영역을 기억
   const regionRef = useRef<Region | null>(null)
   const lastRefreshAt = useRef(0)
@@ -190,33 +207,108 @@ export default function MapScreen() {
     }
   }, [isRecording, insideVenueId, setRecordingVenueId])
 
-  const finalizeTrailArt = useCallback(async (): Promise<string | undefined> => {
-    if (!mapRef.current || trail.length < 2) return undefined
+  // [추가] 지도 영역 변경이 실제로 끝날 때까지 대기한다.
+  // 고정 sleep 은 추측이지만, fitToCoordinates 는 카메라 애니메이션을 거쳐
+  // onRegionChangeComplete 를 비로소 울리므로 이벤트로 기다리는 쪽이 정확하다.
+  // 이벤트 자체가 오지 않는 경우에도 반드시 타임아웃으로 빠져나간다.
+  const waitRegionSettled = useCallback((timeoutMs: number) => (
+      new Promise<void>((resolve) => {
+        let done = false
+        const finish = () => {
+          if (done) return
+          done = true
+          clearTimeout(timer)
+          regionSettledRef.current = null
+          resolve()
+        }
+        const timer = setTimeout(finish, timeoutMs)
+        regionSettledRef.current = finish
+      })
+  ), [])
+
+  const finalizeTrailArt = useCallback(async (venueId: string | null): Promise<string | undefined> => {
+    const map = mapRef.current
+    if (!map || trail.length < 2) return undefined
+    // 트레일 기록(venueId)이 없는 러닝아트는 갤러리에 등록하지 않는다.
+    // referenceId 없이 업로드하면 백엔드가 REFERENCE_ID가 비어 있는 갤러리에
+    // 저장해 버려 트레일과 무관한 이미지가 갤러리에 노출된다.
+    if (!venueId) {
+      console.warn('러닝아트 업로드 생략 - 트레일 기록 venueId가 없습니다.')
+      return undefined
+    }
+
+    // 카메라를 되돌리기 위해 캡처 직전의 영역을 기억한다
+    const previousRegion = regionRef.current
+
+    // [수정] ④ 캡처가 끝나면 카메라를 원래대로 되돌려 사용자 화면 UX를 기존과 같게 유지한다.
+    // 업로드(네트워크 왕복)가 끝날 때까지 지도가 확대된 채 남지 않도록,
+    // takeSnapshot 직후(=캡처 완료 직후) 바로 복원한다.
+    const restoreCamera = () => {
+      setIsCapturingTrailArt(false)
+      if (previousRegion) {
+        regionRef.current = previousRegion
+        map.animateToRegion(previousRegion, 0)
+      }
+    }
+
     try {
-      const snapshotUri = await mapRef.current.takeSnapshot({
+      // [수정] ① 캡처 순간에는 발자국 표시 설정과 무관하게 폴리라인을 마운트시킨다.
+      // 폴리라인은 지도 렌더러가 직접 그리는 오버레이라 takeSnapshot 에 포함되지만,
+      // 발자국(🐾)은 Android 에서 tracksViewChanges=false 의 비트맵 캐시 경유라 잡히지 않는다.
+      // → 캡처 이미지의 목표는 "지도 + 주황색 경로" 로 고정한다.
+      setIsCapturingTrailArt(true)
+      await sleep(PAINT_SETTLE_MS)
+
+      // [수정] ② 트레일 전체가 캡처 영역에 들어오도록 카메라를 맞춘다.
+      // (기존에는 카메라를 한 번도 맞추지 않아 트레일이 화면 밖이면 캡처에 안 담겼다)
+      map.fitToCoordinates(
+          trail.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+          { edgePadding: TRAIL_ART_EDGE_PADDING, animated: true },
+      )
+
+      // [수정] ③ 실제 영역 변경 완료(onRegionChangeComplete) → zoomBucket 변경 →
+      //         pawMarks 재계산 리커밋까지 지난 뒤에 촬영한다.
+      //         이 대기가 캡처 '이전' 안정화이고, 기존의 500ms 대기는 캡처 '이후' 복구 대기다.
+      await waitRegionSettled(REGION_SETTLE_TIMEOUT_MS)
+      await sleep(PAINT_SETTLE_MS)
+
+      const snapshotUri = await map.takeSnapshot({
         width: 1080, height: 1920, format: 'jpg', quality: 0.85, result: 'file',
       })
 
       // takeSnapshot이 네트워크 소켓을 잠시 블로킹하므로, 복구 대기
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await sleep(500)
 
-      const res = await uploadFileToS3(snapshotUri, `trail-art-${Date.now()}.jpg`, 'TRAIL_ART', true)
+      // 캡처가 끝났으므로 카메라와 폴리라인을 원래 상태로 되돌린다
+      restoreCamera()
+
+      const res = await uploadFileToS3(
+        snapshotUri,
+        `trail-art-${Date.now()}.jpg`,
+        'TRAIL_ART',
+        true,
+        venueId,
+      )
       const artUrl: string | undefined =
           res.data?.url ?? res.data?.fileUrl ?? res.data?.imageUrl ?? undefined
       return artUrl
     } catch (error) {
+      // 캡처 도중 예외가 나도 지도가 확대된 채 남지 않도록 반드시 복원한다
+      restoreCamera()
       console.error('러닝아트 업로드 실패:', error)
       return undefined
     }
-  }, [trail.length])
+  }, [trail.length, waitRegionSettled])
 
   const handleStopRecording = useCallback(async (
       reason: 'manual' | 'max_duration' | 'left_venue_timeout',
   ) => {
     setIsStoppingTrail(true)
     try {
-      const trailArtUrl = await finalizeTrailArt()
-      await stopRecording(reason, null, trailArtUrl)
+      // stopRecording()이 recordingVenueId를 정리하기 전에 먼저 읽어야 한다.
+      const venueId = useTrailStore.getState().recordingVenueId ?? null
+      const trailArtUrl = await finalizeTrailArt(venueId)
+      await stopRecording(reason, venueId, trailArtUrl)
     } finally {
       setIsStoppingTrail(false)
     }
@@ -577,6 +669,12 @@ export default function MapScreen() {
             onRegionChangeComplete={(r) => {
               regionRef.current = r
               setZoomBucket(Math.round(Math.log2(Math.max(r.latitudeDelta, 0.0001)) * 2) / 2)
+              // [추가] 러닝아트 캡처가 카메라 이동을 기다리고 있다면 완료 알림
+              const resolve = regionSettledRef.current
+              if (resolve) {
+                regionSettledRef.current = null
+                resolve()
+              }
             }}
             // [추가] 지도의 빈 곳을 누르면 미리보기 카드 닫기
             // (Android는 마커를 눌러도 지도 onPress가 같이 오므로 marker-press는 무시)
@@ -615,7 +713,10 @@ export default function MapScreen() {
               </React.Fragment>
           ))}
 
-          {isRecording && trail.length > 1 && !showPawPrint && (
+          {/* [수정] 캡처(isCapturingTrailArt) 순간에는 발자국 모드여도 폴리라인을 함께 그린다.
+              takeSnapshot 은 좌표를 받지 않고 현재 렌더 결과만 담으므로,
+              캡처 시점에는 반드시 렌더러가 직접 그리는 폴리라인이 마운트돼 있어야 한다. */}
+          {isRecording && trail.length > 1 && (!showPawPrint || isCapturingTrailArt) && (
               <Polyline coordinates={trail} strokeColor="#FF6B35" strokeWidth={3} />
           )}
 

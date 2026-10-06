@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { GalleryItem } from "../../../types/minihome/minihome";
 import {
   formatGalleryDate,
@@ -56,11 +56,13 @@ function GalleryPreviewCard({ gallery }: { gallery: GalleryItem }) {
 function GalleryFullBlock({
   gallery,
   onAddImage,
+  addImageDisabled,
   onDeleteGalleryImage,
   deleteImageDisabled,
 }: {
   gallery: GalleryItem;
   onAddImage?: (galleryId: number) => void;
+  addImageDisabled?: boolean;
   onDeleteGalleryImage?: (galleryImageId: number) => void;
   deleteImageDisabled?: boolean;
 }) {
@@ -114,7 +116,11 @@ function GalleryFullBlock({
                   <button
                     type="button"
                     className="shrink-0 rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
-                    onClick={() => deleteImageConfirm(img.galleryImageId)}
+                    onClick={() => {
+                      if (window.confirm("이 이미지를 삭제하시겠습니까?")) {
+                        onDeleteGalleryImage(img.galleryImageId);
+                      }
+                    }}
                     disabled={deleteImageDisabled}
                   >
                     삭제
@@ -127,13 +133,6 @@ function GalleryFullBlock({
       )}
     </article>
   );
-}
-
-function deleteImageConfirm(galleryImageId: number) {
-  // 삭제 확인 다이얼로그
-  if (window.confirm("이 이미지를 삭제하시겠습니까?")) {
-    onDeleteGalleryImage(galleryImageId);
-  }
 }
 
 export default function GallerySection({

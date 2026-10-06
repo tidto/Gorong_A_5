@@ -182,12 +182,13 @@ public class ReviewService {
 
         // review 삭제 후: image_url이 일치하고 referenceId가 같은 gallery_image 삭제
         // - referenceId만으로 삭제하면 안 되며(여러 갤러리 존재 가능),
-        //   image_url 기반 식별 후 referenceId로 필터링하여 안전하게 삭제한다.
+        //   image_url 기반 식별 후 referenceId와 소유자로 필터링하여 안전하게 삭제한다.
         if (!imageUrls.isEmpty()) {
             List<GalleryImage> galleryImages =
-                    galleryImageRepository.findByImageUrlsAndGalleryReferenceId(
+                    galleryImageRepository.findByImageUrlsAndGalleryReferenceIdAndOwnerUserId(
                             imageUrls,
-                            String.valueOf(eventId)
+                            String.valueOf(eventId),
+                            user.getId()
                     );
             if (!galleryImages.isEmpty()) {
                 galleryImageRepository.deleteAll(galleryImages);
