@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { applySoloParticipation, cancelSoloParticipation, checkSoloApplied } from '../services/api'
 import { parseLooseDate } from '../utils/recommend'
 import { Venue } from '../types'
+import ReviewSection from './review/ReviewSection'
 
 type Props = {
     venue: Venue | null
@@ -450,6 +451,9 @@ export default function VenueDetailModal({
                                 )}
                             </View>
                         ) : null}
+
+                        {/* 리뷰 목록 (읽기 전용) — 소개 영역 뒤, 빈 안내 문구 앞 */}
+                        <ReviewSection eventId={venue.id} />
 
                         {!venue.overview && barrierFreeLines.length === 0 && (
                             <Text style={styles.emptyNote}>등록된 상세 소개가 아직 없어요.</Text>
