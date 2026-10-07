@@ -3,12 +3,14 @@ import { Alert, AppState, Dimensions, Image, ScrollView, StyleSheet, Text, Touch
 import * as Location from 'expo-location'
 import MapView, { Circle, Marker, Polyline, Region } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
 import { useGeofence, ENTER_DWELL_S } from '../hooks/useGeofence'
 import VenueDetailModal from '../components/VenueDetailModal'
 import { fetchMyParticipations, fetchNearbyVenues, fetchPublicEventDetail, fetchPublicEvents, fetchWeather, uploadFileToS3 } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { useTrailStore } from '../store/trailStore'
 import { PublicEvent, Venue } from '../types'
+import { buildAccessibility } from '../utils/accessibility'
 // [수정] 유틸/스코어링 로직은 utils/recommend.ts로 분리
 import {
   distanceMeters,
@@ -104,15 +106,6 @@ function formatEventPeriod(start?: string, end?: string) {
   return '기간 제한 없음'
 }
 
-// 주차/엘리베이터/화장실 정보를 사람이 읽는 줄 단위 문자열로 합침 (없으면 undefined)
-function buildBarrierFreeInfo(item: PublicEvent): string | undefined {
-  const lines: string[] = []
-  if (item.parking) lines.push(`주차: ${item.parking}`)
-  if (item.elevator) lines.push(`엘리베이터: ${item.elevator}`)
-  if (item.restroom) lines.push(`화장실: ${item.restroom}`)
-  return lines.length > 0 ? lines.join('\n') : undefined
-}
-
 function mapPublicEventToVenue(item: PublicEvent): Venue {
   return {
     id: String(item.contentid),
@@ -128,7 +121,7 @@ function mapPublicEventToVenue(item: PublicEvent): Venue {
     eventEndDate: item.eventEndDate,
     overview: item.overview,
     tel: item.tel,
-    barrierFreeInfo: buildBarrierFreeInfo(item),
+    accessibility: buildAccessibility(item),
   }
 }
 
@@ -190,8 +183,8 @@ export default function MapScreen() {
   )
   // 버튼-시트 사이 여백 12 + 측정된 시트 높이(= paddingBottom에 insets.bottom 포함된 실측값)
   // 아직 시트를 한 번도 렌더 못 해 측정값이 0일 때만 기존 고정값으로 대체
-  const buttonRowBottom = sheetHeight > 0 ? sheetHeight + 12 : 220 + insets.bottom
-  const eventSheetBottomPadding = 24 + insets.bottom
+  const buttonRowBottom = sheetHeight > 0 ? sheetHeight + 16 : 220 + insets.bottom
+  const eventSheetBottomPadding = 12 + insets.bottom
 
   useEffect(() => {
     setInsideVenueId(insideVenueId)
@@ -424,6 +417,40 @@ export default function MapScreen() {
     setVenues((prev) => prev.map((v) => (v.id === venue.id ? patch(v) : v)))
     setDetailVenue((prev) => (prev && prev.id === venue.id ? patch(prev) : prev))
   }, [])
+
+  // [추가] 상세 모달을 열면 공개 행사 상세 API(/api/public/map/{id})로 무장애 정보·소개를 보강
+  // - 목록 API(/api/public/map)는 DB에 저장된 값을 그대로 내려주고, 비어 있는 무장애/소개는
+  //   상세 API를 처음 호출할 때 서버가 TourAPI에서 채워 넣음 → 목록에서 온 행사도 한 번은 호출해야 함
+  // - /venues/nearby 응답에는 무장애 정보가 아예 없음
+  // - 행사별로 앱을 켜 둔 동안 1번만 호출 (서버에 없는 행사는 재시도하지 않음, 네트워크 오류만 재시도 허용)
+  const detailFetchedRef = useRef<Set<string>>(new Set())
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const id = detailVenue?.id
+    if (!id || detailFetchedRef.current.has(id)) return
+    detailFetchedRef.current.add(id)
+    setDetailLoadingId(id)
+
+    fetchPublicEventDetail(id)
+        .then((res) => {
+          const accessibility = buildAccessibility(res.data)
+          const { overview, tel } = res.data
+          const enrich = (v: Venue): Venue => ({
+            ...v,
+            accessibility: accessibility ?? v.accessibility,
+            overview: v.overview || overview || undefined,
+            tel: v.tel || tel || undefined,
+          })
+          setVenues((prev) => prev.map((v) => (v.id === id ? enrich(v) : v)))
+          setDetailVenue((prev) => (prev && prev.id === id ? enrich(prev) : prev))
+        })
+        .catch((e) => {
+          console.warn('[detail] 무장애 정보 보강 실패:', e?.response?.status ?? e?.message)
+          if (!e?.response) detailFetchedRef.current.delete(id) // 응답 자체가 없던 네트워크 오류만 재시도
+        })
+        .finally(() => setDetailLoadingId((cur) => (cur === id ? null : cur)))
+  }, [detailVenue?.id])
 
   // [추가] 발자국을 찍을 좌표 — 기록된 좌표 '사이'도 채워서 찍음
   // 좌표가 듬성듬성 기록돼도(빠른 이동, 에뮬레이터 위치 점프 등) 선으로 이은 경로를 따라
@@ -705,9 +732,9 @@ export default function MapScreen() {
                     <Circle
                         center={{ latitude: venue.lat, longitude: venue.lng }}
                         radius={venue.radius}
-                        strokeWidth={insideVenueId === venue.id ? 4 : 2}
+                        strokeWidth={insideVenueId === venue.id ? 3 : 2}
                         strokeColor={insideVenueId === venue.id ? 'rgba(255,107,53,0.95)' : 'rgba(59,130,246,0.75)'}
-                        fillColor={insideVenueId === venue.id ? 'rgba(255,107,53,0.30)' : 'rgba(59,130,246,0.16)'}
+                        fillColor={insideVenueId === venue.id ? 'rgba(255,107,53,0.14)' : 'rgba(59,130,246,0.09)'}
                     />
                 )}
               </React.Fragment>
@@ -739,7 +766,7 @@ export default function MapScreen() {
                 <Text style={styles.previewTitle} numberOfLines={1}>{selectedVenue.name}</Text>
                 <Text style={styles.previewSub} numberOfLines={2}>{selectedVenue.address}</Text>
                 {/* [추가] 상세페이지 진입 */}
-                <TouchableOpacity onPress={() => setDetailVenue(selectedVenue)} hitSlop={{ top: 6, bottom: 6, left: 0, right: 6 }}>
+                <TouchableOpacity onPress={() => setDetailVenue(selectedVenue)} hitSlop={{ top: 14, bottom: 14, left: 0, right: 14 }}>
                   <Text style={styles.previewMore}>자세히 보기 ›</Text>
                 </TouchableOpacity>
               </View>
@@ -750,7 +777,7 @@ export default function MapScreen() {
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityLabel="미리보기 닫기"
               >
-                <Text style={styles.previewCloseText}>✕</Text>
+                <Ionicons name="close" size={16} color="#6b7280" />
               </TouchableOpacity>
             </TouchableOpacity>
         )}
@@ -760,26 +787,11 @@ export default function MapScreen() {
             style={[styles.eventSheet, { paddingBottom: eventSheetBottomPadding }]}
             onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}
         >
-          {/* [추가] 카테고리 필터 칩 — 웹 Home.tsx의 카테고리 탭과 동일한 기준(A01~A04) */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-            {CATEGORY_TABS.map((c) => {
-              const active = activeCategory === c.id
-              return (
-                  <TouchableOpacity
-                      key={c.id}
-                      style={[styles.categoryChip, active && styles.categoryChipActive]}
-                      onPress={() => setActiveCategory(c.id)}
-                  >
-                    <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>{c.label}</Text>
-                  </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
-
           <View style={styles.tabRow}>
             <TouchableOpacity
                 style={[styles.tabBtn, activeTab === 'recommended' && styles.tabBtnActive]}
                 onPress={() => setActiveTab('recommended')}
+                hitSlop={{ top: 12, bottom: 4, left: 6, right: 6 }}
             >
               <Text style={[styles.tabText, activeTab === 'recommended' && styles.tabTextActive]}>
                 {weatherTabLabel}
@@ -788,6 +800,7 @@ export default function MapScreen() {
             <TouchableOpacity
                 style={[styles.tabBtn, activeTab === 'nearby' && styles.tabBtnActive]}
                 onPress={() => setActiveTab('nearby')}
+                hitSlop={{ top: 12, bottom: 4, left: 6, right: 6 }}
             >
               <Text style={[styles.tabText, activeTab === 'nearby' && styles.tabTextActive]}>주변 행사</Text>
             </TouchableOpacity>
@@ -797,6 +810,23 @@ export default function MapScreen() {
           {activeTab === 'recommended' && (
               <Text style={styles.weatherNote} numberOfLines={1}>{weatherNote}</Text>
           )}
+
+          {/* [추가] 카테고리 필터 칩 — 웹 Home.tsx의 카테고리 탭과 동일한 기준(A01~A04) */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
+            {CATEGORY_TABS.map((c) => {
+              const active = activeCategory === c.id
+              return (
+                  <TouchableOpacity
+                      key={c.id}
+                      style={[styles.categoryChip, active && styles.categoryChipActive]}
+                      onPress={() => setActiveCategory(c.id)}
+                      hitSlop={{ top: 9, bottom: 9, left: 2, right: 2 }}
+                  >
+                    <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>{c.label}</Text>
+                  </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
             {activeList.map((venue) => {
@@ -810,24 +840,34 @@ export default function MapScreen() {
                       onLongPress={() => setDetailVenue(venue)}
                       activeOpacity={0.85}
                   >
-                    <Text style={styles.eventCardTitle} numberOfLines={1}>{venue.name}</Text>
-                    <Text style={styles.eventCardPeriod} numberOfLines={1}>
-                      {formatEventPeriod(venue.eventStartDate, venue.eventEndDate)}
-                    </Text>
-                    <Text style={styles.eventCardAddress} numberOfLines={2}>{venue.address}</Text>
-                    <View style={styles.eventCardFooter}>
-                      <Text style={styles.eventCardRadius}>
-                        {venue.geofenceEnabled === false || venue.radius <= 0 ? '지오펜싱 없음' : `반경 ${venue.radius}m`}
+                    <Image
+                        source={venue.imageUrl ? { uri: venue.imageUrl } : require('../../assets/icon.png')}
+                        style={styles.eventCardThumb}
+                    />
+                    <View style={styles.eventCardBody}>
+                      <Text style={styles.eventCardTitle} numberOfLines={1}>{venue.name}</Text>
+                      <Text style={styles.eventCardPeriod} numberOfLines={1}>
+                        {formatEventPeriod(venue.eventStartDate, venue.eventEndDate)}
                       </Text>
-                      {isInside ? (
-                          <Text style={styles.eventCardBadge}>
-                            {isVerified ? '✅ 인증완료' : '진입 중'}
-                          </Text>
-                      ) : (
-                          <TouchableOpacity onPress={() => setDetailVenue(venue)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                            <Text style={styles.eventCardMore}>자세히 ›</Text>
-                          </TouchableOpacity>
-                      )}
+                      <Text style={styles.eventCardAddress} numberOfLines={1}>{venue.address}</Text>
+                      <View style={styles.eventCardFooter}>
+                        {/* '지오펜싱'은 개발 용어 → 상세페이지와 같은 '도착 인증' 표현으로 통일 */}
+                        {!isInside && (
+                            <Text style={styles.eventCardRadius} numberOfLines={1}>
+                              {venue.geofenceEnabled === false || venue.radius <= 0 ? '신청 후 도착 인증' : `반경 ${venue.radius}m 자동 인증`}
+                            </Text>
+                        )}
+                        {isInside ? (
+                            <View style={styles.eventCardBadgeRow}>
+                              {isVerified && <Ionicons name="checkmark-circle" size={13} color="#FF6B35" />}
+                              <Text style={styles.eventCardBadge}>{isVerified ? '인증완료' : '진입 중'}</Text>
+                            </View>
+                        ) : (
+                            <TouchableOpacity onPress={() => setDetailVenue(venue)} hitSlop={{ top: 14, bottom: 14, left: 14, right: 10 }}>
+                              <Text style={styles.eventCardMore}>자세히 ›</Text>
+                            </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   </TouchableOpacity>
               )
@@ -843,7 +883,7 @@ export default function MapScreen() {
               activeOpacity={0.85}
               accessibilityLabel="지도 확대"
           >
-            <Text style={styles.zoomText}>＋</Text>
+            <Ionicons name="add" size={24} color="#374151" />
           </TouchableOpacity>
           <View style={styles.zoomDivider} />
           <TouchableOpacity
@@ -852,7 +892,7 @@ export default function MapScreen() {
               activeOpacity={0.85}
               accessibilityLabel="지도 축소"
           >
-            <Text style={styles.zoomText}>－</Text>
+            <Ionicons name="remove" size={24} color="#374151" />
           </TouchableOpacity>
         </View>
 
@@ -867,14 +907,19 @@ export default function MapScreen() {
         </TouchableOpacity>
 
         <View style={[styles.buttonRow, { bottom: buttonRowBottom }]}>
+          {/* 앱의 주 기능이라 주황 채움 버튼 / 기록 중에는 어두운 색으로 상태 구분 */}
           <TouchableOpacity
-              style={[styles.btn, isRecording && styles.btnActive, isStoppingTrail && styles.btnDisabled]}
+              style={[styles.btn, styles.btnPrimary, isRecording && styles.btnRecording, isStoppingTrail && styles.btnDisabled]}
               onPress={isRecording ? () => handleStopRecording('manual') : () => startRecording(insideVenueId)}
               disabled={isStoppingTrail}
+              activeOpacity={0.85}
           >
-            <Text style={styles.btnText}>
-              {isStoppingTrail ? '저장 중...' : isRecording ? '트레일 기록 종료' : '트레일 기록 시작'}
-            </Text>
+            <View style={styles.btnInner}>
+              <Ionicons name={isRecording ? 'stop-circle' : 'footsteps'} size={16} color="#fff" />
+              <Text style={styles.btnTextOn}>
+                {isStoppingTrail ? '저장 중...' : isRecording ? '트레일 기록 종료' : '트레일 기록 시작'}
+              </Text>
+            </View>
           </TouchableOpacity>
 
           {isRecording && (
@@ -888,10 +933,15 @@ export default function MapScreen() {
         {insideVenueId && (
             <View style={[styles.badgeWrap, isVerified && styles.badgeWrapVerified]}>
               <View style={[styles.badge, isVerified && styles.badgeVerified]}>
+                <Ionicons
+                    name={isVerified ? 'checkmark-circle' : 'location'}
+                    size={16}
+                    color={isVerified ? '#fff' : '#FF6B35'}
+                />
                 <Text style={[styles.badgeText, isVerified && styles.badgeTextVerified]}>
                   {isVerified
-                      ? '✅ 도착 인증 완료'
-                      : `📍 행사장 진입 중 · ${ENTER_DWELL_S - dwellSeconds}초 후 자동 인증`}
+                      ? '도착 인증 완료'
+                      : `행사장 진입 중 · ${ENTER_DWELL_S - dwellSeconds}초 후 자동 인증`}
                 </Text>
               </View>
 
@@ -912,6 +962,7 @@ export default function MapScreen() {
         {/* [추가] 행사 상세페이지 모달 */}
         <VenueDetailModal
             venue={detailVenue}
+            detailLoading={detailLoadingId !== null && detailLoadingId === detailVenue?.id}
             formatPeriod={formatEventPeriod}
             onClose={() => setDetailVenue(null)}
             onShowOnMap={handleShowOnMapFromDetail}
@@ -942,9 +993,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  buttonRow: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  buttonRow: { position: 'absolute', left: 16, flexDirection: 'row', gap: 8 },
+  btn: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   btnActive: { backgroundColor: '#FF6B35' },
+  btnPrimary: { backgroundColor: '#FF6B35', paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999, shadowOpacity: 0.22 },
+  btnRecording: { backgroundColor: '#111827' },
+  btnInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  btnTextOn: { fontWeight: '800', fontSize: 14, color: '#fff' },
   locateBtn: { position: 'absolute', right: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 5 },
   locateIcon: { fontSize: 20 },
   // 내 위치(조준) 아이콘: 24x24 안에 링 + 점 + 상하좌우 눈금
@@ -963,19 +1018,19 @@ const styles = StyleSheet.create({
   btnText: { fontWeight: '600', color: '#333' },
 
   // 탭 스타일 (오늘의 추천 / 주변 행사)
-  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  tabBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#f3f4f6' },
-  tabBtnActive: { backgroundColor: '#FF6B35' },
-  tabText: { fontSize: 13, fontWeight: '700', color: '#6b7280' },
-  tabTextActive: { color: '#fff' },
+  tabRow: { flexDirection: 'row', gap: 22, marginBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e5e7eb' },
+  tabBtn: { paddingBottom: 9, borderBottomWidth: 2.5, borderBottomColor: 'transparent' },
+  tabBtnActive: { borderBottomColor: '#FF6B35' },
+  tabText: { fontSize: 15, fontWeight: '700', color: '#6b7280' },
+  tabTextActive: { color: '#111827' },
   // 카테고리 필터 칩 (전체/자연/문화/레저/쇼핑)
-  categoryRow: { gap: 6, marginBottom: 8 },
+  categoryRow: { gap: 6, marginBottom: 10 },
   categoryChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb' },
   categoryChipActive: { backgroundColor: '#111827', borderColor: '#111827' },
   categoryChipText: { fontSize: 12, fontWeight: '700', color: '#4b5563' },
   categoryChipTextActive: { color: '#fff' },
   // 추천 근거 한 줄 (예: '비 오는 날 · 실내 위주로 추천')
-  weatherNote: { marginTop: -2, marginBottom: 8, fontSize: 11, color: '#6b7280', fontWeight: '600' },
+  weatherNote: { marginBottom: 8, fontSize: 12, color: '#4b5563', fontWeight: '600' },
 
   // 배지 스타일
   badgeWrap: {
@@ -989,6 +1044,9 @@ const styles = StyleSheet.create({
     top: 88,
   },
   badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#fff',
     borderRadius: 20,
     paddingHorizontal: 16,
@@ -1030,7 +1088,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF6B35',
     borderRadius: 2,
   },
-  previewCard: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: 18, padding: 12, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 14, elevation: 8 },
+  previewCard: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 18, padding: 12, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 14, elevation: 8 },
   previewImage: { width: 64, height: 64, borderRadius: 14, backgroundColor: '#f3f4f6' },
   previewText: { flex: 1 },
   previewClose: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
@@ -1038,19 +1096,22 @@ const styles = StyleSheet.create({
   previewTitle: { fontSize: 15, fontWeight: '800', color: '#111827' },
   previewSub: { marginTop: 4, fontSize: 12, color: '#6b7280', lineHeight: 16 },
   previewMore: { marginTop: 6, fontSize: 12, color: '#FF6B35', fontWeight: '800' },
-  eventSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.98)', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 12, paddingHorizontal: 16, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 16, elevation: 10 },
+  eventSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 12, paddingHorizontal: 16, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 16, elevation: 10 },
   sheetHeader: { marginBottom: 10 },
   sheetTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
   sheetSub: { marginTop: 4, fontSize: 12, color: '#6b7280' },
   cardRow: { gap: 10, paddingBottom: 4 },
-  eventCard: { width: 180, borderRadius: 16, padding: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e5e7eb' },
+  eventCard: { width: 262, flexDirection: 'row', gap: 12, borderRadius: 18, padding: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eef0f3', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   eventCardSelected: { borderColor: '#FF6B35', backgroundColor: '#fff7f2' },
-  eventCardInside: { borderColor: '#FF6B35', backgroundColor: 'rgba(255,107,53,0.12)' },
+  eventCardInside: { borderColor: '#FF6B35', backgroundColor: '#FFEFE7' },
   eventCardTitle: { fontSize: 14, fontWeight: '800', color: '#111827' },
-  eventCardPeriod: { marginTop: 4, fontSize: 12, color: '#FF6B35', fontWeight: '700' },
-  eventCardAddress: { marginTop: 8, fontSize: 12, color: '#4b5563', lineHeight: 16 },
-  eventCardFooter: { marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  eventCardRadius: { fontSize: 11, color: '#6b7280', fontWeight: '600' },
+  eventCardThumb: { width: 72, height: 72, borderRadius: 12, backgroundColor: '#f3f4f6' },
+  eventCardBody: { flex: 1, justifyContent: 'space-between' },
+  eventCardPeriod: { marginTop: 3, fontSize: 12, color: '#FF6B35', fontWeight: '700' },
+  eventCardAddress: { marginTop: 2, fontSize: 11, color: '#6b7280' },
+  eventCardFooter: { marginTop: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 },
+  eventCardRadius: { flexShrink: 1, fontSize: 11, color: '#6b7280', fontWeight: '600' },
+  eventCardBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
   eventCardBadge: { fontSize: 11, color: '#FF6B35', fontWeight: '800' },
   eventCardMore: { fontSize: 11, color: '#9ca3af', fontWeight: '700' },
 })

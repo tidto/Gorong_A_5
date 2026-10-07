@@ -23,18 +23,37 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { applySoloParticipation, cancelSoloParticipation, checkSoloApplied } from '../services/api'
 import { parseLooseDate } from '../utils/recommend'
 import { Venue } from '../types'
 import ReviewSection from './review/ReviewSection'
+import { getAccessibilityGroups } from '../utils/accessibility'
 
 type Props = {
     venue: Venue | null
+    // 무장애 정보·소개를 서버에서 보강하는 중이면 true (빈 상태 문구 대신 로딩 표시)
+    detailLoading?: boolean
     formatPeriod: (start?: string, end?: string) => string
     onClose: () => void
     onShowOnMap: (venue: Venue) => void
     // 혼자 참여 신청/취소가 서버에 반영된 뒤 호출 (MapScreen이 지오펜싱 대상을 갱신)
     onParticipationChange?: (venue: Venue, applied: boolean) => void
+}
+
+// 사진 위 그림자: 겹당 1%만 어둡게 하고 24/16겹을 쌓아 단계(밴딩)가 눈에 안 보이게 함
+const HERO_SHADE_BOTTOM = Array.from({ length: 24 }, (_, i) => (i + 1) * 5)
+const HERO_SHADE_TOP = Array.from({ length: 16 }, (_, i) => (i + 1) * 7)
+
+// 요약 칩에 먼저 보여줄 무장애 항목 순서 (앞쪽일수록 우선) — 팀에서 기준이 정해지면 이 배열만 수정
+const ACCESS_PRIORITY = [
+    'route', 'exit', 'restroom', 'elevator', 'wheelchair',
+    'braileBlock', 'audioGuide', 'helpDog', 'signGuide', 'videoGuide',
+    'stroller', 'parking', 'publicTransport',
+]
+const accessRank = (field: string) => {
+    const i = ACCESS_PRIORITY.indexOf(field)
+    return i === -1 ? ACCESS_PRIORITY.length : i
 }
 
 // 날짜 선택 칩 최대 개수 (기간이 긴 행사/상설 관광지는 오늘부터 이만큼만 보여줌)
@@ -78,7 +97,7 @@ function buildDateOptions(venue: Venue): { value: string; label: string }[] {
     return options
 }
 
-// 무장애 정보 3종(주차/엘리베이터/화장실)을 사람이 읽을 문장으로
+// [레거시 폴백] venue.accessibility 가 없고 barrierFreeInfo(문자열)만 있을 때(/venues/nearby 응답)만 사용
 function buildBarrierFreeLines(venue: Venue): string[] {
     const lines: string[] = []
     if (venue.barrierFreeInfo) {
@@ -104,21 +123,6 @@ async function openKakaoRoute(venue: Venue) {
     }
 }
 
-// venue.category는 TourAPI cat1 코드(A01~A05) 또는 'EVENT' — 화면에는 한글 라벨로 표시
-const CATEGORY_LABELS: Record<string, string> = {
-    A01: '자연',
-    A02: '문화',
-    A03: '레저',
-    A04: '쇼핑',
-    A05: '음식',
-    EVENT: '행사',
-}
-
-function getCategoryLabel(category?: string): string | null {
-    const key = (category ?? '').toUpperCase()
-    return CATEGORY_LABELS[key] ?? CATEGORY_LABELS[key.slice(0, 3)] ?? null
-}
-
 // 행사 상태 배지: 종료 / 진행 중 / D-n(시작 전)
 function getStatusBadge(venue: Venue): { label: string; bg: string; color: string } | null {
     const today = startOfToday()
@@ -133,9 +137,24 @@ function getStatusBadge(venue: Venue): { label: string; bg: string; color: strin
     return null
 }
 
+// 무장애 그룹 아이콘 — accessibility.ts 의 이모지 대신 key 로 매핑 (util 은 웹과 공유하는 기준이라 그대로 둠)
+function GroupIcon({ groupKey }: { groupKey: string }) {
+    const color = '#ea580c'
+    switch (groupKey) {
+        case 'mobility':
+            return <MaterialCommunityIcons name="wheelchair-accessibility" size={16} color={color} />
+        case 'visual':
+            return <Ionicons name="eye-outline" size={16} color={color} />
+        case 'hearing':
+            return <Ionicons name="ear-outline" size={16} color={color} />
+        default:
+            return <MaterialCommunityIcons name="baby-carriage" size={16} color={color} />
+    }
+}
+
 // 빠른 실행 버튼 (전화 / 길찾기 / 공유)
 function QuickAction({ icon, label, onPress, disabled }: {
-    icon: string
+    icon: React.ReactNode
     label: string
     onPress: () => void
     disabled?: boolean
@@ -149,15 +168,15 @@ function QuickAction({ icon, label, onPress, disabled }: {
             accessibilityRole="button"
             accessibilityLabel={label}
         >
-            <Text style={styles.quickIcon}>{icon}</Text>
+            {icon}
             <Text style={styles.quickLabel}>{label}</Text>
         </TouchableOpacity>
     )
 }
 
-// 정보 카드의 한 줄 (아이콘 + 라벨 + 값)
+// 정보 목록의 한 줄 (아이콘 타일 + 라벨 + 값)
 function InfoRow({ icon, label, value, muted, divider }: {
-    icon: string
+    icon: React.ReactNode
     label: string
     value: string
     muted?: boolean
@@ -165,9 +184,13 @@ function InfoRow({ icon, label, value, muted, divider }: {
 }) {
     return (
         <View style={[styles.row, divider && styles.rowDivider]}>
-            <Text style={styles.rowIcon}>{icon}</Text>
-            <Text style={styles.infoLabel}>{label}</Text>
-            <Text style={[styles.rowText, muted && { color: '#9ca3af' }]}>{value}</Text>
+            <View style={styles.rowIconTile}>
+                {icon}
+            </View>
+            <View style={styles.rowBody}>
+                <Text style={styles.infoLabel}>{label}</Text>
+                <Text style={[styles.rowText, muted && { color: '#6b7280' }]}>{value}</Text>
+            </View>
         </View>
     )
 }
@@ -178,6 +201,7 @@ export default function VenueDetailModal({
                                              onClose,
                                              onShowOnMap,
                                              onParticipationChange,
+                                             detailLoading,
                                          }: Props) {
     const insets = useSafeAreaInsets()
 
@@ -187,6 +211,7 @@ export default function VenueDetailModal({
     const [pickerOpen, setPickerOpen] = useState(false)
     const [selectedDate, setSelectedDate] = useState<string | null>(null)
     const [expanded, setExpanded] = useState(false) // 소개글 더보기
+    const [scrolled, setScrolled] = useState(false) // 사진이 화면 밖으로 나가면 상태바 뒤에 흰 막을 깜
 
     // 요청이 끝났을 때 모달이 다른 행사로 바뀌었는지 확인하기 위한 ref
     const currentVenueIdRef = useRef<string | null>(null)
@@ -200,6 +225,7 @@ export default function VenueDetailModal({
         setPickerOpen(false)
         setSelectedDate(null)
         setExpanded(false)
+        setScrolled(false)
         checkSoloApplied(venue.id)
             .then((res) => {
                 if (!cancelled) setSoloApplied(Boolean(res.data?.applied))
@@ -217,7 +243,10 @@ export default function VenueDetailModal({
 
     if (!venue) return null
 
-    const barrierFreeLines = buildBarrierFreeLines(venue)
+    const accessGroups = getAccessibilityGroups(venue.accessibility)
+    // 항목별 정보가 있으면 그룹 배지로, 없을 때만 기존 문자열 방식으로 표시
+    const barrierFreeLines = accessGroups.length === 0 ? buildBarrierFreeLines(venue) : []
+    const hasAccess = accessGroups.length > 0 || barrierFreeLines.length > 0
     const hasGeofence = venue.geofenceEnabled !== false && venue.radius > 0
     const hasPeriod = Boolean(venue.eventStartDate || venue.eventEndDate)
     const canRoute = Number.isFinite(venue.lat) && Number.isFinite(venue.lng)
@@ -230,7 +259,15 @@ export default function VenueDetailModal({
     const endDate = parseLooseDate(venue.eventEndDate)
     const isEnded = endDate !== null && endDate < startOfToday()
     const status = getStatusBadge(venue)
-    const categoryLabel = getCategoryLabel(venue.category)
+
+    // 무장애 요약 (상단 칩): 전체 개수 + 앞 4개 라벨만 노출, 나머지는 +N
+    const accessTotal = accessGroups.reduce((n, g) => n + g.items.length, 0)
+    const accessPreview = accessGroups
+        .flatMap((g) => g.items)
+        .sort((a, b) => accessRank(a.field) - accessRank(b.field))
+        .slice(0, 4)
+        .map((i) => i.label)
+    const accessMore = accessTotal - accessPreview.length
 
     const openPicker = () => {
         setSelectedDate(dateOptions[0]?.value ?? null)
@@ -350,34 +387,41 @@ export default function VenueDetailModal({
     }
 
     return (
-        <Modal visible={!!venue} animationType="slide" onRequestClose={pickerOpen ? () => setPickerOpen(false) : onClose}>
+        <Modal visible={!!venue} animationType="slide" statusBarTranslucent onRequestClose={pickerOpen ? () => setPickerOpen(false) : onClose}>
             <View style={{ flex: 1, backgroundColor: '#fff' }}>
-                <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    bounces={false}
+                    showsVerticalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    onScroll={(e) => {
+                        // 값이 바뀔 때만 state 갱신 (스크롤마다 리렌더 방지)
+                        const next = e.nativeEvent.contentOffset.y > 300 - insets.top - 8
+                        setScrolled((prev) => (prev === next ? prev : next))
+                    }}
+                >
                     <View style={styles.heroWrap}>
                         <Image
                             source={venue.imageUrl ? { uri: venue.imageUrl } : require('../../assets/icon.png')}
                             style={styles.hero}
                         />
-                        <View style={styles.heroShade} pointerEvents="none" />
+                        {/* 위/아래 그라데이션 대용 (expo-linear-gradient 없이 반투명 View 겹침) */}
+                        {HERO_SHADE_BOTTOM.map((h) => (
+                            <View key={`b${h}`} pointerEvents="none" style={[styles.heroShade, { bottom: 0, height: h }]} />
+                        ))}
+                        {HERO_SHADE_TOP.map((h) => (
+                            <View key={`t${h}`} pointerEvents="none" style={[styles.heroShade, { top: 0, height: h }]} />
+                        ))}
                         {/* 닫기 버튼 — 상태바 겹침 방지로 safe area 반영 */}
                         <TouchableOpacity
                             style={[styles.closeBtn, { top: insets.top + 10 }]}
                             onPress={onClose}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             accessibilityLabel="상세페이지 닫기"
                         >
-                            <Text style={styles.closeBtnText}>✕</Text>
+                            <Ionicons name="close" size={20} color="#fff" />
                         </TouchableOpacity>
-                    </View>
-
-                    {/* 본문 시트: 사진 위로 살짝 겹쳐 올라오는 둥근 카드 */}
-                    <View style={styles.body}>
-                        <View style={styles.badgeRow}>
-                            {categoryLabel ? (
-                                <View style={styles.categoryBadge}>
-                                    <Text style={styles.categoryBadgeText}>{categoryLabel}</Text>
-                                </View>
-                            ) : null}
+                        {/* 배지는 사진 위 좌하단으로 올려 본문 첫 줄을 제목에 쓴다 */}
+                        <View style={styles.heroBadges}>
                             {status && (
                                 <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
                                     <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
@@ -385,52 +429,120 @@ export default function VenueDetailModal({
                             )}
                             {soloApplied === true && (
                                 <View style={styles.appliedBadge} accessibilityLabel="혼자 참여 신청됨">
-                                    <Text style={styles.appliedBadgeText}>✅ 참여 신청됨</Text>
+                                    <Ionicons name="checkmark-circle" size={14} color="#047857" />
+                                    <Text style={styles.appliedBadgeText}>참여 신청됨</Text>
                                 </View>
                             )}
                         </View>
+                    </View>
 
+                    {/* 본문 시트: 사진 위로 살짝 겹쳐 올라오는 둥근 카드 */}
+                    <View style={styles.body}>
                         <Text style={styles.title}>{venue.name}</Text>
+                        <View style={styles.addressRow}>
+                            <Ionicons name="location-outline" size={15} color="#6b7280" style={{ marginTop: 2 }} />
+                            <Text style={styles.addressLine} numberOfLines={2}>{venue.address}</Text>
+                        </View>
 
+                        {/* 무장애 요약 — 이 앱의 핵심 정보라 스크롤 없이 첫 화면에서 보이게 올림 */}
+                        {accessTotal > 0 && (
+                            <View
+                                style={styles.accessSummary}
+                                accessible
+                                accessibilityLabel={`무장애 편의 ${accessTotal}개: ${accessPreview.join(', ')}`}
+                            >
+                                <View style={styles.accessSummaryHead}>
+                                    <MaterialCommunityIcons name="wheelchair-accessibility" size={18} color="#166534" />
+                                    <Text style={styles.accessSummaryTitle}>무장애 편의 {accessTotal}개 확인됨</Text>
+                                </View>
+                                <View style={styles.accessChipWrap}>
+                                    {accessPreview.map((label) => (
+                                        <View key={label} style={styles.accessChip}>
+                                            <Text style={styles.accessChipText}>{label}</Text>
+                                        </View>
+                                    ))}
+                                    {accessMore > 0 && (
+                                        <View style={[styles.accessChip, styles.accessChipMore]}>
+                                            <Text style={styles.accessChipText}>+{accessMore}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* 빠른 실행: 카드 3개 → 구분선 있는 한 줄 바 */}
                         <View style={styles.quickRow}>
                             <QuickAction
-                                icon="📞"
+                                icon={<Ionicons name="call" size={22} color="#FF6B35" />}
                                 label="전화"
                                 disabled={!venue.tel}
                                 onPress={() => venue.tel && Linking.openURL(`tel:${venue.tel}`)}
                             />
+                            <View style={styles.quickDivider} />
                             <QuickAction
-                                icon="🧭"
+                                icon={<Ionicons name="navigate" size={22} color="#FF6B35" />}
                                 label="길찾기"
                                 disabled={!canRoute}
                                 onPress={() => openKakaoRoute(venue)}
                             />
+                            <View style={styles.quickDivider} />
                             <QuickAction
-                                icon="📤"
+                                icon={<Ionicons name="share-social" size={22} color="#FF6B35" />}
                                 label="공유"
                                 onPress={() => Share.share({ message: `${venue.name}\n${venue.address}` })}
                             />
                         </View>
 
-                        <View style={styles.infoCard}>
+                        <View style={styles.infoList}>
                             <InfoRow
-                                icon="📅"
+                                icon={<Ionicons name="calendar" size={18} color="#EA580C" />}
                                 label="기간"
                                 value={formatPeriod(venue.eventStartDate, venue.eventEndDate)}
                                 muted={!hasPeriod}
                             />
-                            <InfoRow icon="📍" label="장소" value={venue.address} divider />
-                            <InfoRow icon="🚩" label="도착 인증" value={arrivalText} divider />
+                            <InfoRow icon={<Ionicons name="flag" size={18} color="#EA580C" />} label="도착 인증" value={arrivalText} divider />
                         </View>
 
-                        {barrierFreeLines.length > 0 && (
+                        {hasAccess && (
                             <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>♿ 편의 정보</Text>
-                                <View style={styles.accessCard}>
-                                    {barrierFreeLines.map((line, i) => (
-                                        <Text key={i} style={styles.accessText}>• {line}</Text>
-                                    ))}
-                                </View>
+                                <Text style={styles.sectionTitle}>무장애 편의 정보</Text>
+                                {accessGroups.map((group) => (
+                                    <View key={group.key} style={styles.accessGroup}>
+                                        <View style={styles.accessGroupHead}>
+                                            <GroupIcon groupKey={group.key} />
+                                            <Text style={styles.accessGroupTitle}>{group.title}</Text>
+                                        </View>
+                                        <View style={styles.accessCard}>
+                                            {[...group.items].sort((a, b) => accessRank(a.field) - accessRank(b.field)).map((item) => (
+                                                <View
+                                                    key={item.field}
+                                                    style={styles.accessRow}
+                                                    accessible
+                                                    accessibilityLabel={
+                                                        item.description ? `${item.label}, ${item.description}` : item.label
+                                                    }
+                                                >
+                                                    <View style={styles.accessCheckCircle}>
+                                                        <Ionicons name="checkmark" size={13} color="#fff" />
+                                                    </View>
+                                                    <View style={styles.accessBody}>
+                                                        <Text style={styles.accessLabel}>{item.label}</Text>
+                                                        {item.description ? (
+                                                            <Text style={styles.accessDesc}>{item.description}</Text>
+                                                        ) : null}
+                                                    </View>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    </View>
+                                ))}
+                                {barrierFreeLines.length > 0 && (
+                                    <View style={styles.accessCard}>
+                                        {barrierFreeLines.map((line, i) => (
+                                            <Text key={i} style={styles.accessText}>• {line}</Text>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                         )}
 
@@ -443,10 +555,14 @@ export default function VenueDetailModal({
                                 {venue.overview.length > 140 && (
                                     <TouchableOpacity
                                         onPress={() => setExpanded((v) => !v)}
+                                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 24 }}
                                         accessibilityRole="button"
                                         accessibilityLabel={expanded ? '소개 접기' : '소개 더보기'}
                                     >
-                                        <Text style={styles.moreText}>{expanded ? '접기 ▲' : '더보기 ▼'}</Text>
+                                        <View style={styles.moreRow}>
+                                            <Text style={styles.moreText}>{expanded ? '접기' : '더보기'}</Text>
+                                            <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color="#FF6B35" />
+                                        </View>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -455,21 +571,31 @@ export default function VenueDetailModal({
                         {/* 리뷰 목록 (읽기 전용) — 소개 영역 뒤, 빈 안내 문구 앞 */}
                         <ReviewSection eventId={venue.id} />
 
-                        {!venue.overview && barrierFreeLines.length === 0 && (
+                        {!venue.overview && !hasAccess && detailLoading && (
+                            <View style={styles.loadingRow}>
+                                <ActivityIndicator size="small" color="#9ca3af" />
+                                <Text style={styles.emptyNote}>상세 정보를 불러오는 중이에요…</Text>
+                            </View>
+                        )}
+
+                        {!venue.overview && !hasAccess && !detailLoading && (
                             <Text style={styles.emptyNote}>등록된 상세 소개가 아직 없어요.</Text>
                         )}
                     </View>
                 </ScrollView>
 
+                {/* statusBarTranslucent라 본문이 상태바 뒤로 비쳐 보임 → 사진을 지나면 흰 막으로 가림 */}
+                {scrolled && <View pointerEvents="none" style={[styles.statusScrim, { height: insets.top }]} />}
+
                 <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
                     <TouchableOpacity
-                        style={styles.mapBtn}
+                        style={[styles.mapBtn, soloApplied === true && styles.mapBtnPrimary]}
                         onPress={() => onShowOnMap(venue)}
                         activeOpacity={0.85}
                         accessibilityRole="button"
                         accessibilityLabel="지도에서 보기"
                     >
-                        <Text style={styles.mapBtnText}>지도에서 보기</Text>
+                        <Text style={[styles.mapBtnText, soloApplied === true && styles.mapBtnTextOn]}>지도에서 보기</Text>
                     </TouchableOpacity>
                     {renderParticipationButton()}
                 </View>
@@ -478,7 +604,10 @@ export default function VenueDetailModal({
                 {pickerOpen && (
                     <View style={styles.pickerBackdrop}>
                         <View style={[styles.pickerCard, { marginBottom: insets.bottom + 16 }]}>
-                            <Text style={styles.pickerTitle}>📅 방문 예정일을 알려주세요</Text>
+                            <View style={styles.pickerTitleRow}>
+                                <Ionicons name="calendar-outline" size={20} color="#FF6B35" />
+                                <Text style={styles.pickerTitle}>방문 예정일을 알려주세요</Text>
+                            </View>
                             <Text style={styles.pickerSub}>언제 이 행사에 방문하실 예정인가요?</Text>
 
                             {dateOptions.length === 0 ? (
@@ -538,120 +667,181 @@ export default function VenueDetailModal({
 }
 
 const styles = StyleSheet.create({
-    heroWrap: { width: '100%', height: 260, backgroundColor: '#f3f4f6' },
-    heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.12)' },
+    statusScrim: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#fff' },
+
+    // ── 히어로 ──
+    heroWrap: { width: '100%', height: 300, backgroundColor: '#f3f4f6' },
     hero: { width: '100%', height: '100%' },
+    // 한 장짜리 어두운 막은 경계선이 그대로 보여서, 옅은 막을 겹쳐 경계를 부드럽게 함
+    heroShade: { position: 'absolute', left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.011)' },
     closeBtn: {
         position: 'absolute',
         right: 14,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(17,24,39,0.55)',
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: 'rgba(17,24,39,0.6)',
         alignItems: 'center',
         justifyContent: 'center',
     },
     closeBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+    heroBadges: {
+        position: 'absolute',
+        left: 16,
+        bottom: 36,
+        right: 16,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 6,
+    },
+    statusBadge: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5 },
+    statusBadgeText: { fontSize: 12, fontWeight: '800' },
+    appliedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ecfdf5', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5 },
+    appliedBadgeText: { fontSize: 12, fontWeight: '800', color: '#047857' },
+
+    // ── 본문 ──
     body: {
         marginTop: -24,
         backgroundColor: '#fff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
         paddingHorizontal: 20,
-        paddingTop: 22,
-        paddingBottom: 28,
+        paddingTop: 24,
+        paddingBottom: 32,
     },
-    title: { marginTop: 10, fontSize: 22, lineHeight: 30, fontWeight: '800', color: '#111827' },
-    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-    categoryBadge: { backgroundColor: '#FFF1EA', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-    categoryBadgeText: { fontSize: 12, fontWeight: '800', color: '#FF6B35' },
-    statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-    statusBadgeText: { fontSize: 12, fontWeight: '800' },
-    quickRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
-    quickBtn: {
-        flex: 1,
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderRadius: 14,
+    title: { fontSize: 24, lineHeight: 32, fontWeight: '800', color: '#111827', letterSpacing: -0.3 },
+    addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 6 },
+    addressLine: { flex: 1, fontSize: 13, lineHeight: 19, color: '#6b7280' },
+
+    // ── 무장애 요약 ──
+    accessSummary: {
+        marginTop: 16,
+        backgroundColor: '#f0fdf4',
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#f0f0f0',
-        backgroundColor: '#fff',
-        elevation: 1,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
+        borderColor: '#bbf7d0',
+        padding: 14,
     },
-    quickBtnDisabled: { opacity: 0.4 },
+    accessSummaryHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    accessSummaryTitle: { fontSize: 13, fontWeight: '800', color: '#166534' },
+    accessChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+    accessChip: {
+        backgroundColor: '#fff',
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: '#bbf7d0',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+    },
+    accessChipMore: { backgroundColor: '#dcfce7' },
+    accessChipText: { fontSize: 12, fontWeight: '700', color: '#166534' },
+
+    // ── 빠른 실행 바 ──
+    quickRow: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        marginTop: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#eef0f3',
+        backgroundColor: '#fff',
+    },
+    quickBtn: { flex: 1, alignItems: 'center', paddingVertical: 13 },
+    quickBtnDisabled: { opacity: 0.35 },
+    quickDivider: { width: StyleSheet.hairlineWidth, backgroundColor: '#e5e7eb', marginVertical: 10 },
     quickIcon: { fontSize: 20 },
     quickLabel: { marginTop: 4, fontSize: 12, fontWeight: '700', color: '#374151' },
-    infoLabel: { width: 56, fontSize: 12, fontWeight: '700', color: '#9ca3af' },
-    accessCard: { backgroundColor: '#f0fdf4', borderRadius: 14, padding: 14, gap: 6 },
-    accessText: { fontSize: 13, color: '#166534', lineHeight: 19 },
-    moreText: { marginTop: 8, fontSize: 13, fontWeight: '800', color: '#FF6B35' },
-    appliedBadge: {
-        backgroundColor: '#ecfdf5',
-        borderRadius: 999,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-    },
-    appliedBadgeText: { fontSize: 13, fontWeight: '700', color: '#047857' },
-    infoCard: {
-        marginTop: 18,
-        backgroundColor: '#f9fafb',
-        borderRadius: 14,
-        paddingHorizontal: 14,
-    },
-    row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13 },
+
+    // ── 정보 목록 ──
+    infoList: { marginTop: 8 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
     rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#e5e7eb' },
-    rowIcon: { fontSize: 15 },
-    routeBtn: {
-        borderRadius: 999,
-        borderWidth: 1.5,
-        borderColor: '#FF6B35',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+    rowIconTile: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: '#FFF1EA',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    routeBtnText: { color: '#FF6B35', fontWeight: '800', fontSize: 12 },
+    rowIcon: { fontSize: 16 },
+    rowBody: { flex: 1 },
+    infoLabel: { fontSize: 12, fontWeight: '700', color: '#6b7280' },
+    rowText: { marginTop: 2, fontSize: 14, color: '#1f2937', lineHeight: 20, fontWeight: '600' },
+
+    // ── 섹션 공통 ──
+    section: { marginTop: 24 },
+    sectionTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 10 },
+
+    // ── 무장애 상세 ──
+    accessGroup: { marginBottom: 14 },
+    accessGroupHead: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
+    accessGroupTitle: { fontSize: 13, fontWeight: '800', color: '#ea580c' },
+    accessCard: { backgroundColor: '#f0fdf4', borderRadius: 14, padding: 14, gap: 10 },
+    accessText: { fontSize: 13, color: '#166534', lineHeight: 19 },
+    accessRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+    accessCheckCircle: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#16a34a',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+    },
+    accessCheck: { fontSize: 11, fontWeight: '900', color: '#fff' },
+    accessBody: { flex: 1 },
+    accessLabel: { fontSize: 14, fontWeight: '700', color: '#166534', lineHeight: 20 },
+    accessDesc: { fontSize: 12, color: '#4b5563', lineHeight: 18, marginTop: 1 },
+
+    // ── 소개 ──
+    overview: { fontSize: 14, color: '#374151', lineHeight: 22 },
+    moreRow: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4 },
+    moreText: { fontSize: 13, fontWeight: '800', color: '#FF6B35' },
     emptyNote: { marginTop: 28, textAlign: 'center', fontSize: 13, color: '#9ca3af' },
-    rowText: { flex: 1, fontSize: 14, color: '#374151', lineHeight: 20 },
-    linkText: { color: '#2563eb', fontWeight: '700' },
-    section: { marginTop: 22 },
-    sectionTitle: { fontSize: 14, fontWeight: '800', color: '#111827', marginBottom: 8 },
-    sectionText: { fontSize: 13, color: '#4b5563', lineHeight: 19 },
-    overview: { fontSize: 14, color: '#374151', lineHeight: 21 },
+    loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+
+    // ── 하단 버튼 ──
     footer: {
         flexDirection: 'row',
         gap: 10,
         paddingHorizontal: 20,
         paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
         backgroundColor: '#fff',
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: -3 },
+        elevation: 12,
     },
     // '지도에서 보기' — 보조 버튼(테두리형)으로 내리고, 참여 버튼을 주 버튼으로
     mapBtn: {
         flex: 1,
         borderWidth: 1.5,
         borderColor: '#FF6B35',
-        borderRadius: 12,
-        paddingVertical: 14,
+        borderRadius: 14,
+        paddingVertical: 15,
         alignItems: 'center',
         justifyContent: 'center',
     },
     mapBtnText: { color: '#FF6B35', fontWeight: '800', fontSize: 15 },
+    mapBtnPrimary: { backgroundColor: '#FF6B35' },
+    mapBtnTextOn: { color: '#fff' },
     primaryBtn: {
         flex: 1,
         backgroundColor: '#FF6B35',
-        borderRadius: 12,
-        paddingVertical: 14,
+        borderRadius: 14,
+        paddingVertical: 15,
         alignItems: 'center',
         justifyContent: 'center',
     },
     primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-    cancelBtn: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#dc2626' },
+    cancelBtn: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e5e7eb' },
     cancelBtnText: { color: '#dc2626', fontWeight: '800', fontSize: 15 },
     btnDisabled: { backgroundColor: '#9ca3af' },
+
+    // ── 방문일 선택 오버레이 ──
     pickerBackdrop: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.45)',
@@ -663,13 +853,14 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 20,
     },
+    pickerTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
     pickerTitle: { fontSize: 17, fontWeight: '800', color: '#111827', textAlign: 'center' },
     pickerSub: { marginTop: 6, fontSize: 13, color: '#6b7280', textAlign: 'center' },
     pickerScroll: { marginTop: 16, maxHeight: 240 },
     chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
-        paddingHorizontal: 12,
-        paddingVertical: 9,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
         borderRadius: 10,
         borderWidth: 1.5,
         borderColor: '#e5e7eb',

@@ -13,6 +13,24 @@ export interface User {
   accountStatus?: 'ACTIVE' | 'INACTIVE'
 }
 
+// ─── 무장애(배리어프리) 정보 ──────────────────
+// 백엔드 TourItemDto 의 무장애 필드와 동일 (값이 없거나 'N'/'없음'이면 정보 없음)
+export interface AccessibilityInfo {
+  parking?: string          // 주차
+  elevator?: string         // 엘리베이터
+  restroom?: string         // 장애인 화장실
+  route?: string            // 접근 경로
+  wheelchair?: string       // 휠체어 대여
+  exit?: string             // 출입통로(경사로)
+  publicTransport?: string  // 대중교통 접근
+  braileBlock?: string      // 점자블록
+  audioGuide?: string       // 오디오 가이드
+  helpDog?: string          // 보조견 동반
+  signGuide?: string        // 수화 안내
+  videoGuide?: string       // 자막 영상
+  stroller?: string         // 유모차 대여
+}
+
 // ─── 행사·문화장소 ────────────────────────────
 // 백엔드 /api/v1/app/venues/nearby 응답 구조
 export interface Venue {
@@ -24,7 +42,8 @@ export interface Venue {
   geofenceEnabled?: boolean // 지오펜싱 대상 여부
   address: string
   category: string          // TourAPI 카테고리
-  barrierFreeInfo?: string  // 무장애 정보
+  barrierFreeInfo?: string  // 무장애 정보 (문자열, /venues/nearby 응답용 · 레거시)
+  accessibility?: AccessibilityInfo // 무장애 정보 (항목별 · 상세 모달 배지용)
   imageUrl?: string
   eventStartDate?: string
   eventEndDate?: string
@@ -33,7 +52,7 @@ export interface Venue {
 }
 
 // ─── 공개 행사 목록 (백엔드 /api/public/map) ─────
-export interface PublicEvent {
+export interface PublicEvent extends AccessibilityInfo {
   contentid: string
   title: string
   addr1: string
@@ -42,10 +61,6 @@ export interface PublicEvent {
   firstimage?: string
   firstimage2?: string
   overview?: string
-  parking?: string
-  elevator?: string
-  restroom?: string
-  route?: string
   areacode?: string
   cat1?: string
   eventStartDate?: string
@@ -79,8 +94,6 @@ export interface AppGroup {
   event: string
   eventContentId?: string | null
   location: string
-  content?: string | null
-  condition?: string | null
   meetingDate?: string
   meetingTime?: string
   maxMembers: number
@@ -88,7 +101,6 @@ export interface AppGroup {
   joined: boolean       // 내가 이미 참가했는지
   gathered: boolean     // 모임 성사 인증 여부
   status: string
-  ownedByMe?: boolean
 }
 
 export interface EventParticipation {
@@ -99,7 +111,6 @@ export interface EventParticipation {
   groupPostTitle?: string | null
   participationType: 'SOLO' | 'GROUP'
   visitDate?: string | null
-  status?: string
   appliedAt: string
 }
 
