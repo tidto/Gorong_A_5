@@ -128,7 +128,12 @@
 > D-N (Within N days)
 > “Working Day 기준으로 N일 이내에 리뷰해 주세요”
 
+
+
 > 일반적으로 D-2 태그를 많이 사용하며, 중요도가 낮거나 일정이 여유 있는 경우 D-3 ~ D-5 를 사용하기도 합니다.
 
 
 > *온라인 상에 코드 리뷰를 최소화 하고,바로 묻고 답할 수 있는 현장에 모여서 진행하는 것을 주로 택함*
+
+
+[![Architecture diagram of tidto/gorong_a_5](https://gitdiagram.com/tidto/gorong_a_5/diagram.png)](https://gitdiagram.com/tidto/gorong_a_5?utm_source=readme&utm_medium=picture)
