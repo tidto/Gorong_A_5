@@ -30,6 +30,7 @@ interface AuthStore {
   accessRestricted: boolean        // 밴/비활성 계정으로 앱 이용 제한
   accessRestrictedMessage: string | null
   insideVenueId: string | null     // 현재 진입한 지오펜스 행사장 ID
+  insideVenueName: string | null   // 현재 진입한 지오펜스 행사장 이름 (채팅 화면 상단 표시용)
   pendingSignupEmail: string | null
 
   // ─── 액션 ─────────────────────────────────────
@@ -58,8 +59,8 @@ interface AuthStore {
   /** 소셜 로그인 후 회원가입에서 사용할 이메일 임시 저장 */
   setPendingSignupEmail: (email: string | null) => void
 
-  /** MapScreen/ChatScreen에서 지오펜스 진입 ID 공유 */
-  setInsideVenueId: (id: string | null) => void
+  /** MapScreen/ChatScreen에서 지오펜스 진입 ID(와 행사장 이름) 공유 */
+  setInsideVenueId: (id: string | null, name?: string | null) => void
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -70,6 +71,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
   accessRestricted: false,
   accessRestrictedMessage: null,
   insideVenueId: null,
+  insideVenueName: null,
   pendingSignupEmail: null,
 
   // ─── loadFromStorage ──────────────────────────
@@ -216,5 +218,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
   setPendingSignupEmail: (email) => set({ pendingSignupEmail: email }),
 
   // ─── setInsideVenueId ─────────────────────────
-  setInsideVenueId: (id) => set({ insideVenueId: id }),
+  // 행사장을 벗어나면(id === null) 이름도 함께 비운다.
+  setInsideVenueId: (id, name = null) =>
+    set({ insideVenueId: id, insideVenueName: id ? name : null }),
 }))

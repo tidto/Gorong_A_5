@@ -1,6 +1,7 @@
 import {
   collection, addDoc, query, orderBy,
-  limitToLast, onSnapshot, doc, setDoc, deleteDoc, getDoc, updateDoc, arrayUnion
+  limitToLast, onSnapshot, doc, setDoc, deleteDoc, getDoc, updateDoc, arrayUnion,
+  type FirestoreError,
 } from 'firebase/firestore'
 import { db } from '../config/firebaseConfig'
 import { AppGroup, ChatMessage } from '../types'
@@ -12,18 +13,35 @@ export const sendAnonymousMessage = (
 ) =>
   addDoc(collection(db, 'anonymous_chats', venueId, 'messages'), msg)
 
+export interface AnonymousChatStatus {
+  /** true면 서버가 아니라 기기 캐시에서 온 데이터 (= 아직 서버와 동기화되지 않음) */
+  fromCache: boolean
+  error?: FirestoreError
+}
+
 export const subscribeAnonymousChat = (
   venueId: string,
-  callback: (msgs: ChatMessage[]) => void
+  callback: (msgs: ChatMessage[]) => void,
+  onStatus?: (status: AnonymousChatStatus) => void
 ) => {
   const q = query(
     collection(db, 'anonymous_chats', venueId, 'messages'),
     orderBy('createdAt', 'asc'),
     limitToLast(50)
   )
-  return onSnapshot(q, snap => {
-    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)))
-  })
+  return onSnapshot(
+    q,
+    { includeMetadataChanges: true },
+    snap => {
+      callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)))
+      onStatus?.({ fromCache: snap.metadata.fromCache })
+    },
+    // 오류 콜백이 없으면 권한 거부/네트워크 오류가 조용히 묻혀서 '메시지가 안 보이는' 증상으로만 나타난다.
+    error => {
+      console.warn('[anon-chat] 구독 오류:', error.code, error.message)
+      onStatus?.({ fromCache: true, error })
+    }
+  )
 }
 
 // ─── 모임 채팅

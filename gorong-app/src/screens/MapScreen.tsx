@@ -106,6 +106,17 @@ function formatEventPeriod(start?: string, end?: string) {
   return '기간 제한 없음'
 }
 
+function summarizeRequestError(error: unknown) {
+  const requestError = error as {
+    response?: { status?: number }
+    code?: string
+    message?: string
+  }
+  if (requestError.response?.status) return `HTTP ${requestError.response.status}`
+  if (requestError.code === 'ECONNABORTED') return '요청 시간 초과'
+  return requestError.message || '네트워크 오류'
+}
+
 function mapPublicEventToVenue(item: PublicEvent): Venue {
   return {
     id: String(item.contentid),
@@ -187,8 +198,11 @@ export default function MapScreen() {
   const eventSheetBottomPadding = 12 + insets.bottom
 
   useEffect(() => {
-    setInsideVenueId(insideVenueId)
-  }, [insideVenueId, setInsideVenueId])
+    const venueName = insideVenueId
+      ? venues.find((v) => v.id === insideVenueId)?.name ?? null
+      : null
+    setInsideVenueId(insideVenueId, venueName)
+  }, [insideVenueId, venues, setInsideVenueId])
 
   useEffect(() => {
     if (!isRecording) {
@@ -558,18 +572,33 @@ export default function MapScreen() {
           fetchMyParticipations(),
         ])
 
-        if (publicResponse.status !== 'fulfilled' || nearbyResponse.status !== 'fulfilled') {
-          throw new Error('행사 데이터를 불러오지 못했습니다.')
+        const publicEventsError = publicResponse.status === 'rejected'
+          ? summarizeRequestError(publicResponse.reason)
+          : null
+        const nearbyVenuesError = nearbyResponse.status === 'rejected'
+          ? summarizeRequestError(nearbyResponse.reason)
+          : null
+
+        if (publicEventsError) {
+          console.error(`[MapScreen] 공개 행사 API (/api/public/map) 실패: ${publicEventsError}`)
+        }
+        if (nearbyVenuesError) {
+          console.error(`[MapScreen] 주변 행사 API (/api/v1/app/venues/nearby) 실패: ${nearbyVenuesError}`)
+        }
+        if (publicEventsError && nearbyVenuesError) {
+          throw new Error(
+            `공개 행사 API ${publicEventsError}, 주변 행사 API ${nearbyVenuesError}`
+          )
         }
 
         const participationData = participationResponse.status === 'fulfilled'
             ? participationResponse.value.data : []
 
-        const publicVenues = publicResponse.value.data
+        const publicVenues = (publicResponse.status === 'fulfilled' ? publicResponse.value.data : [])
             .map(mapPublicEventToVenue)
             .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lng))
 
-        const nearbyVenues = nearbyResponse.value.data
+        const nearbyVenues = (nearbyResponse.status === 'fulfilled' ? nearbyResponse.value.data : [])
             .map(mapNearbyVenueToVenue)
             .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lng))
         nearbyVenues.forEach((v) => nearbyIdsRef.current.add(v.id))
@@ -616,10 +645,19 @@ export default function MapScreen() {
 
         const mergedVenues = Array.from(venueById.values())
         setVenues(mergedVenues)
+        if (publicEventsError || nearbyVenuesError) {
+          Alert.alert(
+            '행사 정보 일부 누락',
+            `한쪽 행사 목록을 불러오지 못했습니다.\n공개 행사: ${publicEventsError ?? '정상'}\n주변 행사: ${nearbyVenuesError ?? '정상'}`
+          )
+        }
         // [수정] 첫 행사를 자동 선택하던 동작 제거 — 앱을 켜자마자 미리보기 카드가 뜨지 않게
       } catch (err) {
         console.error('주변 행사 조회 실패:', err)
-        Alert.alert('오류', '주변 행사 정보를 불러오지 못했습니다.')
+        Alert.alert(
+          '오류',
+          err instanceof Error ? `주변 행사 정보를 불러오지 못했습니다.\n${err.message}` : '주변 행사 정보를 불러오지 못했습니다.'
+        )
       }
     })()
   }, [loadWeather])

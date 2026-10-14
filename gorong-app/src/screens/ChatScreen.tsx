@@ -20,7 +20,7 @@ import {
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import * as Location from 'expo-location'
-import { useChat } from '../hooks/useChat'
+import { getAnonymousNickname, useChat } from '../hooks/useChat'
 import { useGroupChat } from '../hooks/useGroupChat'
 import { useAuthStore } from '../store/authStore'
 import { auth } from '../config/firebaseConfig'
@@ -80,15 +80,16 @@ export default function ChatScreen() {
   const [groupRoomClosedAt, setGroupRoomClosedAt] = useState<number | null>(null)
   const [loadingGroups, setLoadingGroups] = useState(true)
   const groupMessageListRef = useRef<FlatList<ChatScreenMessage>>(null)
+  const anonymousMessageListRef = useRef<FlatList<ChatScreenMessage>>(null)
 
   // [수정] 방 준비 실패 상태 별도 추적 → 재시도 버튼 노출용
 
   const insets = useSafeAreaInsets()
   const navigation = useNavigation<any>()
-  const { insideVenueId } = useAuthStore()
+  const { insideVenueId, insideVenueName } = useAuthStore()
   const myUid = auth.currentUser?.uid ?? null
 
-  const { messages, sendMessage, isConnected } = useChat(insideVenueId)
+  const { messages, sendMessage, isConnected, syncError, nickname: anonymousNickname } = useChat(insideVenueId)
 
   const selectedGroup = useMemo(
       () => joinedGroups.find((group) => String(group.id) === selectedGroupId) ?? null,
@@ -117,6 +118,13 @@ export default function ChatScreen() {
     const timer = setTimeout(() => groupMessageListRef.current?.scrollToEnd({ animated: true }), 80)
     return () => clearTimeout(timer)
   }, [groupMessages.length, isGroupChatOpen])
+
+  // 익명 채팅: 새 메시지가 오면 맨 아래로 스크롤 (안 하면 새 메시지가 화면 밖에 있어 '안 보이는' 것처럼 된다)
+  useEffect(() => {
+    if (mode !== 'anonymous' || messages.length === 0) return
+    const timer = setTimeout(() => anonymousMessageListRef.current?.scrollToEnd({ animated: true }), 80)
+    return () => clearTimeout(timer)
+  }, [mode, messages.length])
 
   useEffect(() => {
     navigation.setOptions({ tabBarStyle: isGroupChatOpen ? { display: 'none' } : undefined })
@@ -262,15 +270,21 @@ export default function ChatScreen() {
 
   const visibleMessages = useMemo<ChatScreenMessage[]>(() => {
     if (mode === 'anonymous') {
-      return messages.map((message) => ({
-        id: message.id,
-        user: message.nickname || '익명',
-        nickname: message.nickname || '익명',
-        userId: message.userId,
-        isMe: message.userId === myUid,
-        text: message.text,
-        sentAt: message.createdAt,
-      }))
+      return messages.map((message) => {
+        const savedNickname = message.nickname?.replace(/^익명\s+/, '').trim()
+        const nickname = savedNickname && savedNickname !== '익명'
+          ? savedNickname
+          : getAnonymousNickname(message.userId, insideVenueId ?? '')
+        return {
+          id: message.id,
+          user: nickname,
+          nickname,
+          userId: message.userId,
+          isMe: message.userId === myUid,
+          text: message.text,
+          sentAt: message.createdAt,
+        }
+      })
     }
     return groupMessages.map((message) => ({
       id: message.id,
@@ -281,7 +295,7 @@ export default function ChatScreen() {
       text: message.text,
       sentAt: message.sentAt,
     }))
-  }, [mode, messages, groupMessages, myUid])
+  }, [mode, messages, groupMessages, myUid, anonymousNickname, insideVenueId])
 
   const getDistanceMeters = (
       a: { lat: number; lng: number },
@@ -344,12 +358,23 @@ export default function ChatScreen() {
     const text = input.trim()
     if (!text || !myUid) return
 
+    // 익명 채팅: addDoc은 서버 응답이 와야 끝나므로, 기다렸다 비우면 네트워크가 느릴 때 입력창이 그대로 남는다.
+    // 먼저 비우고, 실패하면 입력 내용을 되돌려 준다.
+    if (mode === 'anonymous') {
+      setInput('')
+      try {
+        await sendMessage(text)
+      } catch (error) {
+        console.error('[ChatScreen] 익명 메시지 전송 실패:', error)
+        setInput((current) => current || text)
+        Alert.alert('안내', '메시지 전송에 실패했습니다.')
+      }
+      return
+    }
+
     let sent = false
     try {
-      if (mode === 'anonymous') {
-        await sendMessage(text)
-        sent = true
-      } else if (selectedGroup && !isGroupRoomClosed) {
+      if (selectedGroup && !isGroupRoomClosed) {
         sendGroupChatMessage(text)
         sent = true
       }
@@ -544,9 +569,27 @@ export default function ChatScreen() {
         <>
           <View style={[styles.header, { paddingTop: 16 + insets.top }]}>
             <Text style={styles.headerTitle}>💬 현장 채팅</Text>
-            <Text style={styles.headerSub}>
-              {isConnected ? '📍 행사장 내 익명 채팅' : '행사장에 입장하면 채팅 가능'}
-            </Text>
+            {insideVenueId ? (
+              <>
+              <View style={styles.anonInfoRow}>
+                <View style={styles.anonVenueBox}>
+                  <Text style={styles.anonVenueLabel}>📍 현장 채팅방</Text>
+                  <Text style={styles.anonVenueName} numberOfLines={1}>
+                    {insideVenueName ?? '행사장'}
+                  </Text>
+                  <View style={styles.anonNickRow}>
+                    <Text style={styles.anonNickLabel}>내 닉네임</Text>
+                    <Text style={styles.anonNickName} numberOfLines={1}>{anonymousNickname}</Text>
+                  </View>
+                </View>
+              </View>
+              {!isConnected && !syncError && (
+                <Text style={styles.headerSub}>채팅 서버에 연결하고 있어요</Text>
+              )}
+              </>
+            ) : (
+              <Text style={styles.headerSub}>행사장에 입장하면 채팅 가능</Text>
+            )}
           </View>
           <View style={styles.modeRow}>
             <TouchableOpacity style={[styles.modeBtn, styles.modeBtnActive]}>
@@ -556,10 +599,17 @@ export default function ChatScreen() {
               <Text style={styles.modeText}>모임 채팅방</Text>
             </TouchableOpacity>
           </View>
+          {!!insideVenueId && !!syncError && (
+            <View style={styles.connectionBanner}>
+              <Text style={styles.connectionText}>{syncError}</Text>
+            </View>
+          )}
           <FlatList
+            ref={anonymousMessageListRef}
             data={visibleMessages}
             keyExtractor={(item) => item.id}
             style={styles.messageList}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => renderMessage(item)}
           />
           <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -592,7 +642,7 @@ function renderMessage(item: ChatScreenMessage) {
   const sentAt = formatMessageTime(item.sentAt)
   const bubble = (
     <View style={[styles.bubble, isMine && styles.bubbleMine]}>
-      {!isMine && <Text style={styles.nickname}>{item.nickname || item.user}</Text>}
+      {!!(item.nickname || item.user) && <Text style={styles.nickname}>{item.nickname || item.user}</Text>}
       <Text style={[styles.messageText, isMine && styles.messageTextMine]}>{item.text}</Text>
     </View>
   )
@@ -619,6 +669,13 @@ const styles = StyleSheet.create({
   header:               { paddingHorizontal: 16, paddingBottom: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f1f1' },
   headerTitle:          { fontSize: 20, fontWeight: '800', color: '#111827' },
   headerSub:            { marginTop: 4, fontSize: 12, color: '#6b7280' },
+  anonInfoRow:          { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  anonVenueBox:         { flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#fff7f3', borderWidth: 1, borderColor: '#ffe1d3' },
+  anonVenueLabel:       { fontSize: 11, fontWeight: '700', color: '#FF6B35' },
+  anonVenueName:        { marginTop: 2, fontSize: 14, fontWeight: '800', color: '#111827' },
+  anonNickRow:          { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 8, marginTop: 5 },
+  anonNickLabel:        { fontSize: 11, fontWeight: '700', color: '#6b7280' },
+  anonNickName:         { flexShrink: 1, fontSize: 13, fontWeight: '800', color: '#374151' },
   modeRow:              { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 10, gap: 8 },
   modeBtn:              { flex: 1, paddingVertical: 11, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
   modeBtnActive:        { backgroundColor: '#FF6B35', borderColor: '#FF6B35' },
