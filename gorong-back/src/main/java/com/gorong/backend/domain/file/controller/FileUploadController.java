@@ -34,9 +34,25 @@ public class FileUploadController {
     ) {
         Long userId = miniHomeUserResolver.resolveUserId(authentication);
 
-        if (referenceId != null && !referenceId.isBlank()
-                && sourceType == UploadSourceType.APP_PHOTO
-                && !appArrivalService.hasVerifiedArrival(authentication, referenceId)) {
+        String normalizedReferenceId = referenceId == null ? null : referenceId.trim();
+
+        // 트레일 러닝아트는 반드시 트레일 기록(행사장)과 연결돼야 한다.
+        // referenceId 없이 올라가면 백엔드가 REFERENCE_ID가 비어 있는 갤러리에 저장해
+        // 트레일과 무관한 이미지가 갤러리에 노출된다.
+        // S3 호출 전에 막아 잘못된 DB 행과 쓰레기 S3 객체가 함께 생기지 않게 한다.
+        if (autoSaveToGallery
+                && sourceType == UploadSourceType.TRAIL_ART
+                && (normalizedReferenceId == null || normalizedReferenceId.isBlank())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "트레일 러닝아트는 트레일 기록이 있어야 갤러리에 저장할 수 있습니다."
+            );
+        }
+
+        // POST_PHOTO는 리뷰/포스팅 이미지라 지오펜싱 대상이 아니다.
+        if (normalizedReferenceId != null && !normalizedReferenceId.isBlank()
+                && sourceType != UploadSourceType.POST_PHOTO
+                && !appArrivalService.hasVerifiedArrival(authentication, normalizedReferenceId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "지오펜싱 참여 인증이 완료된 행사만 사진을 올릴 수 있습니다.");
         }
 
@@ -44,8 +60,15 @@ public class FileUploadController {
 
         boolean saved = false;
         if (autoSaveToGallery) {
-            galleryAutoSaveService.append(userId, uploaded.getFileUrl(), sourceType, referenceId);
-            saved = true;
+            try {
+                galleryAutoSaveService.append(userId, uploaded.getFileUrl(), sourceType, normalizedReferenceId);
+                saved = true;
+            } catch (RuntimeException e) {
+                // S3 업로드는 DB 트랜잭션 밖이라 롤백되지 않는다.
+                // 갤러리 저장이 실패하면 DB에 아무 흔적도 없으므로 S3 객체도 되돌려 orphan을 남기지 않는다.
+                s3StorageService.delete(uploaded.getKey());
+                throw e;
+            }
         }
 
         return ResponseEntity.ok(FileUploadResponseDto.builder()

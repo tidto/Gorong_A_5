@@ -19,7 +19,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TRAIL_HISTORY_KEY, TrailHistoryEntry, useTrailStore } from '../store/trailStore'
-import api, { uploadFileToS3 } from '../services/api'
+import api, { deleteTrailArt, uploadFileToS3 } from '../services/api'
 import { prepareImageForUpload } from '../utils/imageUpload'
 
 const SCREEN_W = Dimensions.get('window').width
@@ -288,7 +288,8 @@ export default function TrailScreen() {
   }, [loadGallery, uploadSelectedImages])
 
   // ── 기록 삭제 ────────────────────────────────────
-  const handleDeleteHistory = useCallback(async (itemId: string) => {
+  const handleDeleteHistory = useCallback(async (item: TrailHistoryEntry) => {
+    const itemId = item.id
     Alert.alert('기록 삭제', '이 발자국 기록을 삭제할까요?', [
       { text: '취소', style: 'cancel' },
       {
@@ -296,6 +297,16 @@ export default function TrailScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
+            // 러닝아트가 있으면 미니홈 갤러리에서도 함께 지운다(best-effort).
+            // 실패해도 발자국 기록 삭제는 막지 않는다.
+            if (item.trailArtUrl) {
+              try {
+                await deleteTrailArt(item.trailArtUrl)
+              } catch (remoteErr) {
+                console.warn('러닝아트 연동 삭제 실패(로컬 기록 삭제는 계속):', remoteErr)
+              }
+            }
+
             const raw = await AsyncStorage.getItem(TRAIL_HISTORY_KEY)
             const current = raw ? (JSON.parse(raw) as TrailHistoryEntry[]) : []
             const updated = current.filter((e) => e.id !== itemId)
@@ -441,7 +452,7 @@ export default function TrailScreen() {
                     </Text>
                     <TouchableOpacity
                       style={styles.deleteBtn}
-                      onPress={() => handleDeleteHistory(item.id)}
+                      onPress={() => handleDeleteHistory(item)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Text style={styles.deleteBtnText}>🗑</Text>

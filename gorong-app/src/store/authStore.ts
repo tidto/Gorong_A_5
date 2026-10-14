@@ -16,6 +16,7 @@ import { signOut } from 'firebase/auth'
 import { auth } from '../config/firebaseConfig'
 import { User, SignUpPayload } from '../types'
 import api from '../services/api'
+import { unregisterAndroidPushNotifications } from '../services/pushNotifications'
 
 // AsyncStorage 키 상수
 const STORAGE_KEY_USER = 'gorong-user'
@@ -171,6 +172,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   // ─── logout ───────────────────────────────────
   logout: async () => {
+    try {
+      await unregisterAndroidPushNotifications()
+    } catch (e) {
+      console.warn('[authStore] 푸시 토큰 해제 실패:', e)
+    }
     try {
       await signOut(auth)
     } catch (e) {

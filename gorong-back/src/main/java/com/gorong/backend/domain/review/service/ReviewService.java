@@ -5,8 +5,11 @@ import com.gorong.backend.domain.event.entity.Event;
 import com.gorong.backend.domain.event.repository.EventRepository;
 import com.gorong.backend.domain.group.entity.EventParticipation;
 import com.gorong.backend.domain.group.repository.EventParticipationRepository;
+import com.gorong.backend.domain.minihome.entity.GalleryImage;
+import com.gorong.backend.domain.minihome.repository.GalleryImageRepository;
 import com.gorong.backend.domain.review.entity.Review;
 import com.gorong.backend.domain.review.entity.ReviewImage;
+import com.gorong.backend.domain.review.exception.ReviewForbiddenException;
 import com.gorong.backend.domain.review.repository.ReviewImageRepository;
 import com.gorong.backend.domain.review.repository.ReviewRepository;
 import com.gorong.backend.domain.user.entity.User;
@@ -32,6 +35,7 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final ReviewImageRepository reviewImageRepository;
+    private final GalleryImageRepository galleryImageRepository;
     private final EventParticipationRepository eventParticipationRepository;
     private final EventRepository eventRepository;
     private final VenueArrivalRecordRepository venueArrivalRecordRepository;
@@ -52,15 +56,22 @@ public class ReviewService {
                         .reviewDate(OffsetDateTime.now())
                         .build());
 
+        boolean isPublished = review.getStatus() == Review.PostStatus.PUBLISHED;
+
         assertReviewMetaEditable(review, rating, reviewText);
 
         review.updateQuickReview(rating, reviewText);
 
-        // ⭐️ [수정 사항] DB의 content 컬럼 NOT NULL 제약조건 에러를 막기 위해
-        // 간편 리뷰 저장 시에도 본문(content) 자리에 한 줄 리뷰 텍스트를 채워줍니다.
-        review.updateContent(review.getTitle(), normalizeText(reviewText));
+        // 이미 정식 포스팅(PUBLISHED)으로 승격된 리뷰는 간편 리뷰 저장으로
+        // 본문(content)과 이미지가 덮어써지지 않도록 건드리지 않는다.
+        if (!isPublished) {
+            // ⭐️ [수정 사항] DB의 content 컬럼 NOT NULL 제약조건 에러를 막기 위해
+            // 간편 리뷰 저장 시에도 본문(content) 자리에 한 줄 리뷰 텍스트를 채워줍니다.
+            review.updateContent(review.getTitle(), normalizeText(reviewText));
 
-        syncImages(review, images);
+            syncImages(review, images);
+        }
+
         return reviewRepository.save(review);
     }
 
@@ -156,10 +167,33 @@ public class ReviewService {
                 user.getRoleType() == User.RoleType.ADMIN;
 
         if (!isAuthor && !isAdmin) {
-            throw new IllegalArgumentException("삭제 권한이 없습니다.");
+            throw new ReviewForbiddenException("삭제 권한이 없습니다.");
         }
 
+        // 리뷰 삭제 전: 해당 리뷰의 이미지 URL과 이벤트 ID를 확보하여
+        // 미니홈 갤러리 gallery_image 삭제 대상을 식별한다.
+        final Long eventId = review.getEventId();
+        final List<String> imageUrls = review.getReviewImages().stream()
+                .map(ReviewImage::getImageUrl)
+                .toList();
+
+        // review 삭제 수행 (ReviewImage는 cascade로 자동 삭제)
         reviewRepository.delete(review);
+
+        // review 삭제 후: image_url이 일치하고 referenceId가 같은 gallery_image 삭제
+        // - referenceId만으로 삭제하면 안 되며(여러 갤러리 존재 가능),
+        //   image_url 기반 식별 후 referenceId와 소유자로 필터링하여 안전하게 삭제한다.
+        if (!imageUrls.isEmpty()) {
+            List<GalleryImage> galleryImages =
+                    galleryImageRepository.findByImageUrlsAndGalleryReferenceIdAndOwnerUserId(
+                            imageUrls,
+                            String.valueOf(eventId),
+                            user.getId()
+                    );
+            if (!galleryImages.isEmpty()) {
+                galleryImageRepository.deleteAll(galleryImages);
+            }
+        }
     }
 
     private Review resolvePostingTarget(Long userId, PostingPayload payload) {

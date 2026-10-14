@@ -31,6 +31,9 @@ public interface EventParticipationRepository extends JpaRepository<EventPartici
     void deleteByUserIdAndEventContentIdAndGroupPostId(
             Long userId, String eventContentId, Long groupPostId);
 
+    @org.springframework.transaction.annotation.Transactional
+    void deleteByGroupPostId(Long groupPostId);
+
     /** 유저의 전체 참여 이력 조회 */
     List<EventParticipation> findByUserIdOrderByAppliedAtDesc(Long userId);
 

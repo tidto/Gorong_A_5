@@ -258,7 +258,7 @@ export async function getUserPostHistory(
 
 export async function createGallery(
   userId: number,
-  payload: { title: string; description?: string }
+  payload: { title: string; description?: string; referenceId?: string }
 ): Promise<GalleryItem> {
   await requireAuthUser();
   const res = await axiosInstance.post(`/minihomes/${userId}/galleries`, payload);
@@ -291,6 +291,12 @@ export async function addGalleryImage(
   return res.data;
 }
 
+/** 갤러리 이미지 삭제 */
+export async function deleteGalleryImage(galleryImageId: number, userId: number): Promise<void> {
+  await requireAuthUser();
+  await axiosInstance.delete(`/minihomes/${userId}/gallery-images/${galleryImageId}`);
+}
+
 /** 리뷰 작성 후 활동·갤러리 연동 */
 export async function recordReviewActivity(
   userId: number,
@@ -313,6 +319,9 @@ export async function recordReviewActivity(
   const gallery = await createGallery(userId, {
     title: payload.galleryTitle ?? "리뷰 갤러리",
     description: payload.reviewText.slice(0, 200),
+    // 리뷰 삭제 시 ReviewService 가 referenceId 로 미니홈 갤러리 이미지를 정리한다.
+    // referenceId 가 없으면 정리 쿼리가 매칭되지 않아 이미지가 남는다.
+    referenceId: payload.eventId != null ? String(payload.eventId) : undefined,
   });
   await addGalleryImage(gallery.galleryId, {
     imageUrl: payload.imageUrl.trim(),

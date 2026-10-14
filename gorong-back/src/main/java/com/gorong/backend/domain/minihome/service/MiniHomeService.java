@@ -2,6 +2,8 @@ package com.gorong.backend.domain.minihome.service;
 
 import com.gorong.backend.domain.minihome.dto.ActivityCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
+import com.gorong.backend.domain.file.model.UploadSourceType;
+import com.gorong.backend.domain.file.service.S3StorageService;
 import com.gorong.backend.domain.minihome.dto.GoCatAppearanceUpdateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GoCatCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
@@ -23,7 +25,9 @@ import com.gorong.backend.domain.minihome.entity.MiniHome;
 import com.gorong.backend.domain.minihome.entity.MiniHomeGallery;
 import com.gorong.backend.domain.minihome.entity.UserItem;
 import com.gorong.backend.domain.minihome.exception.GalleryNotFoundException;
+import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.exception.MiniHomeNotFoundException;
+import com.gorong.backend.domain.minihome.exception.MiniHomeForbiddenException;
 import com.gorong.backend.domain.minihome.repository.ActivityLogRepository;
 import com.gorong.backend.domain.minihome.repository.CatEquipRepository;
 import com.gorong.backend.domain.minihome.repository.GalleryImageRepository;
@@ -38,6 +42,7 @@ import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.review.entity.Review;
 import com.gorong.backend.domain.review.repository.ReviewRepository;
+import com.gorong.backend.domain.review.repository.ReviewImageRepository;
 import com.gorong.backend.domain.review.service.ReviewService;
 import com.gorong.backend.domain.user.entity.User;
 import com.gorong.backend.domain.user.entity.UserProfile;
@@ -59,6 +64,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -68,14 +75,22 @@ public class MiniHomeService {
     private static final Set<String> EQUIP_SLOTS = Set.of("HEAD", "FACE", "NECK");
     private static final Set<String> RETIRED_SLOTS = Set.of("BADGE", "BODY", "ACCESSORY");
 
+    /** S3 키 규칙 users/{userId}/{sourceType}/{yyyyMMdd}/{uuid}.{ext} 에서 소유자 userId 를 뽑는다. */
+    private static final Pattern S3_OWNER_PATH_PATTERN = Pattern.compile("/users/(\\d+)/");
+
+    /** 트레일 러닝아트 이미지가 저장될 때 GalleryImage.locationName 에 기록되는 값. */
+    private static final String TRAIL_ART_LOCATION_NAME = UploadSourceType.TRAIL_ART.name();
+
     private final MiniHomeRepository miniHomeRepository;
     private final GoCatRepository goCatRepository;
+    private final S3StorageService s3StorageService;
     private final ActivityLogRepository activityLogRepository;
     private final MiniHomeGalleryRepository miniHomeGalleryRepository;
     private final GalleryImageRepository galleryImageRepository;
     private final CatEquipRepository catEquipRepository;
     private final ItemRepository itemRepository;
     private final UserItemRepository userItemRepository;
+    private final ReviewImageRepository reviewImageRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final EventCategoryItemRewardService eventCategoryItemRewardService;
@@ -427,6 +442,9 @@ public class MiniHomeService {
                 java.util.stream.Collectors.toMap(
                         MiniHomeGallery::getGalleryId,
                         g -> galleryImageRepository.findByGalleryIdOrderByCreateAtDesc(g.getGalleryId())
+                                .stream()
+                                .filter(image -> isGalleryImageConsistent(g, image))
+                                .toList()
                 )
         );
 
@@ -542,6 +560,19 @@ public class MiniHomeService {
         return dto;
     }
 
+    /**
+     * 트레일 러닝아트는 트레일 기록(행사장)이 연결된 갤러리에만 노출한다.
+     * 생성 단계에서 이미 차단하지만, 차단 전 저장된 레거시 행이 남아 있을 수 있어 조회 단계에서도 막는다.
+     * 트레일아트가 아닌 이미지(APP_PHOTO, 리뷰/포스팅 사진 등)는 기존처럼 그대로 노출한다.
+     */
+    private boolean isGalleryImageConsistent(MiniHomeGallery gallery, GalleryImage image) {
+        if (!TRAIL_ART_LOCATION_NAME.equals(image.getLocationName())) {
+            return true;
+        }
+        String referenceId = gallery.getReferenceId();
+        return referenceId != null && !referenceId.trim().isEmpty();
+    }
+
     private MiniHomePageResponseDto.ActivityDto toActivityDto(ActivityLog activity) {
         MiniHomePageResponseDto.ActivityDto base = MiniHomePageResponseDto.ActivityDto.from(activity);
         String normalizedType = activity.getActivityType() == null ? "" : activity.getActivityType().trim().toUpperCase();
@@ -627,35 +658,142 @@ public class MiniHomeService {
     }
 
     @Transactional
-    public MiniHomePageResponseDto.GalleryImageDto addGalleryImage(Long galleryId, GalleryImageCreateRequestDto req) {
+    public MiniHomePageResponseDto.GalleryImageDto addGalleryImage(Long galleryId, GalleryImageCreateRequestDto req, Long requestingUserId) {
         if (galleryId == null || galleryId <= 0) throw new IllegalArgumentException("galleryId는 필수입니다.");
         if (req == null) throw new IllegalArgumentException("요청 본문이 비어 있습니다.");
         if (req.getImageUrl() == null || req.getImageUrl().trim().isEmpty()) {
             throw new IllegalArgumentException("imageUrl은 필수입니다.");
         }
+        requireUserId(requestingUserId);
+
+        String imageUrl = req.getImageUrl().trim();
 
         MiniHomeGallery gallery = miniHomeGalleryRepository.findById(galleryId)
                 .orElseThrow(() -> new GalleryNotFoundException("갤러리를 찾을 수 없습니다. galleryId=" + galleryId));
 
+        // GalleryImage -> MiniHomeGallery -> MiniHome -> userId 경로로 소유권을 확인한다.
+        // galleryId 만 알면 타인 갤러리에 이미지를 넣을 수 있어 반드시 검증해야 한다.
+        MiniHome ownerMiniHome = miniHomeRepository.findById(gallery.getMiniHomeId())
+                .orElseThrow(() -> new MiniHomeNotFoundException(
+                        "미니홈을 찾을 수 없습니다. miniHomeId=" + gallery.getMiniHomeId()));
+        if (!ownerMiniHome.getUserId().equals(requestingUserId)) {
+            throw new MiniHomeForbiddenException("본인의 갤러리에만 이미지를 추가할 수 있습니다.");
+        }
+
+        // S3 키 규칙(users/{userId}/...)이면서 소유자가 다르면 타인 이미지 주입이므로 거부한다.
+        Long urlOwnerUserId = extractOwnerUserIdFromImageUrl(imageUrl);
+        if (urlOwnerUserId != null && !urlOwnerUserId.equals(requestingUserId)) {
+            throw new MiniHomeForbiddenException("본인의 이미지만 갤러리에 추가할 수 있습니다.");
+        }
+
+        // 동일 이미지가 같은 갤러리에 중복 등록되지 않도록 막는다.
+        if (galleryImageRepository.existsByGalleryIdAndImageUrl(gallery.getGalleryId(), imageUrl)) {
+            throw new IllegalArgumentException("이미 갤러리에 등록된 이미지입니다.");
+        }
+
         GalleryImage image = galleryImageRepository.save(GalleryImage.builder()
                 .galleryId(gallery.getGalleryId())
-                .imageUrl(req.getImageUrl())
+                .imageUrl(imageUrl)
                 .locationName(req.getLocationName())
                 .takenAt(req.getTakenAt())
                 .build());
 
-        miniHomeRepository.findById(gallery.getMiniHomeId()).ifPresent(mh ->
-                recordActivity(
-                        mh.getUserId(),
-                        "GALLERY_UPLOADED",
-                        image.getGalleryImageId(),
-                        20,
-                        "갤러리 업로드",
-                        req.getImageUrl()
-                )
+        recordActivity(
+                ownerMiniHome.getUserId(),
+                "GALLERY_UPLOADED",
+                image.getGalleryImageId(),
+                20,
+                "갤러리 업로드",
+                imageUrl
         );
 
         return MiniHomePageResponseDto.GalleryImageDto.from(image);
+    }
+
+    @Transactional
+    public void deleteGalleryImage(Long galleryImageId, Long userId) {
+        GalleryImage galleryImage = galleryImageRepository.findById(galleryImageId)
+                .orElseThrow(() -> new GalleryNotFoundException("갤러리 이미지를 찾을 수 없습니다. galleryImageId=" + galleryImageId));
+
+        // 1. 현재 로그인 사용자의 소유 이미지인지 확인
+        // GalleryImage -> MiniHomeGallery -> MiniHome -> userId 경로로 소유권 확인
+        Long miniHomeId = miniHomeGalleryRepository.findByGalleryId(galleryImage.getGalleryId())
+                .map(MiniHomeGallery::getMiniHomeId)
+                .orElseThrow(() -> new IllegalStateException("갤러리 정보를 찾을 수 없습니다. galleryId=" + galleryImage.getGalleryId()));
+
+        MiniHome miniHome = miniHomeRepository.findById(miniHomeId)
+                .orElseThrow(() -> new IllegalStateException("미니홈을 찾을 수 없습니다. miniHomeId=" + miniHomeId));
+
+        if (!miniHome.getUserId().equals(userId)) {
+            throw new MiniHomeForbiddenException("본인의 갤러리 이미지만 삭제할 수 있습니다.");
+        }
+
+        // 2. review_image에서 해당 이미지가 사용 중인지 확인 (image_url 기준)
+        String imageUrl = galleryImage.getImageUrl();
+        boolean isUsedInReview = reviewImageRepository.existsByImageUrl(imageUrl);
+
+        if (isUsedInReview) {
+            throw new IllegalArgumentException("리뷰에 등록된 이미지는 삭제할 수 없습니다.");
+        }
+
+        // 3. DB에서 gallery_image 삭제 (flush로 실제 DELETE 를 먼저 확정한다)
+        galleryImageRepository.delete(galleryImage);
+        galleryImageRepository.flush();
+
+        // 4. S3 객체 삭제 — DB 삭제에 성공한 뒤에야 지워야 롤백 시에도
+        //    DB 행만 남고 S3 파일이 사라진 깨진 이미지가 생기지 않는다.
+        s3StorageService.delete(extractS3KeyFromImageUrl(imageUrl));
+    }
+
+    /**
+     * S3 키 규칙(users/{userId}/...)에 포함된 소유자 userId 를 추출합니다.
+     * 규칙에 맞지 않는 URL(외부 URL, 레거시 데이터)이면 null 을 반환합니다.
+     */
+    private Long extractOwnerUserIdFromImageUrl(String imageUrl) {
+        Matcher matcher = S3_OWNER_PATH_PATTERN.matcher(imageUrl);
+        if (!matcher.find()) return null;
+        try {
+            return Long.valueOf(matcher.group(1));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String extractS3KeyFromImageUrl(String imageUrl) {
+        if (imageUrl == null) {
+            throw new IllegalArgumentException("이미지 URL은 null이 될 수 없습니다.");
+        }
+        // fileUrl 형태: baseUrl + "/" + key
+        // 예: https://bucket/users/35/post_photo/20260101/uuid.jpg
+        // S3 key는 users/35/post_photo/20260101/uuid.jpg 형태 (전체 경로, leading slash 제외)
+        String key = imageUrl;
+        // URL에서 http:// 또는 https:// 프로토콜 부분 제거 후 key 추출
+        int protocolEnd = key.indexOf("://");
+        if (protocolEnd > 0) {
+            key = key.substring(protocolEnd + 3); // "://".length() = 3, "https://".length() = 8, minus 3 = 5... wait
+        }
+        // 실제로는 "https://".length() = 8이므로 protocolEnd=4(시작 인덱스), +3 하면 7이 되지만
+        // "://"는 3문자이므로 protocolEnd+3은 "://" 이후의 인덱스가 됨
+        // 예: "https://bucket/..."에서 "://"는 4번째 인덱스에 시작하므로 +3 하면 7이 됨
+        // 하지만 String.length()는 8이므로... 실제로 테스트해보면 "https://".length() = 8
+        // 그러므로 protocolEnd = key.indexOf("://") = 4 (0-indexed position of "://")
+        // key.substring(protocolEnd + 3) = key.substring(7) = "bucket/users/..."의 "users/..." 부분부터
+        
+        // 쿼리 문자열이나 프레그먼트가 있으면 제거
+        int queryIndex = key.indexOf("?");
+        if (queryIndex > 0) {
+            key = key.substring(0, queryIndex);
+        }
+        int fragmentIndex = key.indexOf("#");
+        if (fragmentIndex > 0) {
+            key = key.substring(0, fragmentIndex);
+        }
+        // /users/ 이후를 추출하고 leading slash 제거
+int usersIndex = key.indexOf("/users/");
+        if (usersIndex >= 0) {
+            key = key.substring(usersIndex + 1);
+        }
+        return key;
     }
 
     @Transactional

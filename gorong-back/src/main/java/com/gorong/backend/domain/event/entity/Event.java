@@ -108,6 +108,16 @@ public class Event {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    // 행사 기간 백필 전용: 이미 값이 있으면 덮어쓰지 않고, 비어 있는 쪽만 채운다
+    public void updateEventPeriod(String start, String end) {
+        if (isBlank(this.eventStartDate) && !isBlank(start)) this.eventStartDate = start;
+        if (isBlank(this.eventEndDate) && !isBlank(end)) this.eventEndDate = end;
+    }
+
+    private static boolean isBlank(String v) {
+        return v == null || v.isBlank();
+    }
+
     public void updateFromDto(TourItemDto dto) {
         this.title = dto.getTitle();
         this.addr = dto.getAddr1();

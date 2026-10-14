@@ -37,6 +37,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 @Slf4j
 @RestController
@@ -247,13 +249,18 @@ public class MiniHomeController {
     }
 
     @PostMapping("/{userId}/galleries")
-    public MiniHomePageResponseDto.GalleryDto createGallery(@PathVariable Long userId, @Valid @RequestBody GalleryCreateRequestDto req) {
+    public MiniHomePageResponseDto.GalleryDto createGallery(@PathVariable Long userId, @Valid @RequestBody GalleryCreateRequestDto req, Authentication authentication) {
+        // 경로의 userId 는 조작할 수 있으므로 로그인 사용자와 일치하는지 확인한다.
+        Long loginUserId = resolveUserId(authentication);
+        if (!loginUserId.equals(userId)) {
+            throw new MiniHomeForbiddenException("본인의 갤러리만 만들 수 있습니다.");
+        }
         return miniHomeService.createGallery(userId, req);
     }
 
     @PostMapping("/galleries/{galleryId}/images")
-    public MiniHomePageResponseDto.GalleryImageDto addGalleryImage(@PathVariable Long galleryId, @Valid @RequestBody GalleryImageCreateRequestDto req) {
-        return miniHomeService.addGalleryImage(galleryId, req);
+    public MiniHomePageResponseDto.GalleryImageDto addGalleryImage(@PathVariable Long galleryId, @Valid @RequestBody GalleryImageCreateRequestDto req, Authentication authentication) {
+        return miniHomeService.addGalleryImage(galleryId, req, resolveUserId(authentication));
     }
 
     @GetMapping("/{userId}/items")
@@ -280,10 +287,17 @@ public class MiniHomeController {
         return miniHomeService.equip(userId, req);
     }
 
-    @DeleteMapping("/{userId}/equip/{slotType}")
-    public ResponseEntity<Void> unequip(@PathVariable Long userId, @PathVariable String slotType) {
-        miniHomeService.unequip(userId, slotType);
-        return ResponseEntity.noContent().build();
+    @DeleteMapping("/{userId}/gallery-images/{galleryImageId}")
+    public ResponseEntity<Map<String, Object>> deleteGalleryImage(
+            @PathVariable Long userId,
+            @PathVariable Long galleryImageId,
+            Authentication authentication
+    ) {
+        Long loginUserId = miniHomeUserResolver.resolveUserId(authentication);
+        miniHomeService.deleteGalleryImage(galleryImageId, loginUserId);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("message", "이미지가 삭제되었습니다.");
+        return ResponseEntity.ok(response);
     }
 
     private Long resolveUserId(Authentication authentication) {

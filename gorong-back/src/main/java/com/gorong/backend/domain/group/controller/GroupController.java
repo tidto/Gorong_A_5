@@ -214,14 +214,22 @@ public class GroupController {
 
     // ── 6. 삭제 ──────────────────────────────────────────────────────
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteGroup(@PathVariable Long id) {
-        if (!groupRepository.existsById(id)) {
+    public ResponseEntity<Void> deleteGroup(@PathVariable Long id, Authentication authentication) {
+        GroupPost group = groupRepository.findById(id).orElse(null);
+        if (group == null) {
             return ResponseEntity.notFound().build();
         }
-        // ✅ FK 제약 해소: 참여자 먼저 삭제
-        participantRepository.deleteByGroupPostId(id);
-        groupRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+
+        User currentUser = getCurrentUser(authentication);
+        if (currentUser == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        if (group.getAuthor() == null || !group.getAuthor().getId().equals(currentUser.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        groupService.deleteGroupSafely(id);
+        return ResponseEntity.noContent().build();
     }
 
 }
