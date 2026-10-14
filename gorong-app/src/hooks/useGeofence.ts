@@ -29,6 +29,8 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): nu
 
 // 자동 인증까지 대기 시간 (초) — MapScreen에서 카운트다운 표시에 사용
 export const ENTER_DWELL_S = 8
+// GPS 위치가 한 번 튀어도 체류 타이머를 초기화하지 않도록 연속 이탈을 확인한다.
+const EXIT_CONFIRMATION_READINGS = 2
 
 export function useGeofence(venues: Venue[]) {
   const [insideVenueId, setInsideVenueId] = useState<string | null>(null)
@@ -40,6 +42,8 @@ export function useGeofence(venues: Venue[]) {
   const verifiedVenues = useRef<Set<string>>(new Set())
   // 현재 진입 중인 venue ID (ref로 setInterval 클로저에서 최신값 참조)
   const currentInsideRef = useRef<string | null>(null)
+  // 단일 GPS 오차로 안/밖 상태가 반복되는 것을 막기 위한 연속 이탈 횟수
+  const outsideReadingsRef = useRef(0)
   // 진입 시각 (체류 시간 계산용)
   const enteredAt = useRef<number | null>(null)
   // 마지막 GPS 좌표 (인증 API 호출 시 사용)
@@ -133,7 +137,19 @@ useEffect(() => {
 
           const prevInside = currentInsideRef.current
 
+          // 한 번의 위치 업데이트만 반경 밖으로 튄 경우에는 현재 장소 안에 있는 것으로 유지한다.
+          // 위치 업데이트는 약 3초 간격이므로, 두 번 연속 이탈한 경우에만 카운트다운을 초기화한다.
+          if (prevInside && enteredId !== prevInside) {
+            outsideReadingsRef.current += 1
+            if (outsideReadingsRef.current < EXIT_CONFIRMATION_READINGS) {
+              enteredId = prevInside
+            }
+          } else {
+            outsideReadingsRef.current = 0
+          }
+
           if (enteredId !== prevInside) {
+            outsideReadingsRef.current = 0
             currentInsideRef.current = enteredId
             setInsideVenueId(enteredId)
 

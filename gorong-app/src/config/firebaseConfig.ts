@@ -12,7 +12,7 @@ import { getAuth, initializeAuth } from 'firebase/auth'
 // Metro는 React Native 조건의 firebase/auth 진입점을 사용한다. TS 번들러 선언에는 이 RN 전용 export가 빠져 있다.
 // @ts-expect-error getReactNativePersistence는 Firebase Auth의 React Native 런타임 export다.
 import { getReactNativePersistence } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { getFirestore, initializeFirestore } from 'firebase/firestore'
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'
 
 const firebaseConfig = {
@@ -41,5 +41,19 @@ const createAuth = () => {
 }
 
 export const auth = createAuth()
-export const db = getFirestore(app)
+
+// React Native에서는 Firestore 기본 연결(WebChannel 스트리밍)이 막히는 네트워크/기기가 있다.
+// 그러면 쓰기(addDoc)가 서버 응답을 못 받고 계속 대기하고, 다른 사람 메시지도 실시간으로 도착하지 않는다.
+// long polling을 강제하면 이런 환경에서도 송수신이 된다. (속도는 아주 약간 느려질 수 있음)
+const createDb = () => {
+  try {
+    return initializeFirestore(app, { experimentalForceLongPolling: true })
+  } catch (error: any) {
+    // Fast Refresh 등으로 이미 초기화된 경우 기존 인스턴스를 재사용한다.
+    // 그 외 초기화 오류는 숨기지 않아 잘못된 Firebase 설정을 바로 확인할 수 있게 한다.
+    if (error?.code !== 'failed-precondition') throw error
+    return getFirestore(app)
+  }
+}
+export const db = createDb()
 export default app
