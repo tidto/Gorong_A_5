@@ -1,0 +1,4 @@
+[Incubating] Problems report is available at: file:///C:/3AB-A_2101117/Gorong_A_5/gorong-back/build/reports/problems/problems-report.html
+FAILURE: Build failed with an exception.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+BUILD FAILED in 15s

@@ -4,6 +4,7 @@ import com.gorong.backend.domain.group.entity.GroupParticipant;
 import com.gorong.backend.domain.group.entity.GroupPost;
 import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
+import com.gorong.backend.domain.group.repository.EventParticipationRepository;
 import com.gorong.backend.domain.minihome.repository.ActivityLogRepository;
 import com.gorong.backend.domain.minihome.service.MiniHomeService;
 import com.gorong.backend.domain.user.entity.User;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class GroupService {
     private final GroupRepository groupPostRepository;
     private final GroupParticipantRepository participantRepository;
+    private final EventParticipationRepository eventParticipationRepository;
     private final UserRepository userRepository;
     private final MiniHomeService miniHomeService;
     private final ActivityLogRepository activityLogRepository;
@@ -115,10 +117,9 @@ public class GroupService {
 
     @Transactional
     public void deleteGroupSafely(Long groupId) {
-        // 1. 자식 데이터(참여자) 먼저 싹 지우기
+        // 모집글 FK를 참조하는 자식 레코드를 먼저 정리한다.
+        eventParticipationRepository.deleteByGroupPostId(groupId);
         participantRepository.deleteByGroupPostId(groupId);
-
-        // 2. 부모 데이터(모임글) 지우기
         groupPostRepository.deleteById(groupId);
     }
 

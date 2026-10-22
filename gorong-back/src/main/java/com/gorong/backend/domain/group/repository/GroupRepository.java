@@ -1,6 +1,8 @@
 package com.gorong.backend.domain.group.repository;
 
 import com.gorong.backend.domain.group.entity.GroupPost;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -22,6 +24,32 @@ public interface GroupRepository extends JpaRepository<GroupPost, Long> {
         ORDER BY gp.id DESC
         """)
     List<GroupPost> findRecruitingGroupPostsByUserId(@Param("userId") Long userId);
+
+    Page<GroupPost> findByAuthor_IdOrderByIdDesc(Long authorId, Pageable pageable);
+
+    long countByAuthor_Id(Long authorId);
+
+    /** 작성 또는 참여한 모집글 — CatTower 히스토리용 */
+    @Query("""
+        SELECT gp FROM GroupPost gp
+        WHERE gp.author.id = :userId
+           OR EXISTS (
+               SELECT 1 FROM GroupParticipant p
+               WHERE p.groupPost = gp AND p.user.id = :userId
+           )
+        ORDER BY gp.id DESC
+        """)
+    Page<GroupPost> findRecruitmentHistoryByUserId(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(gp) FROM GroupPost gp
+        WHERE gp.author.id = :userId
+           OR EXISTS (
+               SELECT 1 FROM GroupParticipant p
+               WHERE p.groupPost = gp AND p.user.id = :userId
+           )
+        """)
+    long countRecruitmentHistoryByUserId(@Param("userId") Long userId);
     // 기본 CRUD(findById, save, delete 등)는 JpaRepository가 자동으로 제공합니다.
     // 나중에 특정 조건으로 검색이 필요하면 여기에 메서드를 추가하면 됩니다.
 

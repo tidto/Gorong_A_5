@@ -73,9 +73,66 @@ export default function PostingDetail() {
             </div>
           )}
 
-          <div className="rounded-[28px] bg-white text-[16px] leading-8 text-slate-700 whitespace-pre-wrap">
-            {post.contents || '본문이 아직 작성되지 않았습니다.'}
-          </div>
+          <div
+            className="rounded-[28px] bg-white text-[16px] leading-8 prose-content"
+            dangerouslySetInnerHTML={{
+              __html: post.contents || '본문이 아직 작성되지 않았습니다.',
+            }}
+          />
+
+          <style>{`
+            .prose-content h1 {
+              font-size: 1.75rem;
+              font-weight: 700;
+              margin: 1.25rem 0 0.5rem;
+              color: #1a1714;
+              line-height: 1.3;
+            }
+            .prose-content h2 {
+              font-size: 1.35rem;
+              font-weight: 600;
+              margin: 1rem 0 0.4rem;
+              color: #1a1714;
+              line-height: 1.35;
+            }
+            .prose-content ul {
+              list-style: disc;
+              padding-left: 1.5rem;
+              margin: 0.5rem 0;
+            }
+            .prose-content ol {
+              list-style: decimal;
+              padding-left: 1.5rem;
+              margin: 0.5rem 0;
+            }
+            .prose-content li {
+              margin: 0.25rem 0;
+              line-height: 1.7;
+            }
+            .prose-content blockquote {
+              border-left: 4px solid #FF8A3D;
+              padding-left: 1.25rem;
+              color: #5a5650;
+              font-style: italic;
+              margin: 1rem 0;
+            }
+            .prose-content hr {
+              border: none;
+              border-top: 1.5px solid #e0dbd3;
+              margin: 1.5rem 0;
+            }
+            .prose-content a {
+              color: #FF8A3D;
+              text-decoration: underline;
+            }
+            .prose-content a:hover {
+              color: #e87730;
+            }
+            .prose-content p {
+              margin: 0.5rem 0;
+              line-height: 1.8;
+            }
+          `}</style>
         </div>
       </article>
     </div>

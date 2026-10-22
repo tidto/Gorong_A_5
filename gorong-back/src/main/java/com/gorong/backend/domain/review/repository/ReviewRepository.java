@@ -37,4 +37,8 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     List<Review> findByEventIdOrderByRatingAsc(@Param("eventId") Long eventId);
 
     Page<Review> findByStatusOrderByCreatedAtDesc(Review.PostStatus status, Pageable pageable);
+
+    Page<Review> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+
+    long countByUserId(Long userId);
 }

@@ -424,6 +424,14 @@ export function useChatRoom() {
             auth.currentUser?.getIdToken() ?? Promise.resolve(null),
         ])
 
+        // ⚠️ 가드: await 동안 사용자가 다른 방으로 이동했다면(connectedGroupIdRef가 바뀜)
+        // 이 응답은 더 이상 유효하지 않으므로 폐기합니다. (방 전환 시 다른 그룹의
+        // 메시지/구독이 뒤늦게 덮어써지는 레이스 컨디션 방지)
+        if (connectedGroupIdRef.current !== gid) {
+            debugLog('connect', `${gid}는 더 이상 활성 방이 아님, 응답 폐기`)
+            return
+        }
+
         setMessages([
             { user: '시스템', text: `[${groupTitle}] 채팅방에 입장했습니다.` },
             ...history,
@@ -444,6 +452,13 @@ export function useChatRoom() {
         client.connect(
             { Authorization: `Bearer ${token}` },
             () => {
+                // ⚠️ 같은 가드: STOMP 핸드셰이크가 끝나는 동안에도 방이 바뀔 수 있습니다.
+                if (connectedGroupIdRef.current !== gid) {
+                    debugLog('connect', `${gid} 연결 완료되었지만 이미 다른 방으로 전환됨, 즉시 해제`)
+                    try { client.disconnect(() => {}) } catch { /* 무시 */ }
+                    return
+                }
+
                 stompClientRef.current = client
                 setIsConnecting(false)
                 setIsConnected(true)
@@ -453,6 +468,9 @@ export function useChatRoom() {
                 subscriptionRef.current = client.subscribe(
                     `/topic/group/${gid}`,
                     (frame) => {
+                        // ⚠️ 구독 시점엔 최신 방이었어도, 늦게 도착한 프레임이
+                        // 방이 바뀐 뒤에 처리되지 않도록 한 번 더 확인합니다.
+                        if (connectedGroupIdRef.current !== gid) return
                         const received: RawSocketMessage = JSON.parse(frame.body)
                         const myEmail = auth.currentUser?.email ?? ''
 

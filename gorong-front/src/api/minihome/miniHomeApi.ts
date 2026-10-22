@@ -212,9 +212,53 @@ export async function getUserActivities(userId: number): Promise<ActivityItem[]>
   return page.activities ?? [];
 }
 
+export type PostHistoryCategory = "ALL" | "REVIEW" | "RECRUITMENT";
+
+export type UserPostHistoryItem = {
+  category: "REVIEW" | "RECRUITMENT";
+  categoryLabel: string;
+  postId: number;
+  title: string;
+  summary: string | null;
+  createdAt: string | null;
+  linkPath: string;
+};
+
+export type UserPostHistoryPage = {
+  content: UserPostHistoryItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+  reviewCount: number;
+  recruitmentCount: number;
+};
+
+/** CatTower 히스토리 — 리뷰·모집(작성/참여) */
+export async function getUserPostHistory(
+  userId: number,
+  options?: {
+    category?: PostHistoryCategory;
+    page?: number;
+    size?: number;
+  }
+): Promise<UserPostHistoryPage> {
+  await requireAuthUser();
+  const params = new URLSearchParams();
+  if (options?.category) params.set("category", options.category);
+  if (options?.page != null) params.set("page", String(options.page));
+  if (options?.size != null) params.set("size", String(options.size));
+  const query = params.toString();
+  const res = await axiosInstance.get(
+    `/minihomes/${userId}/post-history${query ? `?${query}` : ""}`
+  );
+  return res.data;
+}
+
 export async function createGallery(
   userId: number,
-  payload: { title: string; description?: string }
+  payload: { title: string; description?: string; referenceId?: string }
 ): Promise<GalleryItem> {
   await requireAuthUser();
   const res = await axiosInstance.post(`/minihomes/${userId}/galleries`, payload);
@@ -247,6 +291,12 @@ export async function addGalleryImage(
   return res.data;
 }
 
+/** 갤러리 이미지 삭제 */
+export async function deleteGalleryImage(galleryImageId: number, userId: number): Promise<void> {
+  await requireAuthUser();
+  await axiosInstance.delete(`/minihomes/${userId}/gallery-images/${galleryImageId}`);
+}
+
 /** 리뷰 작성 후 활동·갤러리 연동 */
 export async function recordReviewActivity(
   userId: number,
@@ -269,6 +319,9 @@ export async function recordReviewActivity(
   const gallery = await createGallery(userId, {
     title: payload.galleryTitle ?? "리뷰 갤러리",
     description: payload.reviewText.slice(0, 200),
+    // 리뷰 삭제 시 ReviewService 가 referenceId 로 미니홈 갤러리 이미지를 정리한다.
+    // referenceId 가 없으면 정리 쿼리가 매칭되지 않아 이미지가 남는다.
+    referenceId: payload.eventId != null ? String(payload.eventId) : undefined,
   });
   await addGalleryImage(gallery.galleryId, {
     imageUrl: payload.imageUrl.trim(),

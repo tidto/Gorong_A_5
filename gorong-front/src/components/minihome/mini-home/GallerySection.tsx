@@ -15,6 +15,8 @@ export type GallerySectionProps = {
   emptyMessage?: string;
   onAddImage?: (galleryId: number) => void;
   addImageDisabled?: boolean;
+  onDeleteGalleryImage?: (galleryImageId: number) => void;
+  deleteImageDisabled?: boolean;
 };
 
 function GalleryEmpty({ message }: { message: string }) {
@@ -55,10 +57,14 @@ function GalleryFullBlock({
   gallery,
   onAddImage,
   addImageDisabled,
+  onDeleteGalleryImage,
+  deleteImageDisabled,
 }: {
   gallery: GalleryItem;
   onAddImage?: (galleryId: number) => void;
   addImageDisabled?: boolean;
+  onDeleteGalleryImage?: (galleryImageId: number) => void;
+  deleteImageDisabled?: boolean;
 }) {
   const title = gallery.title?.trim() || `갤러리 #${gallery.galleryId}`;
 
@@ -72,6 +78,7 @@ function GalleryFullBlock({
           ) : null}
           <p className="mt-2 text-xs text-slate-500">생성일 {formatGalleryDate(gallery.createAt)}</p>
         </div>
+
         {onAddImage ? (
           <button
             type="button"
@@ -105,6 +112,20 @@ function GalleryFullBlock({
                 <p className="text-[11px] text-slate-500">
                   생성일 {formatGalleryDate(img.createAt)}
                 </p>
+                {onDeleteGalleryImage ? (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
+                    onClick={() => {
+                      if (window.confirm("이 이미지를 삭제하시겠습니까?")) {
+                        onDeleteGalleryImage(img.galleryImageId);
+                      }
+                    }}
+                    disabled={deleteImageDisabled}
+                  >
+                    삭제
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
@@ -121,6 +142,8 @@ export default function GallerySection({
   emptyMessage = "갤러리가 없습니다.",
   onAddImage,
   addImageDisabled = false,
+  onDeleteGalleryImage,
+  deleteImageDisabled = false,
 }: GallerySectionProps) {
   const visible = useMemo(
     () => getRecentGalleries(galleries ?? [], limit),
@@ -139,7 +162,9 @@ export default function GallerySection({
             key={g.galleryId}
             gallery={g}
             onAddImage={onAddImage}
+            onDeleteGalleryImage={onDeleteGalleryImage}
             addImageDisabled={addImageDisabled}
+            deleteImageDisabled={deleteImageDisabled}
           />
         ))}
       </div>

@@ -1,0 +1,71 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+// Gorong 앱 Firestore 규칙 (프로젝트: gorong-e88a3)
+// src/services/firestore.ts 의 실제 쿼리/쓰기 형태에 맞춤
+// 로그인 방식(이메일/익명 모두)과 관계없이 request.auth != null 로 판단
+// ─────────────────────────────────────────────────────────────
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // ── 1) 익명 채팅 (지오펜스 행사장별) ───────────────────────
+    // 문서: { text, userId, nickname, createdAt(number), isAnonymous }
+    match /anonymous_chats/{venueId}/messages/{messageId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(
+             ['text', 'userId', 'nickname', 'createdAt', 'isAnonymous'])
+        && request.resource.data.keys().hasAll(
+             ['text', 'userId', 'nickname', 'createdAt', 'isAnonymous'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() <= 30
+        && request.resource.data.createdAt is number
+        && request.resource.data.isAnonymous is bool;
+
+      // 메시지는 수정/삭제 불가
+      allow update, delete: if false;
+    }
+
+    // ── 2) 모임 방 (group_rooms) ───────────────────────────────
+    // ensureGroupRoom / joinGroupRoom / markGroupGathered 가 사용
+    match /group_rooms/{groupId} {
+      allow read: if signedIn();
+
+      // 방 생성: 만드는 사람이 members 에 포함되어야 함
+      allow create: if signedIn()
+        && request.auth.uid in request.resource.data.members;
+
+      // 수정: 기존 멤버이거나, 본인을 members 에 추가하는 경우
+      allow update: if signedIn()
+        && (request.auth.uid in resource.data.members
+            || request.auth.uid in request.resource.data.members);
+
+      allow delete: if false;
+    }
+
+    // ── 3) 위치 공유 (5초 임시 문서) ───────────────────────────
+    match /group_locations/{groupId}/members/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // ── 4) 모임 채팅 (group_chats) ─────────────────────────────
+    // 앱은 현재 Spring STOMP 로 채팅하므로 Firestore group_chats 는 미사용.
+    // 쓸 일이 생기기 전까지 막아둠 (기본 거부).
+
+    // 그 외 전부 거부
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
