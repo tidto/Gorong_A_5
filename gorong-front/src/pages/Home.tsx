@@ -24,6 +24,10 @@ const RECOMMEND_BY_TIME: Record<'DAY' | 'NIGHT', string[]> = {
 }
 const REGION_BOUNDARY = { LAT_MIN: 34.0, LAT_MAX: 38.5, LNG_MIN: 126.0, LNG_MAX: 131.0 }
 const DEFAULT_LOCATION = { lat: 35.8956, lng: 128.6224 }
+// IP 기반 위치는 부정확하므로, 대구/경북 범위 안일 때만 신뢰한다 (성남 등으로 튀는 것 방지)
+const DAEGU_GB_BOUNDARY = { LAT_MIN: 35.4, LAT_MAX: 37.6, LNG_MIN: 128.0, LNG_MAX: 130.0 }
+// 사용자가 지도에서 직접 지정한 위치를 저장하는 키
+const MANUAL_LOCATION_KEY = 'gorong.manualLocation'
 
 const WEATHER_ICON: Record<string, string> = {
     Clear: '☀️', Clouds: '☁️', Rain: '🌧️', Snow: '❄️',
@@ -288,6 +292,7 @@ export default function Home() {
     const [searchInput,   setSearchInput]   = useState('')
     const [userLocation,  setUserLocation]  = useState<{ lat: number; lng: number } | null>(null)
     const [mapCenter,     setMapCenter]     = useState<{ lat: number; lng: number }>(DEFAULT_LOCATION)
+    const [isManualLocation, setIsManualLocation] = useState(false)
     const [banInfo,       setBanInfo]       = useState<any | null>(null)
     const [appealText,    setAppealText]    = useState('')
     const [isAppealSubmitting, setIsAppealSubmitting] = useState(false)
@@ -375,22 +380,61 @@ export default function Home() {
     }, [searchInput, events])
 
     // 위치 초기화
+    const applyLocation = useCallback((l: { lat: number; lng: number }) => {
+        setUserLocation(l)
+        setMapCenter(l)
+    }, [])
+
+    const detectLocation = useCallback(() => {
+        // 브라우저 위치 실패 시: IP 위치를 쓰되, 대구/경북 범위를 벗어나면 기본 좌표 사용
+        const fallbackToIp = async () => {
+            try {
+                const d = await (await fetch('https://ipapi.co/json/')).json()
+                const inRegion = typeof d.latitude === 'number' && typeof d.longitude === 'number'
+                    && d.latitude >= DAEGU_GB_BOUNDARY.LAT_MIN && d.latitude <= DAEGU_GB_BOUNDARY.LAT_MAX
+                    && d.longitude >= DAEGU_GB_BOUNDARY.LNG_MIN && d.longitude <= DAEGU_GB_BOUNDARY.LNG_MAX
+                applyLocation(inRegion ? { lat: d.latitude, lng: d.longitude } : DEFAULT_LOCATION)
+            } catch { applyLocation(DEFAULT_LOCATION) }
+        }
+        if (!navigator.geolocation) { applyLocation(DEFAULT_LOCATION); return }
+        navigator.geolocation.getCurrentPosition(
+            pos => applyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            fallbackToIp,
+            { timeout: 12000, maximumAge: 60000 },
+        )
+    }, [applyLocation])
+
     useEffect(() => {
         if (!auth.user) { setUserLocation(null); return }
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                pos => { const l = { lat: pos.coords.latitude, lng: pos.coords.longitude }; setUserLocation(l); setMapCenter(l) },
-                async () => {
-                    try {
-                        const d = await (await fetch('https://ipapi.co/json/')).json()
-                        if (d.region === 'Seoul' || !d.latitude) { setUserLocation(DEFAULT_LOCATION); setMapCenter(DEFAULT_LOCATION) }
-                        else { const l = { lat: d.latitude, lng: d.longitude }; setUserLocation(l); setMapCenter(l) }
-                    } catch { setUserLocation(DEFAULT_LOCATION); setMapCenter(DEFAULT_LOCATION) }
-                },
-                { timeout: 5000 },
-            )
-        } else { setUserLocation(DEFAULT_LOCATION); setMapCenter(DEFAULT_LOCATION) }
-    }, [auth.user])
+        // 직접 지정한 위치가 저장돼 있으면 그것을 우선 사용
+        try {
+            const saved = localStorage.getItem(MANUAL_LOCATION_KEY)
+            if (saved) {
+                const p = JSON.parse(saved)
+                if (Number.isFinite(p?.lat) && Number.isFinite(p?.lng)) {
+                    applyLocation({ lat: p.lat, lng: p.lng })
+                    setIsManualLocation(true)
+                    return
+                }
+            }
+        } catch { /* 저장소 접근 불가 시 자동 위치로 진행 */ }
+        setIsManualLocation(false)
+        detectLocation()
+    }, [auth.user, applyLocation, detectLocation])
+
+    // 지도에서 직접 위치 지정
+    const handlePickLocation = useCallback((lat: number, lng: number) => {
+        applyLocation({ lat, lng })
+        setIsManualLocation(true)
+        try { localStorage.setItem(MANUAL_LOCATION_KEY, JSON.stringify({ lat, lng })) } catch { /* ignore */ }
+    }, [applyLocation])
+
+    // 직접 지정 해제 → 자동 위치로 복귀
+    const handleResetLocation = useCallback(() => {
+        try { localStorage.removeItem(MANUAL_LOCATION_KEY) } catch { /* ignore */ }
+        setIsManualLocation(false)
+        detectLocation()
+    }, [detectLocation])
 
     // 날씨/시간
     useEffect(() => {
@@ -1044,7 +1088,7 @@ export default function Home() {
                                     </button>
                                 </div>
                                 <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', height: 'calc(100% - 68px)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', border: '1px solid #e8e8e8' }}>
-                                    <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
+                                    <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} onPickLocation={handlePickLocation} onResetLocation={handleResetLocation} isManualLocation={isManualLocation} />
                                     <button onClick={handleRecenter} title="내 위치로 이동"
                                             style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 20, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.96)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', cursor: 'pointer' }}
                                             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
@@ -1096,7 +1140,7 @@ export default function Home() {
                                     </button>
                                 </div>
                                 <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', height: 560, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', border: '1px solid #e8e8e8', marginBottom: 56 }}>
-                                    <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
+                                    <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} onPickLocation={handlePickLocation} onResetLocation={handleResetLocation} isManualLocation={isManualLocation} />
                                     <button onClick={handleRecenter} title="내 위치로 이동"
                                             style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 20, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.96)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', cursor: 'pointer', transition: 'all 0.18s' }}
                                             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
@@ -1273,7 +1317,7 @@ export default function Home() {
                                             </button>
                                         </div>
                                         <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', flex: 1, minHeight: 400, boxShadow: '0 4px 20px rgba(0,0,0,0.09)', border: '1px solid #e8e8e8' }}>
-                                            <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} />
+                                            <MapView data={displayEvents} onDetailClick={handleNav} userLocation={mapCenter} onPickLocation={handlePickLocation} onResetLocation={handleResetLocation} isManualLocation={isManualLocation} />
                                             <button onClick={handleRecenter} title="내 위치로 이동"
                                                     style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 20, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.96)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', cursor: 'pointer', transition: 'all 0.18s' }}
                                                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff7ed' }}
