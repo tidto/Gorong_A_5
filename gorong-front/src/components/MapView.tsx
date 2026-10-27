@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 declare global {
     interface Window {
@@ -22,15 +22,24 @@ interface MapViewProps {
     userLocation?: { lat: number; lng: number } | null;
     mapCenter?: { lat: number; lng: number } | null;
     showMarkerCount?: boolean;
+    /** 지정하면 지도 위에 "위치 직접 설정" 버튼이 나타나고, 지도를 클릭한 좌표가 전달됩니다. */
+    onPickLocation?: (lat: number, lng: number) => void;
+    /** 직접 설정한 위치를 해제하고 자동 위치로 되돌릴 때 호출됩니다. */
+    onResetLocation?: () => void;
+    /** 현재 위치가 직접 설정된 값인지 여부 (true일 때 "자동 위치" 버튼 표시) */
+    isManualLocation?: boolean;
 }
 
-export default function MapView({ data, onDetailClick, userLocation, mapCenter, showMarkerCount = true }: MapViewProps) {
+export default function MapView({ data, onDetailClick, userLocation, mapCenter, showMarkerCount = true, onPickLocation, onResetLocation, isManualLocation = false }: MapViewProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
     const markersRef = useRef<any[]>([]);
     const activeOverlay = useRef<any>(null);
     const userMarkerRef = useRef<any>(null);
     const [markerCount, setMarkerCount] = useState(0);
+    const [pickMode, setPickMode] = useState(false);
+    const onPickRef = useRef(onPickLocation);
+    onPickRef.current = onPickLocation;
 
 
     const YJU_LAT = 35.8956224;
@@ -256,9 +265,66 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter, 
         };
     }, [userLocation, mapCenter]);
 
+    // 위치 직접 설정 모드: 지도를 클릭하면 해당 좌표를 부모에게 전달
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!pickMode || !map || !window.kakao?.maps) return;
+
+        const handler = (e: any) => {
+            const ll = e.latLng;
+            onPickRef.current?.(ll.getLat(), ll.getLng());
+            setPickMode(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPickMode(false); };
+
+        window.kakao.maps.event.addListener(map, 'click', handler);
+        window.addEventListener('keydown', onKey);
+        return () => {
+            window.kakao.maps.event.removeListener(map, 'click', handler);
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [pickMode]);
+
+    const pillStyle: React.CSSProperties = {
+        background: 'rgba(255,255,255,0.96)', border: '1px solid #fed7aa', color: '#ea580c',
+        borderRadius: 999, padding: '7px 12px', fontSize: 12, fontWeight: 700,
+        cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', fontFamily: 'inherit',
+    };
+
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'visible' }}>
             <div ref={mapContainer} style={{ width: '100%', height: '100%', minHeight: '100%', overflow: 'visible' }} />
+
+            {onPickLocation && (
+                <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 20, display: 'flex', gap: 6 }}>
+                    {isManualLocation && !pickMode && onResetLocation && (
+                        <button type="button" style={pillStyle} onClick={onResetLocation}>
+                            자동 위치
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        style={pickMode ? { ...pillStyle, background: '#ea580c', color: '#fff', border: '1px solid #ea580c' } : pillStyle}
+                        onClick={() => setPickMode(v => !v)}
+                    >
+                        {pickMode ? '취소' : '📍 위치 직접 설정'}
+                    </button>
+                </div>
+            )}
+
+            {pickMode && (
+                <>
+                    <div style={{ position: 'absolute', inset: 0, zIndex: 9, border: '3px dashed #fb923c', borderRadius: 16, pointerEvents: 'none' }} />
+                    <div style={{
+                        position: 'absolute', top: 52, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
+                        background: '#1a1a1a', color: '#fff', fontSize: 12, fontWeight: 700,
+                        padding: '8px 14px', borderRadius: 999, whiteSpace: 'nowrap',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.25)', pointerEvents: 'none',
+                    }}>
+                        지도를 클릭해서 내 위치를 지정하세요
+                    </div>
+                </>
+            )}
             {showMarkerCount && markerCount > 0 && (
                 <div style={{
                     position: 'absolute', bottom: 12, left: 12, zIndex: 10,
@@ -267,7 +333,7 @@ export default function MapView({ data, onDetailClick, userLocation, mapCenter, 
                     color: '#ea580c', boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
                     border: '1px solid #fed7aa'
                 }}>
-                     {markerCount}개 행사 발견
+                    {markerCount}개 행사 발견
                 </div>
             )}
         </div>
