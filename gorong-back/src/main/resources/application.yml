@@ -4,15 +4,16 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
   datasource:
-    url: jdbc:postgresql://gorong-db.cwhkwq4kiz9p.us-east-1.rds.amazonaws.com:5432/gorong_db?currentSchema=gorong_schema&option=-c%20search_path%3Dgorong_schema%2Cpublic
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:gorong_db}?currentSchema=gorong_schema&option=-c%20search_path%3Dgorong_schema%2Cpublic
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: none
-    show-sql: true
+      # 기본은 none. 최초 스키마 생성 시에만 JPA_DDL_AUTO=update 로 실행
+      ddl-auto: ${JPA_DDL_AUTO:none}
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -32,13 +33,11 @@ juso:
 gemini:
   api:
     key: ${GEMINI_API_KEY}
-    model: ${GEMINI_MODEL:gemini-1.5-flash}
-    
-aws:
-  region: us-east-1
-  s3:
-    bucket: gorong-prod-media-726422254207-us-east-1-an
-    base-url: https://gorong-prod-media-726422254207-us-east-1-an.s3.us-east-1.amazonaws.com
-  credentials:
-    access-key: ${AWS_ACCESS_KEY_ID} # 깃허브 시크릿 및 EC2 환경변수로 주입!
-    secret-key: ${AWS_SECRET_ACCESS_KEY}
+    model: ${GEMINI_MODEL:gemini-2.5-flash}
+
+# 업로드 이미지는 로컬 폴더에 저장하고 /uploads/** 로 제공합니다.
+app:
+  storage:
+    local-dir: ${APP_STORAGE_LOCAL_DIR:./uploads}
+    # 폰에서도 이미지가 보이려면 PC의 로컬 IP 를 사용하세요. 예: http://192.168.0.10:8080
+    base-url: ${APP_STORAGE_BASE_URL:http://localhost:8080}

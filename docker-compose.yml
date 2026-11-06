@@ -1,28 +1,21 @@
-version: '3.8'
-
+# 로컬 실행용: PostgreSQL + PostGIS 만 실행합니다.
+# 사용법 (레포 루트에서):
+#   docker compose --env-file gorong-back/.env up -d
 services:
-  
-  gorong-back:
-    image: ${DOCKER_USERNAME}/gorong-back:latest
-    container_name: gorong-back
-    ports:
-      - "8080:8080"
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: gorong-db
     environment:
-      - DB_USERNAME=${DB_USERNAME}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - TOUR_API_KEY=${TOUR_API_KEY}
-      - JUSO_API_KEY=${JUSO_API_KEY}
-      - JUSO_COORD_API_KEY=${JUSO_COORD_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-    restart: always
-
-  
-  gorong-front:
-    image: ${DOCKER_USERNAME}/gorong-front:latest
-    container_name: gorong-front
+      POSTGRES_DB: ${DB_NAME:-gorong_db}
+      POSTGRES_USER: ${DB_USERNAME:-gorong}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gorong1234}
     ports:
-      - "80:80"
-    restart: always
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - gorong-db-data:/var/lib/postgresql/data
+      # 최초 1회 자동 실행: 확장(PostGIS), 스키마 생성
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+
+volumes:
+  gorong-db-data:
