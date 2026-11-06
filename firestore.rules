@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // 익명 채팅 (행사장별)
+    match /anonymous_chats/{venueId}/messages/{messageId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(
+             ['text', 'userId', 'nickname', 'createdAt', 'isAnonymous'])
+        && request.resource.data.keys().hasAll(
+             ['text', 'userId', 'nickname', 'createdAt', 'isAnonymous'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() <= 30
+        && request.resource.data.createdAt is number
+        && request.resource.data.isAnonymous is bool;
+
+      allow update, delete: if false;
+    }
+
+    // 모임 방
+    match /group_rooms/{groupId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.auth.uid in request.resource.data.members;
+      allow update: if signedIn()
+        && (request.auth.uid in resource.data.members
+            || request.auth.uid in request.resource.data.members);
+      allow delete: if false;
+    }
+
+    // 위치 공유 (5초 임시)
+    match /group_locations/{groupId}/members/{userId} {
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // 그 외 전부 거부
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
