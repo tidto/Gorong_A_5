@@ -318,3 +318,13 @@ hs_err_pid*
 !/gradle/wrapper/gradle-wrapper.jar
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,intellij,visualstudiocode,androidstudio
+
+# --- release: 개인 키와 설정 파일 ---
+.env
+.env.*
+!.env.example
+secrets/
+serviceAccountKey.json
+google-services.json
+GoogleService-Info.plist
+*.pem
