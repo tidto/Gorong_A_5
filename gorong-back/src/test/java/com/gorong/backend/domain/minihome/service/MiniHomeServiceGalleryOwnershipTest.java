@@ -1,7 +1,7 @@
 package com.gorong.backend.domain.minihome.service;
 
 import com.gorong.backend.domain.event.repository.EventRepository;
-import com.gorong.backend.domain.file.service.S3StorageService;
+import com.gorong.backend.domain.file.service.FileStorageService;
 import com.gorong.backend.domain.group.repository.GroupParticipantRepository;
 import com.gorong.backend.domain.group.repository.GroupRepository;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
@@ -65,7 +65,7 @@ class MiniHomeServiceGalleryOwnershipTest {
 
     @Mock private MiniHomeRepository miniHomeRepository;
     @Mock private GoCatRepository goCatRepository;
-    @Mock private S3StorageService s3StorageService;
+    @Mock private FileStorageService fileStorageService;
     @Mock private ActivityLogRepository activityLogRepository;
     @Mock private MiniHomeGalleryRepository miniHomeGalleryRepository;
     @Mock private GalleryImageRepository galleryImageRepository;
@@ -218,10 +218,10 @@ class MiniHomeServiceGalleryOwnershipTest {
 
         miniHomeService.deleteGalleryImage(999L, OWNER_ID);
 
-        InOrder inOrder = Mockito.inOrder(galleryImageRepository, s3StorageService);
+        InOrder inOrder = Mockito.inOrder(galleryImageRepository, fileStorageService);
         inOrder.verify(galleryImageRepository).delete(any(GalleryImage.class));
         inOrder.verify(galleryImageRepository).flush();
-        inOrder.verify(s3StorageService).delete(anyString());
+        inOrder.verify(fileStorageService).delete(anyString());
     }
 
     @Test
@@ -238,7 +238,7 @@ class MiniHomeServiceGalleryOwnershipTest {
         assertThatThrownBy(() -> miniHomeService.deleteGalleryImage(999L, OWNER_ID))
                 .isInstanceOf(MiniHomeForbiddenException.class);
 
-        verify(s3StorageService, never()).delete(anyString());
+        verify(fileStorageService, never()).delete(anyString());
         verify(galleryImageRepository, never()).delete(any());
     }
 

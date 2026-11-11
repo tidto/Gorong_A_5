@@ -3,7 +3,7 @@ package com.gorong.backend.domain.minihome.service;
 import com.gorong.backend.domain.minihome.dto.ActivityCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryCreateRequestDto;
 import com.gorong.backend.domain.file.model.UploadSourceType;
-import com.gorong.backend.domain.file.service.S3StorageService;
+import com.gorong.backend.domain.file.service.FileStorageService;
 import com.gorong.backend.domain.minihome.dto.GoCatAppearanceUpdateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GoCatCreateRequestDto;
 import com.gorong.backend.domain.minihome.dto.GalleryImageCreateRequestDto;
@@ -83,7 +83,7 @@ public class MiniHomeService {
 
     private final MiniHomeRepository miniHomeRepository;
     private final GoCatRepository goCatRepository;
-    private final S3StorageService s3StorageService;
+    private final FileStorageService fileStorageService;
     private final ActivityLogRepository activityLogRepository;
     private final MiniHomeGalleryRepository miniHomeGalleryRepository;
     private final GalleryImageRepository galleryImageRepository;
@@ -742,7 +742,7 @@ public class MiniHomeService {
 
         // 4. S3 객체 삭제 — DB 삭제에 성공한 뒤에야 지워야 롤백 시에도
         //    DB 행만 남고 S3 파일이 사라진 깨진 이미지가 생기지 않는다.
-        s3StorageService.delete(extractS3KeyFromImageUrl(imageUrl));
+        fileStorageService.delete(extractS3KeyFromImageUrl(imageUrl));
     }
 
     /**

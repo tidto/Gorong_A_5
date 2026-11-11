@@ -64,6 +64,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/ws-chat/**","/ws-chat/**" ).permitAll()
                         .requestMatchers("/api/chat/**").permitAll()
                         .requestMatchers("/api/public-chat/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         //행사 참여 이력 API
                         .requestMatchers("/api/event-participation/**").authenticated()
                                        

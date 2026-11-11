@@ -96,7 +96,7 @@ export function useGroupChat(groupId: number | null, enabled: boolean) {
                 if (disposed) return
                 setMessages(historyResponse.data.map((message, index) => toMessage(message, index)))
 
-                const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1'
+                const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1'
                 const backendUrl = new URL(apiBase)
                 const socketProtocol = backendUrl.protocol === 'https:' ? 'wss' : 'ws'
                 // API 주소에 포트가 명시되어 있으면 그대로 사용한다. 생략된 배포 주소는 기존처럼 8080을 사용한다.

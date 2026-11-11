@@ -328,3 +328,9 @@ serviceAccountKey.json
 google-services.json
 GoogleService-Info.plist
 *.pem
+
+# 로컬 업로드 이미지
+gorong-back/uploads/
+
+# 로컬 업로드 이미지
+gorong-back/uploads/

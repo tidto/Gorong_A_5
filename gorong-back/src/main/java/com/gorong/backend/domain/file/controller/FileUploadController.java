@@ -4,7 +4,7 @@ import com.gorong.backend.domain.app.service.AppArrivalService;
 import com.gorong.backend.domain.file.dto.FileUploadResponseDto;
 import com.gorong.backend.domain.file.model.UploadSourceType;
 import com.gorong.backend.domain.file.service.GalleryAutoSaveService;
-import com.gorong.backend.domain.file.service.S3StorageService;
+import com.gorong.backend.domain.file.service.FileStorageService;
 import com.gorong.backend.domain.minihome.service.MiniHomeUserResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,7 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class FileUploadController {
 
-    private final S3StorageService s3StorageService;
+    private final FileStorageService fileStorageService;
     private final GalleryAutoSaveService galleryAutoSaveService;
     private final AppArrivalService appArrivalService;
     private final MiniHomeUserResolver miniHomeUserResolver;
@@ -56,7 +56,7 @@ public class FileUploadController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "지오펜싱 참여 인증이 완료된 행사만 사진을 올릴 수 있습니다.");
         }
 
-        FileUploadResponseDto uploaded = s3StorageService.upload(file, userId, sourceType);
+        FileUploadResponseDto uploaded = fileStorageService.upload(file, userId, sourceType);
 
         boolean saved = false;
         if (autoSaveToGallery) {
@@ -66,7 +66,7 @@ public class FileUploadController {
             } catch (RuntimeException e) {
                 // S3 업로드는 DB 트랜잭션 밖이라 롤백되지 않는다.
                 // 갤러리 저장이 실패하면 DB에 아무 흔적도 없으므로 S3 객체도 되돌려 orphan을 남기지 않는다.
-                s3StorageService.delete(uploaded.getKey());
+                fileStorageService.delete(uploaded.getKey());
                 throw e;
             }
         }

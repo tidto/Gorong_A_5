@@ -20,7 +20,7 @@ import Stomp, { type Client, type Subscription } from 'stompjs'
 import { auth } from '../firebase/firebaseConfig'
 import axiosInstance from '../api/axiosInstance'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://98.84.85.31:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
 // ── 타입 ────────────────────────────────────────────────────
 

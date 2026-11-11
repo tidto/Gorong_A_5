@@ -18,7 +18,7 @@ import axiosInstance from '../api/axiosInstance'
 // ============================================================
 // 상수
 // ============================================================
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://98.84.85.31:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const KST_OFFSET_HOURS = 0
 
 /** 미국 중부 표준시(CST, UTC-6)와 한국 표준시(KST, UTC+9) 시차 보정값(시간 단위) */

@@ -26,7 +26,7 @@ export function useGroupChatUnread(groupIds: number[], isChatTabFocused: boolean
         const token = await currentUser.getIdToken()
         if (disposed) return
 
-        const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1'
+        const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1'
         const backendUrl = new URL(apiBase)
         const socketProtocol = backendUrl.protocol === 'https:' ? 'wss' : 'ws'
         const socketPort = backendUrl.port || '8080'

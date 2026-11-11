@@ -17,7 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 업로드 이미지를 로컬 폴더에 저장합니다. (기존 S3StorageService 대체)
+ * 업로드 이미지를 로컬 폴더에 저장합니다. (기존 FileStorageService 대체)
  * 저장 규칙은 기존과 동일합니다: users/{userId}/{sourceType}/{yyyyMMdd}/{uuid}.{ext}
  * 저장된 파일은 {base-url}/uploads/{key} 주소로 제공됩니다.
  */

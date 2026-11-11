@@ -3,7 +3,7 @@ import axios from 'axios'
 import { auth } from '../config/firebaseConfig'
 import { AppGroup, EventParticipation, PublicEvent, Venue } from '../types'
 
-const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://98.84.85.31/api/v1'
+const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1'
 const rootUrl = baseUrl.replace(/\/api\/v1$/, '')
 
 const api = axios.create({

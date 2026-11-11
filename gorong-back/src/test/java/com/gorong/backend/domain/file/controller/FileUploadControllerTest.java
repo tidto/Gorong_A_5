@@ -4,7 +4,7 @@ import com.gorong.backend.domain.app.service.AppArrivalService;
 import com.gorong.backend.domain.file.dto.FileUploadResponseDto;
 import com.gorong.backend.domain.file.model.UploadSourceType;
 import com.gorong.backend.domain.file.service.GalleryAutoSaveService;
-import com.gorong.backend.domain.file.service.S3StorageService;
+import com.gorong.backend.domain.file.service.FileStorageService;
 import com.gorong.backend.domain.minihome.service.MiniHomeUserResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,7 +42,7 @@ class FileUploadControllerTest {
     private static final String FILE_URL = "https://bucket/" + S3_KEY;
 
     @Mock
-    private S3StorageService s3StorageService;
+    private FileStorageService fileStorageService;
     @Mock
     private GalleryAutoSaveService galleryAutoSaveService;
     @Mock
@@ -63,7 +63,7 @@ class FileUploadControllerTest {
     }
 
     private void givenUploaded() {
-        when(s3StorageService.upload(any(), anyLong(), any()))
+        when(fileStorageService.upload(any(), anyLong(), any()))
                 .thenReturn(FileUploadResponseDto.builder()
                         .fileUrl(FILE_URL)
                         .key(S3_KEY)
@@ -88,7 +88,7 @@ class FileUploadControllerTest {
         assertThat(ex.getReason()).contains("트레일 기록");
 
         // 핵심: S3 업로드가 일어나지 않아 쓰레기 S3 객체도 남지 않는다.
-        verify(s3StorageService, never()).upload(any(), any(), any());
+        verify(fileStorageService, never()).upload(any(), any(), any());
         verify(galleryAutoSaveService, never()).append(anyLong(), anyString(), any(), any());
     }
 
@@ -102,7 +102,7 @@ class FileUploadControllerTest {
 
         assertThat(ex).isNotNull();
         assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        verify(s3StorageService, never()).upload(any(), any(), any());
+        verify(fileStorageService, never()).upload(any(), any(), any());
     }
 
     @Test
@@ -117,7 +117,7 @@ class FileUploadControllerTest {
 
         assertThat(ex).isNotNull();
         assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        verify(s3StorageService, never()).upload(any(), any(), any());
+        verify(fileStorageService, never()).upload(any(), any(), any());
     }
 
     // ── 정상 ────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ class FileUploadControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isGallerySaved()).isFalse();
-        verify(s3StorageService).upload(file, USER_ID, UploadSourceType.TRAIL_ART);
+        verify(fileStorageService).upload(file, USER_ID, UploadSourceType.TRAIL_ART);
         verify(galleryAutoSaveService, never()).append(anyLong(), anyString(), any(), any());
     }
 
@@ -194,6 +194,6 @@ class FileUploadControllerTest {
                 .isSameAs(failure);
 
         // DB 롤백돼도 S3 업로드는 되돌릴 수 없으므로 명시적으로 제거해야 한다.
-        verify(s3StorageService).delete(S3_KEY);
+        verify(fileStorageService).delete(S3_KEY);
     }
 }

@@ -1,7 +1,7 @@
 package com.gorong.backend.domain.app.service;
 
 import com.gorong.backend.domain.app.service.AppTrailService;
-import com.gorong.backend.domain.file.service.S3StorageService;
+import com.gorong.backend.domain.file.service.FileStorageService;
 import com.gorong.backend.domain.minihome.entity.GalleryImage;
 import com.gorong.backend.domain.minihome.repository.ActivityLogRepository;
 import com.gorong.backend.domain.minihome.repository.GalleryImageRepository;
@@ -49,7 +49,7 @@ class AppTrailServiceDeleteTrailArtTest {
     @Mock private MiniHomeUserResolver miniHomeUserResolver;
     @Mock private MiniHomeService miniHomeService;
     @Mock private GalleryImageRepository galleryImageRepository;
-    @Mock private S3StorageService s3StorageService;
+    @Mock private FileStorageService fileStorageService;
     @Mock private MiniHomeRepository miniHomeRepository;
     @Mock private MiniHomeGalleryRepository miniHomeGalleryRepository;
     @Mock private ActivityLogRepository activityLogRepository;
@@ -127,7 +127,7 @@ class AppTrailServiceDeleteTrailArtTest {
         appTrailService.deleteTrailArt(authentication, TRAIL_ART_URL);
 
         verify(miniHomeService, never()).deleteGalleryImage(any(), any());
-        verifyNoInteractions(s3StorageService);
+        verifyNoInteractions(fileStorageService);
     }
 
     // ── 스코프: TRAIL_ART 만 삭제 대상 ───────────────────────────────────
@@ -232,7 +232,7 @@ class AppTrailServiceDeleteTrailArtTest {
                     "갤러리를 찾을 수 없습니다.", expected.getMessage());
         }
 
-        verify(s3StorageService, never()).delete(anyString());
+        verify(fileStorageService, never()).delete(anyString());
         verify(galleryImageRepository, never()).delete(any());
     }
 }
