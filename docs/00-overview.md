@@ -36,6 +36,7 @@
 - [ ] 공공데이터포털(data.go.kr) 계정
 - [ ] 도로명주소 개발자센터(business.juso.go.kr) 계정
 - [ ] OpenWeatherMap 계정 (선택)
+- [ ] GitHub 계정 (웹의 GitHub 로그인을 쓸 경우, 선택)
 - [ ] 휴대폰에 Expo Go 설치 (앱을 실행해 볼 경우)
 - [ ] PC와 휴대폰이 **같은 Wi-Fi**에 연결
 

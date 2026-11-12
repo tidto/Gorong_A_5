@@ -7,13 +7,13 @@
 
 | 서비스 | 발급처 | 백엔드 `.env` | 웹 `.env` | 앱 `.env` | 승인 대기 |
 |---|---|---|---|---|---|
-| 도로명주소 검색 API | business.juso.go.kr | `JUSO_API_KEY` | - | - | 있을 수 있음 |
-| 도로명주소 좌표제공 검색 API | business.juso.go.kr | `JUSO_COORD_API_KEY` | - | - | 있을 수 있음 |
-| 한국관광공사 TourAPI | data.go.kr | `TOUR_API_KEY` | `VITE_TOUR_API_KEY` | - | 있을 수 있음 |
-| Kakao 지도 (JavaScript 키) | developers.kakao.com | - | `VITE_KAKAO_API_KEY` | `EXPO_PUBLIC_KAKAO_MAP_KEY` | 즉시 |
-| Gemini | aistudio.google.com | `GEMINI_API_KEY` | - | - | 즉시 |
-| OpenWeatherMap (선택) | openweathermap.org | `WEATHER_API_KEY` | `VITE_WEATHER_API_KEY` | `EXPO_PUBLIC_WEATHER_API_KEY` | 즉시~수 시간 |
-| Firebase | firebase.google.com | 서비스 계정 파일 | `VITE_FIREBASE_*` | `EXPO_PUBLIC_FIREBASE_*` | 즉시 → [03-firebase](03-firebase.md) |
+| 도로명주소 검색 API | [business.juso.go.kr](https://business.juso.go.kr/jst/jstAddressApiList) | `JUSO_API_KEY` | - | - | 있을 수 있음 |
+| 도로명주소 좌표제공 검색 API | [business.juso.go.kr](https://business.juso.go.kr/jst/jstAddressApiList) | `JUSO_COORD_API_KEY` | - | - | 있을 수 있음 |
+| 한국관광공사 TourAPI | [data.go.kr](https://www.data.go.kr) | `TOUR_API_KEY` | `VITE_TOUR_API_KEY` | - | 있을 수 있음 |
+| Kakao 지도 (JavaScript 키) | [developers.kakao.com](https://developers.kakao.com) | - | `VITE_KAKAO_API_KEY` | `EXPO_PUBLIC_KAKAO_MAP_KEY` | 즉시 |
+| Gemini | [aistudio.google.com](https://aistudio.google.com/apikey) | `GEMINI_API_KEY` | - | - | 즉시 |
+| OpenWeatherMap (선택) | [openweathermap.org](https://home.openweathermap.org/api_keys) | `WEATHER_API_KEY` | `VITE_WEATHER_API_KEY` | `EXPO_PUBLIC_WEATHER_API_KEY` | 즉시~수 시간 |
+| Firebase | [console.firebase.google.com](https://console.firebase.google.com) | 서비스 계정 파일 | `VITE_FIREBASE_*` | `EXPO_PUBLIC_FIREBASE_*` | 즉시 → [03-firebase](03-firebase.md) |
 
 발급받은 키는 메모장 등에 모아 두었다가 [05-env-setup](05-env-setup.md)에서 `.env`에 입력합니다.
 
@@ -23,7 +23,7 @@
 
 주소 검색과 좌표 변환에 사용합니다. **승인키가 2개** 필요합니다.
 
-1. https://business.juso.go.kr/jst/jstAddressApiList 에 접속해 로그인(회원가입)합니다.
+1. [도로명주소 개발자센터 API 신청 페이지](https://business.juso.go.kr/jst/jstAddressApiList)에 접속해 로그인(회원가입)합니다.
 2. 아래 **두 가지 API**를 각각 신청합니다.
 
 | 신청할 API | `.env` 변수 |
@@ -41,7 +41,7 @@
 
 관광지, 행사 정보를 불러옵니다.
 
-1. https://www.data.go.kr 에 가입하고 로그인합니다.
+1. [공공데이터포털](https://www.data.go.kr)에 가입하고 로그인합니다.
 2. 아래 **두 서비스**를 검색해 각각 **활용신청**합니다.
    - **한국관광공사 국문 관광정보 서비스**
    - **한국관광공사 무장애 여행정보 서비스**
@@ -55,7 +55,7 @@
 
 웹과 앱의 지도 화면에 사용합니다.
 
-1. https://developers.kakao.com 에 접속해 로그인합니다.
+1. [Kakao Developers](https://developers.kakao.com)에 접속해 로그인합니다.
 2. 상단 **[앱]** → **[+ 앱 생성]** 을 누르고 입력합니다.
    - 앱 이름: `Gorong`
    - 회사명: 개인 (본인 이름)
@@ -72,7 +72,7 @@
 
 ## 4. Gemini (챗봇)
 
-1. https://aistudio.google.com/apikey 에 Google 계정으로 로그인합니다.
+1. [Google AI Studio API 키 페이지](https://aistudio.google.com/apikey)에 Google 계정으로 로그인합니다.
 2. **API 키 만들기**를 눌러 프로젝트를 선택(또는 새로 만들기)하고 키를 복사합니다.
 3. 모델 이름은 기본값 `gemini-2.5-flash`를 사용합니다. 실행 시 "모델을 찾을 수 없음" 오류가 나면 AI Studio의 모델 목록에서 현재 사용 가능한 이름으로 `GEMINI_MODEL`을 바꾸세요.
 
@@ -80,8 +80,8 @@
 
 날씨 기반 추천에 사용합니다. 키가 없어도 실행은 되지만 날씨 정보가 비어 있을 수 있습니다.
 
-1. https://openweathermap.org 에서 회원가입 후 로그인합니다.
-2. 우측 상단 프로필 → **My API keys** 에서 키를 복사합니다.
+1. [OpenWeatherMap](https://openweathermap.org)에서 회원가입 후 로그인합니다.
+2. 우측 상단 프로필 → **My API keys**([바로가기](https://home.openweathermap.org/api_keys))에서 키를 복사합니다.
 
 > 발급 직후에는 키가 활성화되기까지 시간이 걸려 **401 오류**가 날 수 있습니다. 잠시 후 다시 시도하세요.
 

@@ -4,14 +4,14 @@
 
 | 기능 | 용도 |
 |---|---|
-| Authentication | 회원가입, 로그인 (백엔드가 로그인 토큰을 검증) |
+| Authentication | 회원가입, 로그인 (이메일/비밀번호, 웹은 Google·GitHub 추가) — 백엔드가 로그인 토큰을 검증 |
 | Firestore | 행사장 익명 채팅, 모임 채팅, 위치 공유 |
 
 > 웹과 앱은 **같은 Firebase 프로젝트**를 사용합니다. 백엔드의 서비스 계정 키도 **같은 프로젝트**에서 받아야 합니다.
 
 ## 1. 프로젝트 만들기
 
-1. https://console.firebase.google.com 에 Google 계정으로 로그인합니다.
+1. [Firebase 콘솔](https://console.firebase.google.com)에 Google 계정으로 로그인합니다.
 2. **프로젝트 만들기** (또는 *프로젝트 추가*)를 누릅니다.
 3. 프로젝트 이름에 `gorong` 을 입력합니다. (프로젝트 ID는 `gorong-xxxxx`처럼 자동으로 붙습니다)
 4. Google 애널리틱스는 **사용 안 함**으로 해도 됩니다.
@@ -38,9 +38,36 @@
 
 ## 3. Authentication (로그인)
 
-1. 왼쪽 메뉴 **빌드 → Authentication** → **시작하기**
-2. **Sign-in method(로그인 방법)** 탭에서 **이메일/비밀번호**를 선택해 **사용 설정** 후 저장합니다.
-3. **설정 → 승인된 도메인**에 `localhost`가 있는지 확인합니다. (기본으로 들어 있습니다. 없으면 추가하세요)
+웹은 **이메일/비밀번호, Google, GitHub** 로그인을 지원하고, 앱은 **이메일/비밀번호**만 사용합니다.
+왼쪽 메뉴 **빌드 → Authentication** → **시작하기**를 누른 뒤 **Sign-in method(로그인 방법)** 탭에서 설정합니다.
+
+### 3-1. 이메일/비밀번호 (필수, 웹·앱 공통)
+
+**이메일/비밀번호**를 선택해 **사용 설정** 후 저장합니다.
+
+### 3-2. Google (웹)
+
+1. **Google**을 선택해 **사용 설정**합니다.
+2. 프로젝트 공개용 이름과 **지원 이메일**(본인 이메일)을 선택하고 저장합니다.
+
+### 3-3. GitHub (웹)
+
+GitHub 로그인은 본인의 **GitHub OAuth 앱**을 만들어 연결해야 합니다.
+
+1. Firebase의 로그인 방법 탭에서 **새 제공업체 추가 → GitHub**를 선택하고 **사용 설정**을 켭니다.
+2. 화면에 표시되는 **승인 콜백 URL**을 복사합니다. (`https://<프로젝트ID>.firebaseapp.com/__/auth/handler` 형태)
+3. [GitHub 개발자 설정](https://github.com/settings/developers)에서 **OAuth Apps → New OAuth App**을 누르고 입력합니다.
+   - Application name: `Gorong`
+   - Homepage URL: `http://localhost:3000`
+   - Authorization callback URL: 2번에서 복사한 **승인 콜백 URL**
+4. **Register application** 후 나온 **Client ID**를 복사하고, **Generate a new client secret**으로 **Client secret**도 복사합니다.
+5. Firebase의 GitHub 설정 화면에 Client ID와 Client secret을 붙여 넣고 저장합니다.
+
+> GitHub, Google 로그인을 쓰지 않을 거라면 3-2, 3-3은 건너뛰어도 됩니다. 이메일/비밀번호만으로 웹과 앱 모두 실행할 수 있습니다.
+
+### 3-4. 승인된 도메인
+
+**Authentication → 설정 → 승인된 도메인**에 `localhost`가 있는지 확인합니다. (기본으로 들어 있습니다. 없으면 추가하세요)
 
 > 회원가입을 해 본 뒤 **Authentication → 사용자** 탭에 계정이 보이면 정상입니다.
 
@@ -82,7 +109,7 @@ gorong-back/src/main/resources/serviceAccountKey.json
 
 - [ ] 프로젝트 `gorong` 생성
 - [ ] 웹 앱 등록 후 설정값 6개 메모
-- [ ] 이메일/비밀번호 로그인 사용 설정
+- [ ] 이메일/비밀번호 로그인 사용 설정 (Google, GitHub는 선택)
 - [ ] Firestore 데이터베이스 생성 + `firestore.rules` 게시
 - [ ] `serviceAccountKey.json`을 `gorong-back/src/main/resources/`에 배치
 
