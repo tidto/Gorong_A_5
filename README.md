@@ -14,6 +14,8 @@
 👉 [실행 가이드 보러 가기](https://github.com/tidto/Gorong_A_5/blob/release/docs/00-overview.md)
 
 
+---
+
 #### 신뢰도 높은 정보 탐색 (Information Acquisition)
    * 공공데이터 기반 큐레이션: 한국관광공사의 TourAPI 4.0 등 국가 제공 API를 연동하여 전국의 정확한 축제 및 문화 정보를 사용자에게 배포합니다.
    * 맞춤형 추천: 사용자의 관심 태그와 위치 기반 서비스(LBS)를 통해 꼭 필요한 정보를 쉽고 빠르게 얻을 수 있게 합니다
