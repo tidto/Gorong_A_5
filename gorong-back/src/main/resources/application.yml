@@ -22,7 +22,7 @@ spring:
 tour:
   api:
     service-key: ${TOUR_API_KEY}
-    base-url: https://apis.data.go.kr/B551011/KorService1
+    base-url: https://apis.data.go.kr/B551011/KorService2
 
 juso:
   api:

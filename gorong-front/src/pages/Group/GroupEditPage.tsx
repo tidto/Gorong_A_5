@@ -392,7 +392,7 @@ const GroupEditPage = () => {
         setTourLoading(true); setTourError(''); setTourEvents([]);
         try {
             const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            const url = `https://apis.data.go.kr/B551011/KorService1/searchFestival1`
+            const url = `https://apis.data.go.kr/B551011/KorService2/searchFestival2`
                 + `?serviceKey=${TOUR_API_KEY}&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=GoRong&_type=json`
                 + `&eventStartDate=${today}&keyword=${encodeURIComponent(eventKeyword)}`;
             const json = await (await fetch(url)).json();

@@ -17,7 +17,7 @@ public class GroupTourApiService {
 
             // 📌 핵심: 공공데이터 API는 '이미 인코딩된 키'를 주소에 그대로 이어 붙이는 걸 좋아합니다.
             // UriComponentsBuilder를 쓰지 말고, String으로 주소를 만든 뒤 URI.create()를 쓰세요.
-            String urlString = "http://apis.data.go.kr/B551011/KorService1/searchFestival1?"
+            String urlString = "https://apis.data.go.kr/B551011/KorService2/searchFestival2?"
                     + "serviceKey=" + serviceKey  // 여기에 들어가는 키가 핵심입니다.
                     + "&_type=json"
                     + "&MobileOS=ETC"

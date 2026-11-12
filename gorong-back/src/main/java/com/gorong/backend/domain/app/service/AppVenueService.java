@@ -84,7 +84,7 @@ public class AppVenueService {
 
         try {
             String url = UriComponentsBuilder
-                    .fromUriString("https://apis.data.go.kr/B551011/KorService1/detailCommon1")
+                    .fromUriString("https://apis.data.go.kr/B551011/KorService2/detailCommon2")
                     .queryParam("serviceKey", tourApiKey)
                     .queryParam("contentId", venueId)
                     .queryParam("MobileOS", "ETC")
@@ -136,7 +136,7 @@ public class AppVenueService {
     public List<NearbyVenueResponseDto> getNearbyVenues(double lat, double lng, int radius) {
         try {
             String url = UriComponentsBuilder
-                    .fromUriString("https://apis.data.go.kr/B551011/KorService1/locationBasedList1")
+                    .fromUriString("https://apis.data.go.kr/B551011/KorService2/locationBasedList2")
                     .queryParam("serviceKey", tourApiKey)
                     .queryParam("numOfRows", 20)
                     .queryParam("pageNo", 1)
